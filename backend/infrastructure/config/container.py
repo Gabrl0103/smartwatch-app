@@ -4,6 +4,8 @@ from functools import lru_cache
 
 from domain.errors import ExternalServiceError
 from domain.ports.database_health import DatabaseHealthPort
+from domain.ports.voice_assistant import VoiceAssistantPort
+from infrastructure.assistant.gemini_voice_assistant import GeminiVoiceAssistant
 from infrastructure.config.settings import load_settings
 from infrastructure.database.engine import create_db_engine
 from infrastructure.database.sql_database_health import SqlDatabaseHealth
@@ -15,3 +17,9 @@ def get_database_health() -> DatabaseHealthPort:
     if not settings.database_url:
         raise ExternalServiceError("Falta configurar DATABASE_URL.")
     return SqlDatabaseHealth(create_db_engine(settings.database_url))
+
+
+@lru_cache
+def get_voice_assistant() -> VoiceAssistantPort:
+    settings = load_settings()
+    return GeminiVoiceAssistant(settings.gemini_api_key, settings.gemini_model)
