@@ -15,6 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -30,23 +31,28 @@ import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
+import com.rumbo.watchapp.domain.model.VoiceResult
+import com.rumbo.watchapp.infrastructure.network.VoiceApiClient
 import com.rumbo.watchapp.presentation.theme.WatchappTheme
 import java.io.File
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
- * Pantalla temporal de prueba: graba 4 segundos con el micrófono, mide el nivel de
- * sonido y permite reproducir lo grabado. Sirve para saber si el micrófono y el
- * altavoz del emulador funcionan. El archivo grabado (AAC) es el mismo tipo de audio
- * que luego se enviará al backend para que Gemini lo transcriba.
+ * Pantalla temporal de prueba: graba 4 segundos con el micrófono, envía el audio (AAC)
+ * al backend para que Gemini lo transcriba e interprete y muestra lo que entendió.
+ * También permite reproducir lo grabado para comprobar el micrófono del emulador.
  */
 @Composable
 fun VoiceTestApp() {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     var status by remember { mutableStateOf("Toca Grabar y habla") }
+    var result by remember { mutableStateOf<VoiceResult?>(null) }
     var peak by remember { mutableIntStateOf(0) }
     var recording by remember { mutableStateOf(false) }
+    var sending by remember { mutableStateOf(false) }
     var fileKb by remember { mutableIntStateOf(0) }
     var recorder by remember { mutableStateOf<MediaRecorder?>(null) }
     var player by remember { mutableStateOf<MediaPlayer?>(null) }
@@ -85,10 +91,26 @@ fun VoiceTestApp() {
             recorder = newRecorder
             peak = 0
             fileKb = 0
+            result = null
             recording = true
             status = "Grabando... habla ahora"
         } catch (e: Exception) {
             status = "Error al grabar: ${e.message}"
+        }
+    }
+
+    fun sendRecording() {
+        sending = true
+        status = "Enviando al servidor..."
+        scope.launch {
+            try {
+                result = VoiceApiClient.interpret(file)
+                status = "Listo"
+            } catch (e: Exception) {
+                status = "Error: ${e.message ?: "no se pudo conectar"}"
+            } finally {
+                sending = false
+            }
         }
     }
 
@@ -98,7 +120,11 @@ fun VoiceTestApp() {
         recorder = null
         recording = false
         fileKb = (file.length() / 1024).toInt()
-        status = if (peak > 1000) "Listo: sí se oyó tu voz" else "Listo, pero casi sin sonido"
+        if (file.length() > 0) {
+            sendRecording()
+        } else {
+            status = "No se grabó audio"
+        }
     }
 
     fun playRecording() {
@@ -147,13 +173,13 @@ fun VoiceTestApp() {
                                 .transformedHeight(this, transformationSpec),
                             transformation = SurfaceTransformation(transformationSpec),
                         ) {
-                            Text("Prueba de micrófono")
+                            Text("Prueba de voz")
                         }
                     }
                     item {
                         Button(
                             onClick = {
-                                if (recording) return@Button
+                                if (recording || sending) return@Button
                                 if (micGranted) {
                                     startRecording()
                                 } else {
@@ -189,6 +215,22 @@ fun VoiceTestApp() {
                             modifier = Modifier.fillMaxWidth(),
                             textAlign = TextAlign.Center,
                         )
+                    }
+                    result?.let { voice ->
+                        val lines = listOf(
+                            "Entendí: ${voice.text}",
+                            "Intención: ${voice.intent}",
+                            "Destino: ${voice.destination ?: "-"}",
+                        )
+                        lines.forEach { line ->
+                            item {
+                                Text(
+                                    text = line,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                        }
                     }
                     item {
                         Text(
