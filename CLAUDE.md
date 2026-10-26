@@ -12,14 +12,15 @@ Proyecto: **Rumbo**, app Wear OS de navegación por vibraciones para personas ci
 
 ## Stack
 - Reloj: Kotlin + Jetpack Compose for Wear OS (emulador, formato cuadrado redondeado).
-- Backend: FastAPI + SQLAlchemy + PostgreSQL. Rutas a pie y geocodificación: Geoapify (modo walk). Voz/IA: Gemini API. TTS: `TextToSpeech` de Android.
+- Backend: FastAPI + SQLAlchemy + PostgreSQL. Rutas a pie y geocodificación: Geoapify (modo walk). Voz/IA: Gemini API. TTS: por decidir: Google Text-to-Speech en el emulador o Gemini TTS desde el backend.
+- Voz: el reloj graba audio AAC y lo envía a `POST /voice/interpret`, donde Gemini lo transcribe e interpreta (el emulador no trae reconocimiento de voz).
 - Todo en capas gratis ($0). Despliegue del backend en Render.
 
 ## Convenciones
-- Nombres de clases, variables, archivos y commits en inglés. Todo texto visible al usuario en español.
+- Nombres de clases, variables y archivos en inglés. Todo texto visible al usuario en español.
 - Secretos solo en `.env` (ignorado por git). Se versiona solo `.env.example`.
 - Tests para la lógica de domain y application.
-- Commits pequeños (`feat`, `fix`, `docs`, `chore`), push frecuente.
+- Commits en español, sin prefijos (`feat`, `fix`, `docs`), muy pequeños; meta: 100+ commits. Push frecuente.
 
 ## Diseño
 - Tokens: fondo `#0B0E14`, superficie `#151922`, texto `#F5F7FA`, primario `#4F8EFF`. Estados: en ruta `#4F8EFF`, giro próximo `#FFC857`, desviado `#FF8A3D`, sin señal `#8A93A6`, llegada `#3DDC84`. Fuentes: Poppins (títulos), Inter (texto).
