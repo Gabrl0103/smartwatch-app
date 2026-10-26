@@ -19,16 +19,16 @@
 |---|---|---|
 | Reloj | Kotlin + Jetpack Compose for Wear OS | Standalone en emulador gratuito de Android Studio |
 | Backend | FastAPI (Python) | Curva baja, docs automáticas, fácil de testear |
-| Rutas a pie + geocodificación | OpenRouteService (perfil `foot-walking`) | Gratis con registro (2.000 rutas/día, 1.000 geocodificaciones/día, 40 req/min); tiene perfil a pie y geocodificación en un solo servicio |
-| Voz → texto, intención y asistente | Gemini API (capa gratis, AI Studio) | Recibe audio, extrae intención y responde; sin tarjeta de crédito |
-| Texto → voz | `TextToSpeech` de Android (en el reloj) | Gratis, sin red; plan B: TTS de Gemini desde el backend |
+| Rutas a pie + geocodificación | Geoapify (modo `walk`) | Gratis con registro (3.000 créditos/día); rutas a pie y geocodificación en un solo servicio |
+| Voz → texto, intención y asistente | Gemini API (capa gratis, AI Studio) | Recibe el audio grabado en el reloj, lo transcribe, extrae la intención y responde; sin tarjeta de crédito. Necesario porque el emulador Wear OS no trae reconocimiento de voz |
+| Texto → voz | Pendiente: Google Text-to-Speech instalado en el emulador o Gemini TTS desde el backend | El emulador Wear OS no trae motor TTS |
 | Base de datos | PostgreSQL (Render o Supabase, free tier) | Gratis |
 | Hosting backend | Render (free tier) | $0; el servidor duerme tras inactividad |
 | Tests | pytest (backend) / JUnit (reloj) | Solo domain y application |
 
 Costo total: **$0**.
 
-Nota: el servidor demo de OSRM se descartó porque no está confirmado que ofrezca perfil a pie de forma fiable.
+Nota: el servidor demo de OSRM se descartó porque no está confirmado que ofrezca perfil a pie de forma fiable. OpenRouteService se reemplazó por Geoapify porque openrouteservice.org está caído.
 
 ## 3. Arquitectura — Clean Architecture (4 capas)
 
@@ -37,13 +37,13 @@ Dependencias apuntan hacia adentro: `domain` no conoce a nadie. Patrón Reposito
 **Reloj (watchapp)**
 - `domain`: models (Route, RouteStep, VibrationPattern, VoiceIntent), errors (RouteNotFoundError, GpsUnavailableError, VoiceNotUnderstoodError), ports (RoutingRepository, LocationProvider, VibrationController, SpeechRecorder, SpeechSynthesizer, VoiceAssistantRepository)
 - `application`: casos de uso (ProcessVoiceCommand, ConfirmDestination, CalculateRoute, TrackUserPosition, EmitNavigationInstruction, DetectDeviation, DetectArrival, AskAssistant)
-- `infrastructure`: cliente HTTP al backend, AndroidLocationProvider (FusedLocationProviderClient), AndroidVibrationController (Vibrator API), AndroidAudioRecorder, AndroidTtsService, composition root (DI manual)
+- `infrastructure`: cliente HTTP al backend, AndroidLocationProvider (FusedLocationProviderClient), AndroidVibrationController (Vibrator API), AndroidAudioRecorder (MediaRecorder, AAC), servicio TTS (pendiente de definir), composition root (DI manual)
 - `presentation`: pantallas Compose + ViewModels
 
 **Backend**
 - `domain`: models (Route, RouteStep, VoiceCommand), errors, ports (RoutingProviderPort, GeocodingPort, VoiceAssistantPort)
 - `application`: casos de uso (InterpretVoiceCommand, GeocodeDestination, CreateRoute, AskAssistant)
-- `infrastructure`: adaptador OpenRouteService, adaptador Gemini, repositorio PostgreSQL (SQLAlchemy), config/composition root
+- `infrastructure`: adaptador Geoapify, adaptador Gemini, repositorio PostgreSQL (SQLAlchemy), config/composition root
 - `presentation`: routers FastAPI, DTOs (Pydantic), middleware global de errores
 
 **Regla de seguridad**: la navegación crítica (GPS, vibraciones, detección de giro/desvío/llegada) se calcula en el reloj con reglas locales, sin depender de la IA ni de la latencia de red. La IA solo interviene para entender el destino y responder preguntas.
@@ -76,10 +76,25 @@ smartwatch-nav/
 ## 5. Fuentes de datos
 
 - Ubicación: `FusedLocationProviderClient` (simulada en el emulador con Extended Controls).
-- Audio del usuario: micrófono del reloj (en emulador, micrófono del PC).
-- Rutas a pie y lugares: OpenRouteService, consumido solo desde el backend.
-- Interpretación de voz y respuestas del asistente: Gemini API, consumido solo desde el backend.
-- Las API keys viven en `backend/.env` (no versionado); se versiona `.env.example`.
+- Audio del usuario: micrófono del reloj (en emulador, micrófono del PC), grabado con `MediaRecorder` en AAC y enviado al backend. Prueba del micrófono del emulador superada.
+- Rutas a pie y lugares: Geoapify, consumido solo desde el backend.
+- Transcripción e interpretación de voz y respuestas del asistente: Gemini API, consumido solo desde el backend.
+- Las API keys viven en `backend/.env` (no versionado); se versiona `.env.example`. Variables: `DATABASE_URL`, `GEOAPIFY_API_KEY` (reemplaza a `ORS_API_KEY`), `GEMINI_API_KEY`, `GEMINI_MODEL`.
+
+### Flujo de voz
+
+1. El reloj graba el audio del usuario (`MediaRecorder`, AAC).
+2. Lo envía a `POST /voice/interpret`.
+3. Gemini transcribe el audio y extrae la intención.
+4. El backend responde con el texto y la intención; el reloj confirma o actúa.
+
+### Endpoints del backend
+
+| Método | Ruta | Entrada | Salida |
+|---|---|---|---|
+| GET | `/health` | — | Estado del servicio |
+| GET | `/health/db` | — | Estado de la conexión a la base de datos |
+| POST | `/voice/interpret` | Audio crudo en el cuerpo; formato en `Content-Type` (p. ej. `audio/aac`) | `text`, `intent`, `destination`, `question` |
 
 ## 6. Modelo de datos
 
@@ -156,17 +171,18 @@ Diseñadas en Claude Design (lienzo "Rumbo — UI del reloj"), en formato cuadra
 ## 11. Fases
 
 1. **Semana 1 — Setup y prueba de voz**: proyecto Wear OS + emulador, backend "hello world" desplegado en Render + Postgres conectado, y prueba rápida de grabar audio y reproducir TTS en el emulador.
-2. **Semana 2 — Voz, destino y ruta**: endpoint de voz (Gemini), geocodificación y ruta a pie (OpenRouteService), pantallas de inicio, escuchando y confirmar.
+2. **Semana 2 — Voz, destino y ruta**: endpoint de voz (Gemini), geocodificación y ruta a pie (Geoapify), pantallas de inicio, escuchando y confirmar.
 3. **Semana 3 — Navegación**: GPS en emulador, motor de vibraciones, detección de giro próximo, desvío, sin señal y llegada.
 4. **Semana 4 — Asistente y cierre**: asistente conversacional, audio opcional, pruebas de accesibilidad, documentación, video de sustentación.
 
 ## 12. Preguntas abiertas
 
 - Requisitos exactos del profesor (rúbrica, formato de entrega, sustentación).
-- Si el emulador Wear OS trae reconocimiento/TTS funcional (se resuelve en la prueba de la semana 1).
-- Crear cuentas gratuitas: OpenRouteService (API key) y Google AI Studio (API key de Gemini); confirmar el nombre del modelo de Gemini disponible en la capa gratis.
+- TTS: Google Text-to-Speech instalado en el emulador o Gemini TTS desde el backend (el emulador no trae motor TTS).
+- Crear cuentas gratuitas: Geoapify (API key) y Google AI Studio (API key de Gemini); confirmar el nombre del modelo de Gemini disponible en la capa gratis.
 
 ## 13. Changelog
 
+- **v0.4** (2026-10-26): Ruteo y geocodificación cambian de OpenRouteService a Geoapify (modo `walk`, 3.000 créditos/día) porque openrouteservice.org está caído; `GEOAPIFY_API_KEY` reemplaza a `ORS_API_KEY`. El emulador Wear OS no trae reconocimiento de voz ni motor TTS: el reloj graba audio (MediaRecorder, AAC) y lo envía a `POST /voice/interpret`, donde Gemini lo transcribe e interpreta; prueba del micrófono del emulador superada. Nuevo endpoint `POST /voice/interpret` (audio crudo, formato en `Content-Type`; devuelve `text`, `intent`, `destination`, `question`). TTS pendiente de definir entre Google Text-to-Speech en el emulador o Gemini TTS desde el backend.
 - **v0.2** (2026-10-05): Voz y asistente conversacional como funcionalidad esencial; routing cambia de OSRM a OpenRouteService; se agrega Gemini API (voz/IA) y TTS de Android; nuevos puertos, casos de uso y entidad VoiceCommand; pantallas y design tokens definidos (formato cuadrado redondeado); fases reordenadas; landing page excluida del repositorio documentado.
 - **v0.1** (2026-10-03): Alcance, stack, arquitectura Clean Architecture, estructura de repo, modelo de datos, requerimientos, pantallas y fases iniciales.
