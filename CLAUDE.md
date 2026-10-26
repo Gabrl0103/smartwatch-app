@@ -12,7 +12,7 @@ Proyecto: **Rumbo**, app Wear OS de navegación por vibraciones para personas ci
 
 ## Stack
 - Reloj: Kotlin + Jetpack Compose for Wear OS (emulador, formato cuadrado redondeado).
-- Backend: FastAPI + SQLAlchemy + PostgreSQL. Rutas a pie y geocodificación: OpenRouteService. Voz/IA: Gemini API. TTS: `TextToSpeech` de Android.
+- Backend: FastAPI + SQLAlchemy + PostgreSQL. Rutas a pie y geocodificación: Geoapify (modo walk). Voz/IA: Gemini API. TTS: `TextToSpeech` de Android.
 - Todo en capas gratis ($0). Despliegue del backend en Render.
 
 ## Convenciones
