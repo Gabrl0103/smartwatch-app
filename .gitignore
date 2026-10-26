@@ -1,0 +1,24 @@
+# Secretos
+.env
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Android / Wear OS
+watchapp/.gradle/
+watchapp/build/
+watchapp/app/build/
+watchapp/local.properties
+watchapp/.idea/
+*.iml
+*.apk
+*.aab
+
+# SO / editores
+.DS_Store
+Thumbs.db
+.vscode/
