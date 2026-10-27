@@ -4,10 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rumbo.watchapp.application.location.LocationTracker
 import com.rumbo.watchapp.application.usecase.PlanRouteFromVoice
-import com.rumbo.watchapp.application.usecase.TrackNavigation
 import com.rumbo.watchapp.application.usecase.TrackingState
 import com.rumbo.watchapp.domain.error.AppError
 import com.rumbo.watchapp.domain.port.AudioRecorder
+import com.rumbo.watchapp.domain.port.NavigationRunner
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,17 +21,16 @@ class RoutePlanningViewModel(
     private val recorder: AudioRecorder,
     private val planRoute: PlanRouteFromVoice,
     private val locationTracker: LocationTracker,
-    private val navigation: TrackNavigation,
+    private val navigationRunner: NavigationRunner,
+    val navigationState: StateFlow<TrackingState>,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<PlanState>(PlanState.Start)
     val state: StateFlow<PlanState> = _state.asStateFlow()
 
-    val navigationState: StateFlow<TrackingState> = navigation.state
-
     /** Enciende el GPS (no hace nada si ya está encendido o no hay permiso). */
     fun startLocation() {
-        locationTracker.start(viewModelScope)
+        locationTracker.start()
     }
 
     /** Graba 4 s, interpreta la orden y busca la ruta. El permiso de micrófono ya debe estar dado. */
@@ -59,18 +58,17 @@ class RoutePlanningViewModel(
         }
     }
 
+    /** Arranca la navegación en el servicio en primer plano para que siga con la pantalla apagada. */
     fun go() {
         val current = _state.value
         if (current !is PlanState.Confirming) return
-        startLocation()
-        navigation.start(current.route, viewModelScope)
+        navigationRunner.start(current.route)
         _state.value = PlanState.OnRoute(current.route)
     }
 
-    /** Termina la navegación: apaga GPS y vibraciones y vuelve al inicio. */
+    /** Termina la navegación: el servicio apaga GPS y vibraciones; vuelve al inicio. */
     fun finish() {
-        navigation.stop()
-        locationTracker.stop()
+        navigationRunner.stop()
         reset()
     }
 
@@ -83,8 +81,8 @@ class RoutePlanningViewModel(
     }
 
     override fun onCleared() {
-        navigation.stop()
-        locationTracker.stop()
         recorder.release()
+        // Si se está navegando, el servicio sigue dueño del GPS; si no, se apaga.
+        if (_state.value !is PlanState.OnRoute) locationTracker.stop()
     }
 }

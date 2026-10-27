@@ -6,7 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.rumbo.watchapp.di.AppContainer
+import com.rumbo.watchapp.di.RumboApplication
 import com.rumbo.watchapp.presentation.viewmodel.RoutePlanningViewModel
 
 class MainActivity : ComponentActivity() {
@@ -14,12 +14,13 @@ class MainActivity : ComponentActivity() {
     private val viewModel: RoutePlanningViewModel by viewModels {
         viewModelFactory {
             initializer {
-                val container = AppContainer(applicationContext)
+                val container = (application as RumboApplication).container
                 RoutePlanningViewModel(
                     container.audioRecorder,
                     container.planRouteFromVoice,
                     container.locationTracker,
-                    container.trackNavigation,
+                    container.navigationRunner,
+                    container.trackNavigation.state,
                 )
             }
         }
