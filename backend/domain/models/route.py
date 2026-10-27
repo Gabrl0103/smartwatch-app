@@ -25,6 +25,7 @@ class Place:
 class RouteStep:
     order: int
     maneuver: Maneuver
+    instruction: str
     distance_to_next_m: float
     point: Coordinates
 
@@ -37,3 +38,4 @@ class Route:
     distance_m: float
     duration_s: float
     steps: list[RouteStep]
+    polyline: list[Coordinates]
