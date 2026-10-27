@@ -14,11 +14,13 @@ import kotlinx.coroutines.launch
 
 /**
  * Única suscripción al GPS de la app: reparte las lecturas a quien las necesite y recuerda
- * la última para usarla como origen de la ruta.
+ * la última para usarla como origen de la ruta. Vive en [scope] (de toda la app), así no se
+ * corta si la pantalla que lo encendió desaparece.
  */
 class LocationTracker(
     private val provider: LocationProvider,
     private val clock: () -> Long,
+    private val scope: CoroutineScope,
 ) {
     private val _fixes = MutableSharedFlow<LocationFix>(
         extraBufferCapacity = 8,
@@ -30,7 +32,7 @@ class LocationTracker(
     private var lastFix: LocationFix? = null
     private var job: Job? = null
 
-    fun start(scope: CoroutineScope) {
+    fun start() {
         if (job?.isActive == true) return
         job = scope.launch {
             provider.locations().collect { fix ->
