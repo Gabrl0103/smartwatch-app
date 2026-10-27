@@ -76,6 +76,7 @@ class TrackNavigationTest {
             tracking.stop()
         }
         assertEquals(1, vibration.stops)
+        assertEquals(TrackingState(), tracking.state.value)
     }
 
     @Test
