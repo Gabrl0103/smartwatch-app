@@ -13,7 +13,7 @@ import androidx.wear.compose.material3.Text
 import com.rumbo.watchapp.R
 
 @Composable
-fun StartScreen(onSpeak: () -> Unit) {
+fun StartScreen(onSpeak: () -> Unit, gpsAvailable: Boolean) {
     CenteredScreen {
         Text(
             text = "¿A dónde vamos?",
@@ -33,5 +33,6 @@ fun StartScreen(onSpeak: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
+        if (!gpsAvailable) NoGpsLabel()
     }
 }

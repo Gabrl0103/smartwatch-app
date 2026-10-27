@@ -17,8 +17,9 @@ import com.rumbo.watchapp.presentation.format.formatDistance
 import com.rumbo.watchapp.presentation.format.formatWalkingMinutes
 
 @Composable
-fun ConfirmScreen(route: Route, onGo: () -> Unit, onChange: () -> Unit) {
+fun ConfirmScreen(route: Route, gpsAvailable: Boolean, onGo: () -> Unit, onChange: () -> Unit) {
     CenteredScreen {
+        if (!gpsAvailable) NoGpsLabel()
         Text(
             text = route.destinationName,
             style = MaterialTheme.typography.titleMedium,
