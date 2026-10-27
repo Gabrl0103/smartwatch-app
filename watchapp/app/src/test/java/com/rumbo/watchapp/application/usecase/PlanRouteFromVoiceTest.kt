@@ -5,6 +5,7 @@ import com.rumbo.watchapp.domain.model.Coordinates
 import com.rumbo.watchapp.domain.model.Place
 import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.domain.model.VoiceResult
+import com.rumbo.watchapp.domain.navigation.ORIGIN
 import com.rumbo.watchapp.domain.port.PlacesRepository
 import com.rumbo.watchapp.domain.port.RoutesRepository
 import com.rumbo.watchapp.domain.port.VoiceRepository
@@ -95,5 +96,18 @@ class PlanRouteFromVoiceTest {
 
         assertEquals("No encontré «lugar inventado», intenta con otro nombre", error.message)
         assertNull(routes.origin)
+    }
+
+    @Test
+    fun usesCurrentLocationAsOriginWhenAvailable() = runBlocking {
+        val here = Coordinates(1.2146, -77.2783)
+        val places = FakePlaces(park)
+        val routes = FakeRoutes(route)
+        val useCase = PlanRouteFromVoice(FakeVoice(navigate("parque")), places, routes, origin = { here })
+
+        useCase(audio)
+
+        assertEquals(here, places.near)
+        assertEquals(here, routes.origin)
     }
 }
