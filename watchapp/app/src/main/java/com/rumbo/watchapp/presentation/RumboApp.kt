@@ -3,6 +3,7 @@ package com.rumbo.watchapp.presentation
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -60,6 +61,20 @@ fun RumboApp(viewModel: RoutePlanningViewModel) {
             viewModel.showError("Necesito permiso del micrófono para escucharte")
         }
     }
+    // Android 13+ pide permiso para mostrar la notificación "Rumbo: navegando". Se navega igual
+    // si lo niega: el servicio sigue en primer plano, solo que sin notificación visible.
+    val notificationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { viewModel.go() }
+    val onGo = {
+        val needsNotificationPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !context.isGranted(Manifest.permission.POST_NOTIFICATIONS)
+        if (needsNotificationPermission) {
+            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            viewModel.go()
+        }
+    }
     val onSpeak = {
         val missing = PERMISSIONS.filterNot { context.isGranted(it) }
         if (missing.isEmpty()) {
@@ -79,7 +94,7 @@ fun RumboApp(viewModel: RoutePlanningViewModel) {
                 is PlanState.Confirming -> ConfirmScreen(
                     route = current.route,
                     gpsAvailable = gpsAvailable,
-                    onGo = viewModel::go,
+                    onGo = onGo,
                     onChange = viewModel::reset,
                 )
                 is PlanState.OnRoute -> NavigationScreen(state = navigation, onFinish = viewModel::finish)
