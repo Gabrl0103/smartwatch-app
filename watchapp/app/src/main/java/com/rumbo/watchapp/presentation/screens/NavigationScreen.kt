@@ -30,6 +30,7 @@ import com.rumbo.watchapp.presentation.theme.StatusTurnSoon
 /** Pantalla "En ruta" sin mapa: estado, siguiente paso, distancia restante y vibración actual. */
 @Composable
 fun NavigationScreen(state: TrackingState, onFinish: () -> Unit) {
+    KeepScreenOn()
     val color = statusColor(state.status)
     val arrived = state.status == NavigationStatus.ARRIVED
     Column(
