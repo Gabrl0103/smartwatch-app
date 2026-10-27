@@ -95,6 +95,8 @@ smartwatch-nav/
 | GET | `/health` | — | Estado del servicio |
 | GET | `/health/db` | — | Estado de la conexión a la base de datos |
 | POST | `/voice/interpret` | Audio crudo en el cuerpo; formato en `Content-Type` (p. ej. `audio/aac`) | `text`, `intent`, `destination`, `question` |
+| GET | `/places/search` | `q` (texto); `lat`, `lng` opcionales para priorizar cercanía (si faltan, centro de Pasto) | `name`, `lat`, `lng` (404 si no hay resultados) |
+| POST | `/routes` | JSON `{origin: {lat, lng}, destination: {lat, lng}, destination_name}` | `destination_name`, `distance_m`, `duration_s`, `steps: [{order, maneuver (left/right/straight/arrive), instruction, distance_m, lat, lng}]`, `polyline: [[lat, lng], ...]` (422 si faltan coordenadas o están fuera de rango) |
 
 ## 6. Modelo de datos
 
@@ -183,6 +185,7 @@ Diseñadas en Claude Design (lienzo "Rumbo — UI del reloj"), en formato cuadra
 
 ## 13. Changelog
 
+- **v0.6** (2026-10-26): Búsqueda de lugares y ruta a pie con Geoapify (`GET /places/search`, `POST /routes`). Geocodificación filtrada a Colombia y sesgada a la ubicación del usuario o al centro de Pasto. El ruteo pide `details=instruction_details` (sin eso Geoapify no devuelve el tipo de maniobra) y reduce sus tipos a left/right/straight/arrive. `RouteStep` gana `instruction` y `Route` gana `polyline`. Modo `walk` confirmado en el plan gratis (Plaza de Nariño → Parque Bolívar: 1.649 m, 12 pasos).
 - **v0.5** (2026-10-26): El reloj se conecta al backend en Render (`https://smartwatch-app.onrender.com`): permiso `INTERNET`, `VoiceApiClient` (HttpURLConnection, sin dependencias nuevas, timeouts de 90 s por el arranque en frío de Render) y modelo `VoiceResult` en el dominio. La pantalla "Prueba de voz" envía la grabación a `POST /voice/interpret` y muestra texto, intención y destino.
 - **v0.4** (2026-10-26): Ruteo y geocodificación cambian de OpenRouteService a Geoapify (modo `walk`, 3.000 créditos/día) porque openrouteservice.org está caído; `GEOAPIFY_API_KEY` reemplaza a `ORS_API_KEY`. El emulador Wear OS no trae reconocimiento de voz ni motor TTS: el reloj graba audio (MediaRecorder, AAC) y lo envía a `POST /voice/interpret`, donde Gemini lo transcribe e interpreta; prueba del micrófono del emulador superada. Nuevo endpoint `POST /voice/interpret` (audio crudo, formato en `Content-Type`; devuelve `text`, `intent`, `destination`, `question`). TTS pendiente de definir entre Google Text-to-Speech en el emulador o Gemini TTS desde el backend.
 - **v0.2** (2026-10-05): Voz y asistente conversacional como funcionalidad esencial; routing cambia de OSRM a OpenRouteService; se agrega Gemini API (voz/IA) y TTS de Android; nuevos puertos, casos de uso y entidad VoiceCommand; pantallas y design tokens definidos (formato cuadrado redondeado); fases reordenadas; landing page excluida del repositorio documentado.
