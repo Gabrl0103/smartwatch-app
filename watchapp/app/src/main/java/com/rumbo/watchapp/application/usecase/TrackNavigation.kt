@@ -88,6 +88,9 @@ class TrackNavigation(
         job?.cancel()
         job = null
         recalculating = false
+        engine = null
+        route = null
+        _state.value = TrackingState()
         vibration.stop()
     }
 
