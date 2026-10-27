@@ -2,7 +2,10 @@ package com.rumbo.watchapp.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.rumbo.watchapp.application.location.LocationTracker
 import com.rumbo.watchapp.application.usecase.PlanRouteFromVoice
+import com.rumbo.watchapp.application.usecase.TrackNavigation
+import com.rumbo.watchapp.application.usecase.TrackingState
 import com.rumbo.watchapp.domain.error.AppError
 import com.rumbo.watchapp.domain.port.AudioRecorder
 import kotlinx.coroutines.CancellationException
@@ -17,10 +20,19 @@ private const val RECORDING_MS = 4_000L
 class RoutePlanningViewModel(
     private val recorder: AudioRecorder,
     private val planRoute: PlanRouteFromVoice,
+    private val locationTracker: LocationTracker,
+    private val navigation: TrackNavigation,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<PlanState>(PlanState.Start)
     val state: StateFlow<PlanState> = _state.asStateFlow()
+
+    val navigationState: StateFlow<TrackingState> = navigation.state
+
+    /** Enciende el GPS (no hace nada si ya está encendido o no hay permiso). */
+    fun startLocation() {
+        locationTracker.start(viewModelScope)
+    }
 
     /** Graba 4 s, interpreta la orden y busca la ruta. El permiso de micrófono ya debe estar dado. */
     fun listen() {
@@ -49,7 +61,17 @@ class RoutePlanningViewModel(
 
     fun go() {
         val current = _state.value
-        if (current is PlanState.Confirming) _state.value = PlanState.OnRoute(current.route)
+        if (current !is PlanState.Confirming) return
+        startLocation()
+        navigation.start(current.route, viewModelScope)
+        _state.value = PlanState.OnRoute(current.route)
+    }
+
+    /** Termina la navegación: apaga GPS y vibraciones y vuelve al inicio. */
+    fun finish() {
+        navigation.stop()
+        locationTracker.stop()
+        reset()
     }
 
     fun reset() {
@@ -61,6 +83,8 @@ class RoutePlanningViewModel(
     }
 
     override fun onCleared() {
+        navigation.stop()
+        locationTracker.stop()
         recorder.release()
     }
 }

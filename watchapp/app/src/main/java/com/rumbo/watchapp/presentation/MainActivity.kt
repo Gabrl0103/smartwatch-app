@@ -15,7 +15,12 @@ class MainActivity : ComponentActivity() {
         viewModelFactory {
             initializer {
                 val container = AppContainer(applicationContext)
-                RoutePlanningViewModel(container.audioRecorder, container.planRouteFromVoice)
+                RoutePlanningViewModel(
+                    container.audioRecorder,
+                    container.planRouteFromVoice,
+                    container.locationTracker,
+                    container.trackNavigation,
+                )
             }
         }
     }
