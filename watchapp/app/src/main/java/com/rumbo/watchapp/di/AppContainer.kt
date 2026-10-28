@@ -8,6 +8,8 @@ import com.rumbo.watchapp.application.usecase.PlanRouteFromVoice
 import com.rumbo.watchapp.application.usecase.RegisterDevice
 import com.rumbo.watchapp.application.usecase.TrackNavigation
 import com.rumbo.watchapp.domain.port.AudioRecorder
+import com.rumbo.watchapp.domain.port.SpeechOutput
+import com.rumbo.watchapp.domain.port.VoiceSettings
 import com.rumbo.watchapp.infrastructure.audio.MediaAudioRecorder
 import com.rumbo.watchapp.infrastructure.location.AndroidLocationProvider
 import com.rumbo.watchapp.infrastructure.navigation.ForegroundNavigationRunner
@@ -18,6 +20,10 @@ import com.rumbo.watchapp.infrastructure.network.SavedPlacesApiClient
 import com.rumbo.watchapp.infrastructure.network.VibrationEventsApiClient
 import com.rumbo.watchapp.infrastructure.network.VoiceApiClient
 import com.rumbo.watchapp.infrastructure.storage.PreferencesDeviceStore
+import com.rumbo.watchapp.infrastructure.storage.PreferencesVoiceSettings
+import com.rumbo.watchapp.infrastructure.tts.AndroidSpeechPlayer
+import com.rumbo.watchapp.infrastructure.tts.AndroidTextToSpeech
+import com.rumbo.watchapp.infrastructure.tts.SpeechOutputImpl
 import com.rumbo.watchapp.infrastructure.vibration.AndroidVibrationController
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -33,6 +39,13 @@ class AppContainer(context: Context) {
     private val registerDevice = RegisterDevice(DevicesApiClient, PreferencesDeviceStore(appContext))
 
     val audioRecorder: AudioRecorder = MediaAudioRecorder(appContext)
+    val voiceSettings: VoiceSettings = PreferencesVoiceSettings(appContext)
+    val speech: SpeechOutput = SpeechOutputImpl(
+        player = AndroidSpeechPlayer(appContext, AndroidTextToSpeech(appContext)),
+        isEnabled = voiceSettings::isEnabled,
+        scope = appScope,
+        onError = { Log.w("Rumbo", "No se pudo hablar: ${it.message}") },
+    )
     val locationTracker = LocationTracker(AndroidLocationProvider(appContext), clock, appScope)
     val planRouteFromVoice = PlanRouteFromVoice(
         VoiceApiClient,
@@ -50,6 +63,7 @@ class AppContainer(context: Context) {
         routes = RoutesApiClient,
         vibration = AndroidVibrationController(appContext),
         vibrationEvents = VibrationEventsApiClient,
+        speech = speech,
         clock = clock,
     )
     val navigationRunner = ForegroundNavigationRunner(appContext)

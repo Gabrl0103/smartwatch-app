@@ -37,7 +37,7 @@ Dependencias apuntan hacia adentro: `domain` no conoce a nadie. Patrón Reposito
 **Reloj (watchapp)**
 - `domain`: models (Route, RouteStep, VibrationPattern, VoiceIntent), errors (RouteNotFoundError, GpsUnavailableError, VoiceNotUnderstoodError), ports (RoutingRepository, LocationProvider, VibrationController, SpeechRecorder, SpeechSynthesizer, VoiceAssistantRepository)
 - `application`: casos de uso (ProcessVoiceCommand, ConfirmDestination, CalculateRoute, TrackUserPosition, EmitNavigationInstruction, DetectDeviation, DetectArrival, AskAssistant)
-- `infrastructure`: cliente HTTP al backend, AndroidLocationProvider (FusedLocationProviderClient), AndroidVibrationController (Vibrator API), AndroidAudioRecorder (MediaRecorder, AAC), servicio TTS (pendiente de definir), composition root (DI manual)
+- `infrastructure`: cliente HTTP al backend, AndroidLocationProvider (FusedLocationProviderClient), AndroidVibrationController (Vibrator API), AndroidAudioRecorder (MediaRecorder, AAC), salida de voz en `infrastructure/tts` (`SpeechOutputImpl` + `AndroidSpeechPlayer` con `POST /speech` y TextToSpeech de respaldo), composition root (DI manual)
 - `presentation`: pantallas Compose + ViewModels
 
 **Backend**
@@ -98,6 +98,29 @@ smartwatch-nav/
 - Caché en memoria de hasta 100 frases (se descarta la menos usada) para no gastar cuota gratuita en frases repetidas. Los errores no se guardan en caché.
 - Errores de Gemini → 502 `EXTERNAL_SERVICE_ERROR`; el 429 (cuota agotada) dice "Se agotó la cuota gratuita de voz de Gemini. Intenta más tarde."
 - Prueba real: desde `backend/`, `python scripts/try_speech.py "Llegaste a tu destino." prueba.wav`.
+
+### Voz en el reloj
+
+- Puerto `SpeechOutput { speak(text, priority); stop() }` en `domain/port`; prioridades `NORMAL` y `HIGH` (giro, desvío, llegada).
+- `SpeechOutputImpl` decide qué suena: una frase nueva cancela la actual, salvo que la nueva sea `NORMAL` y la actual `HIGH` (esa se descarta). Si la voz está apagada no dice nada.
+- `AndroidSpeechPlayer` pide el WAV a `POST /speech` (90 s mientras Render despierta; 20 s cuando el backend ya respondió una vez), lo guarda en `cacheDir/speech/<sha256 del texto>.wav`, lo reutiliza si la frase se repite y lo reproduce con `MediaPlayer` (uso "guía de navegación").
+- Si falla la red o el servidor, usa `TextToSpeech` de Android en es-CO; si no hay motor o no habla español (el emulador no trae), no dice nada y deja un `Log.w`. La voz nunca bloquea ni detiene la navegación ni las vibraciones.
+- Cuándo habla:
+
+| Momento | Frase | Prioridad |
+|---|---|---|
+| Confirmar | "<destino>, a <distancia>, <minutos> minutos a pie. ¿Vamos?" | normal |
+| Tocar "Ir" | "Iniciando ruta. <primera instrucción>" | normal |
+| Giro próximo | "En <distancia>, <instrucción>" (p. ej. "En treinta metros, gire a la izquierda hacia la Calle 18.") | alta |
+| Maniobra | "Gira a la izquierda." / "Gira a la derecha." | alta |
+| Desvío | "Te saliste de la ruta. Recalculando." | alta |
+| Sin señal | "Perdí la señal de GPS." | normal |
+| Señal recuperada | "Señal recuperada." | normal |
+| Llegada | "Llegaste a tu destino." | alta |
+| Error en pantalla | El mismo mensaje (incluido "No pude guardar el lugar") | normal |
+
+- Números en palabras hasta 999 ("veintiún minutos", "ciento un metros") y distancias redondeadas para que suenen naturales: de 10 en 10 metros bajo 100 m, de 50 en 50 bajo 1 km y en décimas de kilómetro después ("un kilómetro y medio", "uno coma seis kilómetros"). Los minutos se redondean hacia arriba, igual que en pantalla.
+- Si en una misma lectura hay varios eventos, solo se dice el más importante (llegada > desvío > maniobra > giro próximo > sin señal > señal recuperada).
 
 ### Endpoints del backend
 
@@ -170,7 +193,7 @@ vibration_events (log para demo/sustentación)
 - RF7: Detectar pérdida de señal GPS y notificar.
 - RF8: Detectar llegada y notificar con patrón especial.
 - RF9: Asistente conversacional por voz durante la ruta (preguntas sobre el entorno o la ruta), con respuesta hablada.
-- RF10: Audio (TTS) opcional para las instrucciones de navegación.
+- RF10: Audio (TTS) opcional para las instrucciones de navegación: interruptor "Voz: sí/no" en Inicio; con "no" solo vibra.
 
 ## 8. Requerimientos no funcionales
 
@@ -187,7 +210,7 @@ vibration_events (log para demo/sustentación)
 
 Diseñadas en Claude Design (lienzo "Rumbo — UI del reloj"), en formato cuadrado redondeado (Wear OS Square) y una versión redonda de referencia.
 
-1. Inicio (voz): botón grande de micrófono, "¿A dónde vamos?" y, debajo, botón "Lugares guardados".
+1. Inicio (voz): botón grande de micrófono, "¿A dónde vamos?" y, debajo, botón "Lugares guardados" e interruptor "Voz: sí" / "Voz: no" (el estado va en el texto, no solo en el color; se guarda en SharedPreferences y empieza en sí).
    - Lugares guardados: lista (`TransformingLazyColumn`); tocar un lugar pide la ruta y pasa a Confirmar; mantenerlo pulsado ofrece borrarlo con confirmación ("¿Borrar «X»?" Cancelar / Borrar). Si está vacía: "Aún no tienes lugares guardados".
 2. Escuchando destino.
 3. Confirmar destino: nombre, distancia y tiempo a pie; Ir / Cambiar y botón secundario "Guardar" ("Guardando..." → "Guardado"; si falla, "No pude guardar el lugar"). Si el destino vino de un lugar guardado ya aparece "Guardado".
@@ -221,6 +244,7 @@ Diseñadas en Claude Design (lienzo "Rumbo — UI del reloj"), en formato cuadra
 
 ## 13. Changelog
 
+- **v0.14** (2026-10-28): Voz hablada en el reloj. Puerto `SpeechOutput` (prioridad normal/alta) y `VoiceSettings`; `SpeechOutputImpl` cancela la frase anterior al llegar otra, salvo que la nueva sea normal y la actual alta. `AndroidSpeechPlayer` usa `POST /speech` (`SpeechApiClient`, timeout de 20 s cuando el backend ya despertó), guarda el WAV en el cache del reloj por hash del texto y lo reproduce con `MediaPlayer`; si falla, `TextToSpeech` en es-CO, y si tampoco hay, solo un `Log.w`. `BackendHttp` lee el cuerpo como bytes y acepta timeout por petición. Frases en `application/speech` (números en palabras, distancias redondeadas, minutos) para Confirmar, Ir, giro próximo, maniobra, desvío, sin señal, señal recuperada, llegada y errores en pantalla. `TrackNavigation` habla sin esperar y si la voz falla sigue vibrando. Interruptor "Voz: sí/no" en Inicio. Tests JUnit de frases y de la cancelación por prioridad con un reproductor falso.
 - **v0.13** (2026-10-28): Voz hablada con Gemini TTS desde el backend. Nuevo endpoint `POST /speech` (`{text}` → `audio/wav`), puerto `SpeechSynthesizerPort`, adaptador `GeminiSpeechSynthesizer` (httpx; `generateContent` con `responseModalities: ["AUDIO"]`, voz prebuilt `Iapetus`; convierte el PCM 16-bit mono a WAV) y caso de uso `synthesize_speech` (texto no vacío de hasta 300 caracteres; caché en memoria de 100 frases). Errores de Gemini, incluido el 429 por cuota, salen como `ExternalServiceError` con mensaje claro. Nueva variable `GEMINI_TTS_MODEL` (por defecto `gemini-3.8-flash-tts`, gratis según la página de precios de Gemini) y script `scripts/try_speech.py` para probar la voz real. Queda resuelta la pregunta abierta sobre el TTS.
 - **v0.12** (2026-10-28): Lugares guardados y registro en el reloj. Clientes HTTP `SavedPlacesApiClient`, `DevicesApiClient` y `VibrationEventsApiClient` (HttpURLConnection + org.json); `requireOk` acepta cualquier 2xx y `RoutesApiClient` lee `route_id` (nuevo `Route.id`). Caso de uso `ManageSavedPlaces` (listar, ruta hasta un lugar, guardar el destino con su nombre en el punto final de la ruta, borrar) y `RegisterDevice`: al primer inicio genera un UUID, hace `POST /devices` y guarda en SharedPreferences que ya se registró (si falla, reintenta en el próximo inicio). `TrackNavigation` envía en segundo plano un `POST /vibration-events` por cada vibración (patrón, `route_id` y orden del siguiente paso); si falla, se ignora y la navegación sigue. Pantallas: botón "Lugares guardados" en Inicio, lista con borrado por pulsación larga y confirmación, "Guardar" en Confirmar, botón "Inicio" en la pantalla de error y "Reintentar" que vuelve a la lista cuando el error vino de ahí. Las pantallas centradas se desplazan si el contenido no cabe. Tests JUnit de `ManageSavedPlaces`, `RegisterDevice` y del log de vibraciones.
 - **v0.11** (2026-10-28): Endpoints de persistencia: `GET/POST /saved-places`, `DELETE /saved-places/{id}`, `POST /devices` (idempotente) y `POST /vibration-events`. `POST /routes` guarda la ruta y sus pasos (estado `active`) y devuelve `route_id`; `POST /voice/interpret` guarda el comando. Ese historial se guarda con `save_history` (mejor esfuerzo): si falla la base o falta `DATABASE_URL`, se registra el error y la respuesta principal sale igual. Casos de uso `manage_saved_places`, `register_device`, `record_vibration_event`; validación común en `application/validation.py`. Migraciones aplicadas en Neon y verificadas (7 tablas + `schema_migrations`, usuario semilla, `GET /health/db` ok).

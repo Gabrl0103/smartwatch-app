@@ -1,5 +1,8 @@
 package com.rumbo.watchapp.application.usecase
 
+import com.rumbo.watchapp.application.speech.Phrase
+import com.rumbo.watchapp.application.speech.navigationPhrase
+import com.rumbo.watchapp.application.speech.startPhrase
 import com.rumbo.watchapp.domain.model.Coordinates
 import com.rumbo.watchapp.domain.model.LocationFix
 import com.rumbo.watchapp.domain.model.Place
@@ -11,6 +14,7 @@ import com.rumbo.watchapp.domain.navigation.NavigationEvent
 import com.rumbo.watchapp.domain.navigation.NavigationStatus
 import com.rumbo.watchapp.domain.navigation.NavigationThresholds
 import com.rumbo.watchapp.domain.port.RoutesRepository
+import com.rumbo.watchapp.domain.port.SpeechOutput
 import com.rumbo.watchapp.domain.port.VibrationController
 import com.rumbo.watchapp.domain.port.VibrationEventsRepository
 import com.rumbo.watchapp.domain.vibration.VibrationPattern
@@ -41,12 +45,15 @@ data class TrackingState(
  * Une GPS, motor de navegación y vibraciones. Las lecturas y el ticker corren en el mismo
  * [CoroutineScope]; usar uno de un solo hilo (p. ej. viewModelScope) para no tener carreras.
  * Cada vibración se anota en [vibrationEvents] en segundo plano; si falla, se sigue navegando.
+ * La voz ([speech]) solo acompaña: dice el inicio y los avisos importantes sin esperar a que
+ * terminen, y si falla las vibraciones siguen igual.
  */
 class TrackNavigation(
     private val fixes: Flow<LocationFix>,
     private val routes: RoutesRepository,
     private val vibration: VibrationController,
     private val vibrationEvents: VibrationEventsRepository,
+    private val speech: SpeechOutput,
     private val clock: () -> Long,
     private val thresholds: NavigationThresholds = NavigationThresholds(),
     private val tickMs: Long = 1_000,
@@ -69,6 +76,7 @@ class TrackNavigation(
         val now = clock()
         useRoute(route, now)
         vibrate(VibrationPatterns.ON_ROUTE, now)
+        say(Phrase(startPhrase(route)))
         job = scope.launch {
             launch {
                 val filter = LocationFilter(thresholds)
@@ -99,12 +107,22 @@ class TrackNavigation(
         route = null
         _state.value = TrackingState()
         vibration.stop()
+        speech.stop()
     }
 
     private fun CoroutineScope.handle(events: List<NavigationEvent>, now: Long) {
         VibrationPatterns.mostImportant(events)?.let { vibrate(it, now) }
+        engine?.let { navigationPhrase(events, it.snapshot) }?.let(::say)
         if (NavigationEvent.RecalculateRequested in events) recalculate()
         publish()
+    }
+
+    private fun say(phrase: Phrase) {
+        try {
+            speech.speak(phrase.text, phrase.priority)
+        } catch (e: Exception) {
+            // La voz nunca debe detener la navegación.
+        }
     }
 
     // Patrones que se repiten mientras dure el estado (en ruta y sin señal).

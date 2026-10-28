@@ -12,11 +12,18 @@ import androidx.wear.compose.material3.FilledIconButton
 import androidx.wear.compose.material3.FilledTonalButton
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
+import androidx.wear.compose.material3.SwitchButton
 import androidx.wear.compose.material3.Text
 import com.rumbo.watchapp.R
 
 @Composable
-fun StartScreen(onSpeak: () -> Unit, onSavedPlaces: () -> Unit, gpsAvailable: Boolean) {
+fun StartScreen(
+    onSpeak: () -> Unit,
+    onSavedPlaces: () -> Unit,
+    voiceEnabled: Boolean,
+    onVoiceChange: (Boolean) -> Unit,
+    gpsAvailable: Boolean,
+) {
     CenteredScreen {
         Text(
             text = "¿A dónde vamos?",
@@ -41,6 +48,14 @@ fun StartScreen(onSpeak: () -> Unit, onSavedPlaces: () -> Unit, gpsAvailable: Bo
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         ) {
             Text("Lugares guardados", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+        }
+        // El estado va en el texto ("sí"/"no"), no solo en el color del interruptor.
+        SwitchButton(
+            checked = voiceEnabled,
+            onCheckedChange = onVoiceChange,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        ) {
+            Text(if (voiceEnabled) "Voz: sí" else "Voz: no")
         }
         if (!gpsAvailable) NoGpsLabel()
     }

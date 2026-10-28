@@ -12,10 +12,17 @@ import org.json.JSONException
 import org.json.JSONObject
 
 // Render duerme el servicio gratis; la primera petición puede tardar en despertarlo.
-private const val TIMEOUT_MS = 90_000
+internal const val TIMEOUT_MS = 90_000
 private const val JSON_CONTENT_TYPE = "application/json; charset=utf-8"
 
-internal class HttpResponse(val code: Int, val body: String)
+/** true desde que el backend respondió una vez en este proceso: ya no está dormido. */
+@Volatile
+internal var backendAwake = false
+    private set
+
+internal class HttpResponse(val code: Int, val bytes: ByteArray) {
+    val body: String get() = bytes.toString(Charsets.UTF_8)
+}
 
 /** Hace una petición al backend y devuelve el código y el cuerpo, sea éxito o error. */
 internal suspend fun backendRequest(
@@ -23,20 +30,22 @@ internal suspend fun backendRequest(
     path: String,
     contentType: String? = null,
     body: ByteArray? = null,
+    timeoutMs: Int = TIMEOUT_MS,
 ): HttpResponse = withContext(Dispatchers.IO) {
     val connection = URL(BASE_URL + path).openConnection() as HttpURLConnection
     try {
         connection.requestMethod = method
-        connection.connectTimeout = TIMEOUT_MS
-        connection.readTimeout = TIMEOUT_MS
+        connection.connectTimeout = timeoutMs
+        connection.readTimeout = timeoutMs
         if (body != null) {
             connection.doOutput = true
             contentType?.let { connection.setRequestProperty("Content-Type", it) }
             connection.outputStream.use { it.write(body) }
         }
         val code = connection.responseCode
+        backendAwake = true
         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-        HttpResponse(code, stream?.bufferedReader()?.use { it.readText() }.orEmpty())
+        HttpResponse(code, stream?.use { it.readBytes() } ?: ByteArray(0))
     } catch (e: SocketTimeoutException) {
         throw AppError("El servidor tardó demasiado en responder, intenta de nuevo")
     } catch (e: IOException) {
@@ -47,8 +56,11 @@ internal suspend fun backendRequest(
 }
 
 /** Envía [json] en el cuerpo de un POST. */
-internal suspend fun backendPostJson(path: String, json: JSONObject): HttpResponse =
-    backendRequest("POST", path, JSON_CONTENT_TYPE, json.toString().toByteArray())
+internal suspend fun backendPostJson(
+    path: String,
+    json: JSONObject,
+    timeoutMs: Int = TIMEOUT_MS,
+): HttpResponse = backendRequest("POST", path, JSON_CONTENT_TYPE, json.toString().toByteArray(), timeoutMs)
 
 /** Devuelve el cuerpo si la respuesta es 2xx; si no, lanza el mensaje de error del backend. */
 internal fun HttpResponse.requireOk(): String {

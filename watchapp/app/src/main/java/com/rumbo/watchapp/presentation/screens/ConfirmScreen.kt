@@ -18,6 +18,7 @@ import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.presentation.format.formatDistance
 import com.rumbo.watchapp.presentation.format.formatWalkingMinutes
 import com.rumbo.watchapp.presentation.theme.StatusOffRoute
+import com.rumbo.watchapp.presentation.viewmodel.SAVE_FAILED_MESSAGE
 import com.rumbo.watchapp.presentation.viewmodel.SaveStatus
 
 @Composable
@@ -66,7 +67,7 @@ fun ConfirmScreen(
         }
         if (save == SaveStatus.FAILED) {
             Text(
-                text = "No pude guardar el lugar",
+                text = SAVE_FAILED_MESSAGE,
                 style = MaterialTheme.typography.labelMedium,
                 color = StatusOffRoute,
                 textAlign = TextAlign.Center,

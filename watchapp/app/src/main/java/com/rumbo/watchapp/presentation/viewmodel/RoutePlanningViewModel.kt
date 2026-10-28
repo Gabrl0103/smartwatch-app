@@ -3,6 +3,7 @@ package com.rumbo.watchapp.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rumbo.watchapp.application.location.LocationTracker
+import com.rumbo.watchapp.application.speech.confirmPhrase
 import com.rumbo.watchapp.application.usecase.ManageSavedPlaces
 import com.rumbo.watchapp.application.usecase.PlanRouteFromVoice
 import com.rumbo.watchapp.application.usecase.TrackingState
@@ -11,6 +12,8 @@ import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.domain.model.SavedPlace
 import com.rumbo.watchapp.domain.port.AudioRecorder
 import com.rumbo.watchapp.domain.port.NavigationRunner
+import com.rumbo.watchapp.domain.port.SpeechOutput
+import com.rumbo.watchapp.domain.port.VoiceSettings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,10 +32,15 @@ class RoutePlanningViewModel(
     private val locationTracker: LocationTracker,
     private val navigationRunner: NavigationRunner,
     val navigationState: StateFlow<TrackingState>,
+    private val speech: SpeechOutput,
+    private val voiceSettings: VoiceSettings,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<PlanState>(PlanState.Start)
     val state: StateFlow<PlanState> = _state.asStateFlow()
+
+    private val _voiceEnabled = MutableStateFlow(voiceSettings.isEnabled())
+    val voiceEnabled: StateFlow<Boolean> = _voiceEnabled.asStateFlow()
 
     private val busy get() = _state.value.let {
         it is PlanState.Listening || it is PlanState.Processing || it is PlanState.LoadingPlaces
@@ -53,7 +61,7 @@ class RoutePlanningViewModel(
                 delay(RECORDING_MS)
                 val audio = recorder.stop()
                 _state.value = PlanState.Processing
-                _state.value = PlanState.Confirming(planRoute(audio))
+                confirm(planRoute(audio))
             } catch (e: CancellationException) {
                 recorder.release()
                 throw e
@@ -80,7 +88,7 @@ class RoutePlanningViewModel(
         if (_state.value !is PlanState.SavedPlaces) return
         launchSavedPlaces {
             _state.value = PlanState.Processing
-            _state.value = PlanState.Confirming(savedPlaces.planRoute(place), SaveStatus.SAVED)
+            confirm(savedPlaces.planRoute(place), SaveStatus.SAVED)
         }
     }
 
@@ -121,7 +129,15 @@ class RoutePlanningViewModel(
                 SaveStatus.FAILED
             }
             setSaveStatus(route, status)
+            if (status == SaveStatus.FAILED) speech.speak(SAVE_FAILED_MESSAGE)
         }
+    }
+
+    /** Interruptor "Voz: sí/no"; al apagarla se calla lo que esté sonando. Las vibraciones siguen. */
+    fun setVoiceEnabled(enabled: Boolean) {
+        voiceSettings.setEnabled(enabled)
+        _voiceEnabled.value = enabled
+        if (!enabled) speech.stop()
     }
 
     /** Arranca la navegación en el servicio en primer plano para que siga con la pantalla apagada. */
@@ -139,11 +155,19 @@ class RoutePlanningViewModel(
     }
 
     fun reset() {
+        speech.stop()
         _state.value = PlanState.Start
     }
 
+    /** Muestra el error y también lo lee. */
     fun showError(message: String, retry: RetryAction = RetryAction.LISTEN) {
         _state.value = PlanState.Error(message, retry)
+        speech.speak(message)
+    }
+
+    private fun confirm(route: Route, save: SaveStatus = SaveStatus.IDLE) {
+        _state.value = PlanState.Confirming(route, save)
+        speech.speak(confirmPhrase(route))
     }
 
     // Solo cambia el botón si el usuario sigue confirmando esa misma ruta.

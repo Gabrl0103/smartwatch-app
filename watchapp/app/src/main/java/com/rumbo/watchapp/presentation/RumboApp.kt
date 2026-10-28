@@ -45,6 +45,7 @@ fun RumboApp(viewModel: RoutePlanningViewModel) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
     val navigation by viewModel.navigationState.collectAsState()
+    val voiceEnabled by viewModel.voiceEnabled.collectAsState()
     var gpsAvailable by remember {
         mutableStateOf(context.isGranted(Manifest.permission.ACCESS_FINE_LOCATION))
     }
@@ -94,6 +95,8 @@ fun RumboApp(viewModel: RoutePlanningViewModel) {
                 PlanState.Start -> StartScreen(
                     onSpeak = onSpeak,
                     onSavedPlaces = viewModel::openSavedPlaces,
+                    voiceEnabled = voiceEnabled,
+                    onVoiceChange = viewModel::setVoiceEnabled,
                     gpsAvailable = gpsAvailable,
                 )
                 PlanState.Listening -> ListeningScreen()

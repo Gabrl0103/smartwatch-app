@@ -22,6 +22,8 @@ class MainActivity : ComponentActivity() {
                     container.locationTracker,
                     container.navigationRunner,
                     container.trackNavigation.state,
+                    container.speech,
+                    container.voiceSettings,
                 )
             }
         }
