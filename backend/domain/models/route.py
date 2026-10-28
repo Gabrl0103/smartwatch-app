@@ -9,6 +9,12 @@ class Maneuver(str, Enum):
     ARRIVE = "arrive"
 
 
+class RouteStatus(str, Enum):
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
 @dataclass(frozen=True)
 class Coordinates:
     lat: float

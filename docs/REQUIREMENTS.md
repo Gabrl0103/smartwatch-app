@@ -57,6 +57,7 @@ smartwatch-nav/
 │   ├── application/use_cases/
 │   ├── infrastructure/{routing,geocoding,assistant,database,config}/
 │   ├── presentation/{routers,dto}/
+│   ├── scripts/migrate.py
 │   ├── tests/
 │   ├── .env.example
 │   └── requirements.txt
@@ -100,28 +101,47 @@ smartwatch-nav/
 
 ## 6. Modelo de datos
 
+PostgreSQL (Neon). El esquema se crea con migraciones SQL versionadas en `database/migrations/` (`001_create_tables.sql`, `002_seed_default_user.sql`, ...) que aplica `backend/scripts/migrate.py`. Nombres de tablas y columnas en inglés:
+
 ```
-User
- - id, nombre (usuario único fijo, sin auth)
+users            (usuario único fijo, sin auth; semilla id 1, "Usuario")
+ - id, name
 
-Device
- - id, user_id, tipo (wear_os), registrado_en
+devices          (id = UUID generado por el reloj, así registrarlo dos veces no duplica)
+ - id, user_id → users, type (wear_os), registered_at
 
-Route
- - id, user_id, origen (lat/lng), destino (lat/lng), nombre_destino, creado_en,
-   estado (activa/completada/cancelada)
+saved_places
+ - id, user_id → users, name, lat, lng, created_at
 
-RouteStep
- - id, route_id, orden, tipo_maniobra (left/right/straight/arrive),
-   distancia_hasta_siguiente, lat/lng del punto
+routes
+ - id, user_id → users, origin_lat, origin_lng, destination_lat, destination_lng,
+   destination_name, created_at, status (active/completed/cancelled)
 
-VoiceCommand
- - id, user_id, texto_transcrito, intencion (navigate/ask/cancel/repeat),
-   destino_extraido, creado_en
+route_steps      (único por route_id + step_order)
+ - id, route_id → routes, step_order, maneuver (left/right/straight/arrive),
+   distance_to_next_m, lat, lng
 
-VibrationEvent (log para demo/sustentación)
- - id, route_step_id, patron_emitido, timestamp
+voice_commands
+ - id, user_id → users, transcribed_text, intent (navigate/ask/cancel/repeat),
+   extracted_destination, created_at
+
+vibration_events (log para demo/sustentación)
+ - id, route_step_id → route_steps (nullable), pattern, emitted_at
 ```
+
+Índices por `user_id` en `devices`, `saved_places`, `routes` y `voice_commands`; por `route_id` en `route_steps` (vía la restricción única) y por `route_step_id` en `vibration_events`.
+
+### Migraciones
+
+- Desde `backend/`: `python scripts/migrate.py` (usa `DATABASE_URL` del entorno o de `backend/.env`).
+- Cada archivo `.sql` corre en su propia transacción y queda anotado en `schema_migrations`; correr el script otra vez solo aplica las nuevas. Si una falla, se detiene sin anotarla.
+- Los archivos no deben usar `;` ni `--` dentro de textos (el script separa sentencias por `;` y quita comentarios `--`).
+- Para agregar un cambio de esquema, crear el siguiente archivo numerado (`003_...sql`) y actualizar `infrastructure/database/tables.py`, que debe coincidir con las migraciones.
+
+### Persistencia en el backend
+
+- Puertos en `domain/ports/`: `SavedPlaceRepositoryPort`, `RouteRepositoryPort`, `VoiceCommandRepositoryPort`, `VibrationEventRepositoryPort`, `DeviceRepositoryPort`.
+- Implementaciones con SQLAlchemy Core en `infrastructure/database/` (`SqlSavedPlaceRepository`, `SqlRouteRepository`, `SqlVoiceCommandRepository`, `SqlVibrationEventRepository`, `SqlDeviceRepository`), probadas con SQLite en memoria.
 
 ## 7. Requerimientos funcionales
 
@@ -185,6 +205,7 @@ Diseñadas en Claude Design (lienzo "Rumbo — UI del reloj"), en formato cuadra
 
 ## 13. Changelog
 
+- **v0.10** (2026-10-28): Base de datos. Migraciones SQL versionadas en `database/migrations/` (`001_create_tables.sql` con las 7 tablas, claves foráneas e índices; `002_seed_default_user.sql` con el usuario fijo id 1 "Usuario") y `backend/scripts/migrate.py`, que las aplica en orden, cada una en su transacción, y anota las corridas en `schema_migrations` (idempotente). Columnas en inglés (p. ej. `status` active/completed/cancelled, `step_order`, `emitted_at`); el id de `devices` lo genera el reloj. Nuevos modelos `SavedPlace`, `Device`, `RouteStatus` y `DEFAULT_USER_ID`, cinco puertos de repositorio y sus implementaciones SQLAlchemy Core (`infrastructure/database/tables.py` + `Sql*Repository`), con tests sobre SQLite en memoria.
 - **v0.9** (2026-10-26): GPX de demostración en `docs/demo/` generados con `tools/route_to_gpx.py` a partir de una ruta real de `POST /routes` (centro de Pasto → Parque Bolívar, 1 970 m, 16 pasos; un punto cada ~5 m a 1,4 m/s): recorrido normal, con desvío de 35 m durante ~40 m y con un hueco de ~15 s sin señal, más instrucciones para el emulador y Logcat. La navegación ya no se corta con la pantalla apagada: la pantalla "En ruta" mantiene `FLAG_KEEP_SCREEN_ON` y un servicio en primer plano de tipo `location` (notificación "Rumbo: navegando") corre `TrackNavigation` desde que se toca "Ir" hasta "Terminar". Nuevos permisos `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION` y `POST_NOTIFICATIONS` (pedido al tocar "Ir" en Android 13+). Un solo `AppContainer` por proceso (`RumboApplication`) compartido por actividad y servicio; puerto `NavigationRunner` para que el ViewModel no dependa del servicio.
 - **v0.8** (2026-10-26): Motor de navegación en el reloj, en Kotlin puro (domain/application, sin `android.*`) con pruebas JUnit. GPS real con Fused Location (alta precisión, 1 s / mínimo 500 ms); se piden `ACCESS_FINE_LOCATION` y `ACCESS_COARSE_LOCATION` junto con el micrófono (Android 12+ exige pedirlas juntas). Sin permiso se usa el centro de Pasto y se muestra "Sin GPS". El origen de `POST /routes` es la última lectura con menos de 30 s y precisión < 50 m. Geometría: haversine, rumbo, proyección equirectangular local, distancia punto-segmento, snap a la polilínea (con ventana alrededor del progreso) y distancias a lo largo de la ruta. Filtro: descarta precisión > 25 m o antigüedad > 5 s, mediana de 3 lecturas y velocidad/rumbo calculados si faltan. `NavigationEngine` recibe el tiempo en cada llamada; estados en ruta, giro próximo, maniobra, desviado, sin señal y llegada; progreso que solo avanza; umbrales en `NavigationThresholds`; histéresis por avisos únicos por paso y desvío 25 m (3 lecturas) / regreso 15 m. Patrones de vibración como datos (`VibrationPatterns`) y `AndroidVibrationController` (registra cada patrón con `Log.d("Vibracion")`). `TrackNavigation` une GPS, motor y vibración y recalcula la ruta tras 10 s fuera de ella. Nueva pantalla "En ruta" sin mapa con estado, siguiente paso, distancia restante e indicador del patrón; "Terminar" apaga GPS y vibración.
 - **v0.7** (2026-10-26): El reloj arranca en el flujo "pedir destino por voz → confirmar" y se elimina la pantalla de prueba de voz. Dominio del reloj: `Coordinates`, `Place`, `Route`/`RouteStep` (`Maneuver` left/right/straight/arrive), `AppError` y puertos `VoiceRepository`, `PlacesRepository`, `RoutesRepository` y `AudioRecorder`. Caso de uso `PlanRouteFromVoice`: interpreta el audio, exige intención `navigate` con destino, busca el lugar y pide la ruta desde un origen fijo (centro de Pasto, 1.2136, -77.2811; pendiente reemplazar por GPS). Clientes HTTP sin dependencias nuevas (HttpURLConnection + org.json, timeouts de 90 s) que convierten `{"error":{"message"}}` y fallas de red en mensajes en español. Pantallas por estado (Inicio, Escuchando, Buscando ruta, Confirmar, En ruta provisional, Error) con los colores de Rumbo; el texto sobre el primario va oscuro por contraste. JUnit para el caso de uso.
