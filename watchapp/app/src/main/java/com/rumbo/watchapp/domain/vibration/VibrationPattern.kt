@@ -19,4 +19,18 @@ data class VibrationPattern(
     val pulseDurationsMs: List<Long> get() = timingsMs.filterIndexed { i, _ -> amplitudes[i] > 0 }
     val pulseAmplitudes: List<Int> get() = amplitudes.filter { it > 0 }
     val durationMs: Long get() = timingsMs.sum()
+
+    /** Cada pulso con su inicio dentro del patrón; sirve para dibujarlo al ritmo real. */
+    val pulses: List<Pulse>
+        get() {
+            var startMs = 0L
+            return timingsMs.indices.mapNotNull { i ->
+                val pulse = if (amplitudes[i] > 0) Pulse(startMs, timingsMs[i], amplitudes[i]) else null
+                startMs += timingsMs[i]
+                pulse
+            }
+        }
 }
+
+/** Un tramo en que el motor vibra: empieza en [startMs], dura [durationMs] y tiene fuerza [amplitude]. */
+data class Pulse(val startMs: Long, val durationMs: Long, val amplitude: Int)

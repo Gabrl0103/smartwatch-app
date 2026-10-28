@@ -51,6 +51,18 @@ class VibrationPatternsTest {
     }
 
     @Test
+    fun pulsesKeepTheirPlaceInThePattern() {
+        assertEquals(
+            listOf(Pulse(0, 300, 150), Pulse(500, 300, 150)),
+            VibrationPatterns.LEFT.pulses,
+        )
+        all.forEach { pattern ->
+            assertEquals(pattern.label, pattern.pulseDurationsMs, pattern.pulses.map { it.durationMs })
+            assertTrue(pattern.label, pattern.pulses.all { it.startMs + it.durationMs <= pattern.durationMs })
+        }
+    }
+
+    @Test
     fun leftAndRightFeelDifferent() {
         assertTrue(VibrationPatterns.LEFT.pulseDurationsMs != VibrationPatterns.RIGHT.pulseDurationsMs)
     }

@@ -36,10 +36,23 @@ data class TrackingState(
     val destinationName: String = "",
     val nextInstruction: String? = null,
     val distanceToNextStepM: Double? = null,
+    val stepLengthM: Double? = null,
     val remainingM: Double = 0.0,
     val pattern: VibrationPattern? = null,
     val recalculating: Boolean = false,
-)
+) {
+    /**
+     * Avance hacia el siguiente paso, de 0 (recién pasado el anterior) a 1 (encima del giro): la
+     * distancia que falta normalizada por el largo del tramo. Al llegar queda en 1.
+     */
+    val stepProgress: Float
+        get() {
+            if (status == NavigationStatus.ARRIVED) return 1f
+            val toNext = distanceToNextStepM ?: return 0f
+            val length = stepLengthM?.takeIf { it > 0 } ?: return 0f
+            return (1 - toNext / length).coerceIn(0.0, 1.0).toFloat()
+        }
+}
 
 /**
  * Une GPS, motor de navegación y vibraciones. Las lecturas y el ticker corren en el mismo
@@ -190,6 +203,7 @@ class TrackNavigation(
             destinationName = route?.destinationName.orEmpty(),
             nextInstruction = snapshot.nextStep?.instruction,
             distanceToNextStepM = snapshot.distanceToNextStepM,
+            stepLengthM = snapshot.stepLengthM,
             remainingM = snapshot.remainingM,
             recalculating = recalculating,
         )

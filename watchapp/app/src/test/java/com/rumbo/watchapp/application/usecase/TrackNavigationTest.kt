@@ -111,6 +111,8 @@ class TrackNavigationTest {
             assertEquals("Gire a la derecha.", state.nextInstruction)
             assertEquals(VibrationPatterns.ON_ROUTE, state.pattern)
             assertEquals(400.0, state.remainingM, 0.5)
+            assertEquals(200.0, state.stepLengthM!!, 0.5)
+            assertEquals(0f, state.stepProgress, 0.01f)
         } finally {
             tracking.stop()
         }

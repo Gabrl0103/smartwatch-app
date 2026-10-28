@@ -26,7 +26,7 @@ class SpeechPhrasesTest {
     )
 
     private fun snapshot(nextStep: RouteStep? = turn, distance: Double? = 34.0) =
-        NavigationSnapshot(NavigationStatus.TURN_APPROACHING, nextStep, distance, 500.0, 100.0, 2.0)
+        NavigationSnapshot(NavigationStatus.TURN_APPROACHING, nextStep, distance, 120.0, 500.0, 100.0, 2.0)
 
     @Test
     fun numbersInWords() {

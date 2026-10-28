@@ -36,6 +36,7 @@ class NavigationEngineTest {
         assertEquals(NavigationStatus.ON_ROUTE, engine.snapshot.status)
         assertEquals("Gire a la derecha.", engine.snapshot.nextStep?.instruction)
         assertEquals(50.0, engine.snapshot.distanceToNextStepM!!, 0.5)
+        assertEquals(200.0, engine.snapshot.stepLengthM!!, 0.5)
     }
 
     @Test
@@ -75,6 +76,8 @@ class NavigationEngineTest {
         assertEquals(listOf(NavigationEvent.NextStepChanged(route.steps[2])), events)
         assertEquals(NavigationStatus.ON_ROUTE, engine.snapshot.status)
         assertEquals(170.0, engine.snapshot.distanceToNextStepM!!, 0.5)
+        // El tramo nuevo va del giro (200 m) a la llegada (400 m).
+        assertEquals(200.0, engine.snapshot.stepLengthM!!, 0.5)
     }
 
     @Test

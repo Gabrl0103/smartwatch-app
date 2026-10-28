@@ -20,6 +20,7 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import com.rumbo.watchapp.application.usecase.TrackingState
 import com.rumbo.watchapp.domain.navigation.NavigationStatus
+import com.rumbo.watchapp.presentation.components.VibrationIndicator
 import com.rumbo.watchapp.presentation.format.formatDistance
 import com.rumbo.watchapp.presentation.theme.StatusArrived
 import com.rumbo.watchapp.presentation.theme.StatusNoSignal

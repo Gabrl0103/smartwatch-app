@@ -23,6 +23,8 @@ data class NavigationSnapshot(
     val status: NavigationStatus,
     val nextStep: RouteStep?,
     val distanceToNextStepM: Double?,
+    /** Largo del tramo que termina en el siguiente paso (desde el paso anterior o el inicio). */
+    val stepLengthM: Double?,
     val remainingM: Double,
     val progressM: Double,
     val distanceToRouteM: Double?,

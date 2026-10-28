@@ -59,6 +59,7 @@ class NavigationEngine(
                 status = status,
                 nextStep = next,
                 distanceToNextStepM = next?.let { distanceToNextStep() },
+                stepLengthM = next?.let { stepLength() },
                 remainingM = (totalM - progressM).coerceAtLeast(0.0),
                 progressM = progressM,
                 distanceToRouteM = distanceToRouteM,
@@ -113,6 +114,8 @@ class NavigationEngine(
     }
 
     private fun distanceToNextStep() = (stepAlong[nextIndex] - progressM).coerceAtLeast(0.0)
+
+    private fun stepLength() = stepAlong[nextIndex] - (stepAlong.getOrNull(nextIndex - 1) ?: 0.0)
 
     private fun advanceNextStep(events: MutableList<NavigationEvent>) {
         var index = nextIndex
