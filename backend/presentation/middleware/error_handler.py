@@ -1,11 +1,19 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from domain.errors import DomainError, ExternalServiceError, NotFoundError, ValidationError
+from domain.errors import (
+    DomainError,
+    ExternalServiceError,
+    NotFoundError,
+    QuotaExhaustedError,
+    ValidationError,
+)
 
+# Se toma la primera clase que coincide: las subclases van antes que su padre.
 _STATUS = {
     NotFoundError: 404,
     ValidationError: 422,
+    QuotaExhaustedError: 429,
     ExternalServiceError: 502,
 }
 

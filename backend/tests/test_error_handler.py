@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from domain.errors import NotFoundError, ValidationError
+from domain.errors import ExternalServiceError, NotFoundError, QuotaExhaustedError, ValidationError
 from presentation.middleware.error_handler import register_error_handlers
 
 
@@ -16,6 +16,14 @@ def _client():
     @app.get("/invalid")
     def invalid():
         raise ValidationError("Dato inválido.")
+
+    @app.get("/quota")
+    def quota():
+        raise QuotaExhaustedError("Sin cuota.")
+
+    @app.get("/external")
+    def external():
+        raise ExternalServiceError("Falló.")
 
     @app.get("/boom")
     def boom():
@@ -32,6 +40,13 @@ def test_not_found_maps_to_404():
 
 def test_validation_maps_to_422():
     assert _client().get("/invalid").status_code == 422
+
+
+def test_quota_exhausted_maps_to_429_before_its_parent():
+    r = _client().get("/quota")
+    assert r.status_code == 429
+    assert r.json()["error"]["code"] == "QUOTA_EXHAUSTED"
+    assert _client().get("/external").status_code == 502
 
 
 def test_unexpected_error_maps_to_500_without_leaking_details():

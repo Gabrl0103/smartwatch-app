@@ -6,7 +6,7 @@ import wave
 import httpx
 import pytest
 
-from domain.errors import ExternalServiceError
+from domain.errors import ExternalServiceError, QuotaExhaustedError
 from infrastructure.speech.gemini_speech_synthesizer import (
     VOICE_NAME,
     GeminiSpeechSynthesizer,
@@ -78,7 +78,7 @@ def test_returns_wav_unchanged_when_gemini_already_sends_wav():
 def test_quota_exceeded_raises_clear_error():
     synthesizer = make_synthesizer(lambda r: httpx.Response(429, json={}))
 
-    with pytest.raises(ExternalServiceError, match="cuota"):
+    with pytest.raises(QuotaExhaustedError, match="cuota"):
         synthesizer.synthesize("Hola")
 
 

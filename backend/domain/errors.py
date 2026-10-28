@@ -19,3 +19,9 @@ class ValidationError(DomainError):
 
 class ExternalServiceError(DomainError):
     code = "EXTERNAL_SERVICE_ERROR"
+
+
+class QuotaExhaustedError(ExternalServiceError):
+    """El servicio externo rechazó la petición por cuota agotada (p. ej. 429 de Gemini)."""
+
+    code = "QUOTA_EXHAUSTED"

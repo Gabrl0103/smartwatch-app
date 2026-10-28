@@ -5,7 +5,7 @@ import wave
 
 import httpx
 
-from domain.errors import ExternalServiceError
+from domain.errors import ExternalServiceError, QuotaExhaustedError
 
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
@@ -53,7 +53,7 @@ class GeminiSpeechSynthesizer:
         except httpx.HTTPError as error:
             raise ExternalServiceError("No pude conectar con Gemini para generar la voz.") from error
         if response.status_code == 429:
-            raise ExternalServiceError(
+            raise QuotaExhaustedError(
                 "Se agotó la cuota gratuita de voz de Gemini. Intenta más tarde."
             )
         if response.status_code != 200:
