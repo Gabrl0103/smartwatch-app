@@ -62,15 +62,15 @@ internal suspend fun backendPostJson(
     timeoutMs: Int = TIMEOUT_MS,
 ): HttpResponse = backendRequest("POST", path, JSON_CONTENT_TYPE, json.toString().toByteArray(), timeoutMs)
 
+/** Campo de {"error": {...}} del backend (p. ej. "code" o "message"), si viene. */
+internal fun HttpResponse.errorField(key: String): String? = runCatching {
+    JSONObject(body).getJSONObject("error").getString(key)
+}.getOrNull()?.ifBlank { null }
+
 /** Devuelve el cuerpo si la respuesta es 2xx; si no, lanza el mensaje de error del backend. */
 internal fun HttpResponse.requireOk(): String {
     if (code in 200..299) return body
-    val serverMessage = runCatching {
-        JSONObject(body).getJSONObject("error").getString("message")
-    }.getOrNull()
-    throw AppError(
-        if (serverMessage.isNullOrBlank()) "El servidor respondió con error $code" else serverMessage,
-    )
+    throw AppError(errorField("message") ?: "El servidor respondió con error $code")
 }
 
 internal fun <T> parseJson(body: String, parse: (JSONObject) -> T): T =

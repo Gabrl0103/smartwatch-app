@@ -3,52 +3,33 @@ package com.rumbo.watchapp.infrastructure.tts
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
-import android.util.Log
 import com.rumbo.watchapp.infrastructure.network.SpeechApiClient
 import java.io.File
 import java.io.IOException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 
-private const val TAG = "Rumbo"
-
 /**
  * Voz de Gemini (POST /speech) guardada en el cache del reloj y reproducida con MediaPlayer.
- * Si el servidor o la red fallan, usa [fallback] (TextToSpeech de Android).
+ * Es el respaldo cuando el reloj no tiene voz propia; los errores suben a [SpeechOutputImpl].
  */
-class AndroidSpeechPlayer(
-    context: Context,
-    private val fallback: AndroidTextToSpeech,
-) : SpeechPlayer {
+class GeminiSpeechPlayer(context: Context) : SpeechPlayer {
 
     private val cacheDir = File(context.applicationContext.cacheDir, "speech")
     private var staleFilesRemoved = false
 
     override suspend fun play(text: String) {
-        val file = try {
-            audioFile(text)
-        } catch (e: CancellationException) {
+        val file = audioFile(text)
+        try {
+            playFile(file)
+        } catch (e: IOException) {
+            // Un WAV dañado no debe quedarse en el cache.
+            file.delete()
             throw e
-        } catch (e: Exception) {
-            Log.w(TAG, "No pude traer la voz del servidor: ${e.message}")
-            null
         }
-        if (file != null) {
-            try {
-                playFile(file)
-                return
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "No pude reproducir la voz guardada: ${e.message}")
-                file.delete()
-            }
-        }
-        fallback.speak(text)
     }
 
     // Reutiliza el WAV si la frase ya se pidió en esta versión; se escribe aparte y se renombra

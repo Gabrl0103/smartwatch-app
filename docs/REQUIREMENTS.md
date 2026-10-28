@@ -21,7 +21,7 @@
 | Backend | FastAPI (Python) | Curva baja, docs automáticas, fácil de testear |
 | Rutas a pie + geocodificación | Geoapify (modo `walk`) | Gratis con registro (3.000 créditos/día); rutas a pie y geocodificación en un solo servicio |
 | Voz → texto, intención y asistente | Gemini API (capa gratis, AI Studio) | Recibe el audio grabado en el reloj, lo transcribe, extrae la intención y responde; sin tarjeta de crédito. Necesario porque el emulador Wear OS no trae reconocimiento de voz |
-| Texto → voz | Gemini TTS desde el backend (`POST /speech`, modelo `gemini-3.8-flash-tts`, capa gratis) | El emulador Wear OS no trae motor TTS; un solo proveedor de IA y una voz igual en cualquier reloj |
+| Texto → voz | Principal: TextToSpeech del reloj en español. Respaldo: Gemini TTS desde el backend (`POST /speech`, modelo `gemini-3.8-flash-tts`, capa gratis) | La voz del reloj no gasta cuota ni red; el emulador Wear OS (API 34) no trae motor TTS, así que ahí habla Gemini |
 | Base de datos | PostgreSQL (Render o Supabase, free tier) | Gratis |
 | Hosting backend | Render (free tier) | $0; el servidor duerme tras inactividad |
 | Tests | pytest (backend) / JUnit (reloj) | Solo domain y application |
@@ -37,7 +37,7 @@ Dependencias apuntan hacia adentro: `domain` no conoce a nadie. Patrón Reposito
 **Reloj (watchapp)**
 - `domain`: models (Route, RouteStep, VibrationPattern, VoiceIntent), errors (RouteNotFoundError, GpsUnavailableError, VoiceNotUnderstoodError), ports (RoutingRepository, LocationProvider, VibrationController, SpeechRecorder, SpeechSynthesizer, VoiceAssistantRepository)
 - `application`: casos de uso (ProcessVoiceCommand, ConfirmDestination, CalculateRoute, TrackUserPosition, EmitNavigationInstruction, DetectDeviation, DetectArrival, AskAssistant)
-- `infrastructure`: cliente HTTP al backend, AndroidLocationProvider (FusedLocationProviderClient), AndroidVibrationController (Vibrator API), AndroidAudioRecorder (MediaRecorder, AAC), salida de voz en `infrastructure/tts` (`SpeechOutputImpl` + `AndroidSpeechPlayer` con `POST /speech` y TextToSpeech de respaldo), composition root (DI manual)
+- `infrastructure`: cliente HTTP al backend, AndroidLocationProvider (FusedLocationProviderClient), AndroidVibrationController (Vibrator API), AndroidAudioRecorder (MediaRecorder, AAC), salida de voz en `infrastructure/tts` (`SpeechOutputImpl` elige entre `AndroidTextToSpeech`, la voz principal, y `GeminiSpeechPlayer` con `POST /speech` como respaldo), composition root (DI manual)
 - `presentation`: pantallas Compose + ViewModels
 
 **Backend**
@@ -103,8 +103,11 @@ smartwatch-nav/
 
 - Puerto `SpeechOutput { speak(text, priority); stop() }` en `domain/port`; prioridades `NORMAL` y `HIGH` (giro, desvío, llegada).
 - `SpeechOutputImpl` decide qué suena: una frase nueva cancela la actual, salvo que la nueva sea `NORMAL` y la actual `HIGH` (esa se descarta). Si la voz está apagada no dice nada.
-- `AndroidSpeechPlayer` pide el WAV a `POST /speech` (90 s mientras Render despierta; 20 s cuando el backend ya respondió una vez), lo guarda en `cacheDir/speech/v2-<sha256 de "v2:" + texto>.wav` (al cambiar la versión se ignoran y borran los audios anteriores), lo reutiliza si la frase se repite y lo reproduce con `MediaPlayer` (uso "guía de navegación").
-- Si falla la red o el servidor, usa `TextToSpeech` de Android en es-CO; si no hay motor o no habla español (el emulador no trae), no dice nada y deja un `Log.w`. La voz nunca bloquea ni detiene la navegación ni las vibraciones.
+- Qué voz usa: 1) TextToSpeech del reloj si está listo (si aún arranca, lo espera hasta 3 s); 2) Gemini por `POST /speech` solo si la voz del reloj no está disponible o falla en esa frase; 3) nada. Si el backend responde `QUOTA_EXHAUSTED`/429, no se vuelve a llamar a Gemini durante 30 minutos.
+- `AndroidTextToSpeech` arranca al abrir la app y prueba en orden es-CO, es-419, es-US, es-MX, es-ES y "es"; usa el primero con `isLanguageAvailable >= LANG_AVAILABLE`. Deja en el log (etiqueta `Voz`) el motor, los motores instalados, los idiomas disponibles y el elegido, o el resultado de cada idioma si ninguno sirve. Si falta descargar el español (`LANG_MISSING_DATA`), Inicio muestra el botón "Falta la voz en español del reloj", que abre `TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA`.
+- Verificado en el emulador Wear OS API 34: no hay ningún servicio `TTS_SERVICE` instalado; el log dice `No hay motor TextToSpeech en el reloj (onInit=-1); se usará Gemini` e Inicio muestra "Voz: Gemini".
+- `GeminiSpeechPlayer` pide el WAV a `POST /speech` (90 s mientras Render despierta; 20 s cuando el backend ya respondió una vez), lo guarda en `cacheDir/speech/v2-<sha256 de "v2:" + texto>.wav` (al cambiar la versión se ignoran y borran los audios anteriores), lo reutiliza si la frase se repite y lo reproduce con `MediaPlayer` (uso "guía de navegación").
+- Si no hay voz del reloj y Gemini falla (red, servidor o cuota), no dice nada y deja un `Log.w` con etiqueta `Voz`. La voz nunca bloquea ni detiene la navegación ni las vibraciones.
 - Cuándo habla:
 
 | Momento | Frase | Prioridad |
@@ -210,7 +213,7 @@ vibration_events (log para demo/sustentación)
 
 Diseñadas en Claude Design (lienzo "Rumbo — UI del reloj"), en formato cuadrado redondeado (Wear OS Square) y una versión redonda de referencia.
 
-1. Inicio (voz): botón grande de micrófono, "¿A dónde vamos?" y, debajo, botón "Lugares guardados" e interruptor "Voz: sí" / "Voz: no" (el estado va en el texto, no solo en el color; se guarda en SharedPreferences y empieza en sí).
+1. Inicio (voz): botón grande de micrófono, "¿A dónde vamos?" y, debajo, botón "Lugares guardados" e interruptor "Voz: sí" / "Voz: no" (el estado va en el texto, no solo en el color; se guarda en SharedPreferences y empieza en sí). Debajo, en texto pequeño, qué voz se usa: "Voz: del reloj", "Voz: Gemini" o "Voz: no disponible"; y, si falta el español del motor, el botón "Falta la voz en español del reloj".
    - Lugares guardados: lista (`TransformingLazyColumn`); tocar un lugar pide la ruta y pasa a Confirmar; mantenerlo pulsado ofrece borrarlo con confirmación ("¿Borrar «X»?" Cancelar / Borrar). Si está vacía: "Aún no tienes lugares guardados".
 2. Escuchando destino.
 3. Confirmar destino: nombre, distancia y tiempo a pie; Ir / Cambiar y botón secundario "Guardar" ("Guardando..." → "Guardado"; si falla, "No pude guardar el lugar"). Si el destino vino de un lugar guardado ya aparece "Guardado".
@@ -244,6 +247,7 @@ Diseñadas en Claude Design (lienzo "Rumbo — UI del reloj"), en formato cuadra
 
 ## 13. Changelog
 
+- **v0.18** (2026-10-28): La voz del reloj (TextToSpeech) pasa a ser la principal y Gemini queda de respaldo. `AndroidTextToSpeech` arranca al abrir la app, prueba es-CO, es-419, es-US, es-MX, es-ES y "es", y deja en el log `Voz` el motor, los idiomas y el elegido o el motivo. `SpeechOutputImpl` usa la voz del reloj si está lista, Gemini (`GeminiSpeechPlayer`, antes `AndroidSpeechPlayer`) solo si no, y deja de llamar a Gemini 30 minutos tras un `QUOTA_EXHAUSTED` (nuevo `QuotaExhaustedError`). Inicio muestra qué voz se usa y, si falta el español del motor, un botón que abre la instalación de voces. El manifiesto ya tenía la consulta `TTS_SERVICE`. En el emulador Wear OS API 34 no hay motor TTS: habla Gemini. Tests de prioridad entre voces y de la pausa por cuota.
 - **v0.17** (2026-10-28): `scripts/try_speech.py --verify` pasa a 2 frases y normaliza números antes de comparar ("50" = "cincuenta", "1,6" = "uno coma seis"), para no dar falsos fallos cuando la transcripción usa cifras.
 - **v0.16** (2026-10-28): Nuevo error de dominio `QuotaExhaustedError` (código `QUOTA_EXHAUSTED`, HTTP 429). `POST /speech` lo devuelve cuando Gemini responde 429, en vez del 502 genérico.
 - **v0.15** (2026-10-28): Corrige que la voz leyera en voz alta la instrucción de estilo antes de cada frase. Según la guía de Gemini, los modelos TTS 3.8 tratan el texto como transcripción literal, así que el backend ahora envía solo la frase (sin `STYLE_PROMPT` ni system instruction); el acento depende de la voz (`VOICE_NAME`). El cache de audio del reloj pasa a la versión `v2` (`speechCacheFileName`) y borra los WAV viejos. `scripts/try_speech.py --verify` comprueba con 3 frases, transcribiendo con Gemini, que el audio contiene solo la frase; `--voices` lista voces por idioma.

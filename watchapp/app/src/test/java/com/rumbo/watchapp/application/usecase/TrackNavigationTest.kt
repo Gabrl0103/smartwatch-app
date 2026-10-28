@@ -14,6 +14,7 @@ import com.rumbo.watchapp.domain.navigation.NavigationStatus
 import com.rumbo.watchapp.domain.port.RoutesRepository
 import com.rumbo.watchapp.domain.port.SpeechOutput
 import com.rumbo.watchapp.domain.port.SpeechPriority
+import com.rumbo.watchapp.domain.port.SpeechStatus
 import com.rumbo.watchapp.domain.port.VibrationController
 import com.rumbo.watchapp.domain.port.VibrationEventsRepository
 import com.rumbo.watchapp.domain.vibration.VibrationPattern
@@ -23,6 +24,7 @@ import com.rumbo.watchapp.testing.fixAt
 import com.rumbo.watchapp.testing.lRoute
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -55,6 +57,7 @@ class TrackNavigationTest {
     private class FakeSpeech(private val error: Exception? = null) : SpeechOutput {
         val spoken = mutableListOf<Pair<String, SpeechPriority>>()
         var stops = 0
+        override val status = MutableStateFlow(SpeechStatus())
 
         override fun speak(text: String, priority: SpeechPriority) {
             error?.let { throw it }

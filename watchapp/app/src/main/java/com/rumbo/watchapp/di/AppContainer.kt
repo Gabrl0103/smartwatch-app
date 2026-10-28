@@ -21,8 +21,8 @@ import com.rumbo.watchapp.infrastructure.network.VibrationEventsApiClient
 import com.rumbo.watchapp.infrastructure.network.VoiceApiClient
 import com.rumbo.watchapp.infrastructure.storage.PreferencesDeviceStore
 import com.rumbo.watchapp.infrastructure.storage.PreferencesVoiceSettings
-import com.rumbo.watchapp.infrastructure.tts.AndroidSpeechPlayer
 import com.rumbo.watchapp.infrastructure.tts.AndroidTextToSpeech
+import com.rumbo.watchapp.infrastructure.tts.GeminiSpeechPlayer
 import com.rumbo.watchapp.infrastructure.tts.SpeechOutputImpl
 import com.rumbo.watchapp.infrastructure.vibration.AndroidVibrationController
 import kotlinx.coroutines.CancellationException
@@ -40,11 +40,14 @@ class AppContainer(context: Context) {
 
     val audioRecorder: AudioRecorder = MediaAudioRecorder(appContext)
     val voiceSettings: VoiceSettings = PreferencesVoiceSettings(appContext)
+    // La voz del reloj arranca aquí, al iniciar la app, para estar lista en la primera frase.
     val speech: SpeechOutput = SpeechOutputImpl(
-        player = AndroidSpeechPlayer(appContext, AndroidTextToSpeech(appContext)),
+        local = AndroidTextToSpeech(appContext),
+        remote = GeminiSpeechPlayer(appContext),
         isEnabled = voiceSettings::isEnabled,
         scope = appScope,
-        onError = { Log.w("Rumbo", "No se pudo hablar: ${it.message}") },
+        clock = clock,
+        onError = { Log.w("Voz", "No se pudo hablar: ${it.message}") },
     )
     val locationTracker = LocationTracker(AndroidLocationProvider(appContext), clock, appScope)
     val planRouteFromVoice = PlanRouteFromVoice(

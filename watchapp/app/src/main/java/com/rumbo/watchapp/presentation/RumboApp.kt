@@ -1,9 +1,12 @@
 package com.rumbo.watchapp.presentation
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.speech.tts.TextToSpeech
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -46,6 +49,7 @@ fun RumboApp(viewModel: RoutePlanningViewModel) {
     val state by viewModel.state.collectAsState()
     val navigation by viewModel.navigationState.collectAsState()
     val voiceEnabled by viewModel.voiceEnabled.collectAsState()
+    val speechStatus by viewModel.speechStatus.collectAsState()
     var gpsAvailable by remember {
         mutableStateOf(context.isGranted(Manifest.permission.ACCESS_FINE_LOCATION))
     }
@@ -79,6 +83,16 @@ fun RumboApp(viewModel: RoutePlanningViewModel) {
             viewModel.go()
         }
     }
+    // Abre el instalador de voces del motor; si no hay a dónde ir, avisa en pantalla y por voz.
+    val onInstallVoice = {
+        try {
+            context.startActivity(
+                Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        } catch (e: ActivityNotFoundException) {
+            viewModel.showError("Falta la voz en español del reloj")
+        }
+    }
     val onSpeak = {
         val missing = PERMISSIONS.filterNot { context.isGranted(it) }
         if (missing.isEmpty()) {
@@ -97,6 +111,8 @@ fun RumboApp(viewModel: RoutePlanningViewModel) {
                     onSavedPlaces = viewModel::openSavedPlaces,
                     voiceEnabled = voiceEnabled,
                     onVoiceChange = viewModel::setVoiceEnabled,
+                    speechStatus = speechStatus,
+                    onInstallVoice = onInstallVoice,
                     gpsAvailable = gpsAvailable,
                 )
                 PlanState.Listening -> ListeningScreen()

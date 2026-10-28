@@ -15,6 +15,8 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.SwitchButton
 import androidx.wear.compose.material3.Text
 import com.rumbo.watchapp.R
+import com.rumbo.watchapp.domain.port.SpeechEngine
+import com.rumbo.watchapp.domain.port.SpeechStatus
 
 @Composable
 fun StartScreen(
@@ -22,6 +24,8 @@ fun StartScreen(
     onSavedPlaces: () -> Unit,
     voiceEnabled: Boolean,
     onVoiceChange: (Boolean) -> Unit,
+    speechStatus: SpeechStatus,
+    onInstallVoice: () -> Unit,
     gpsAvailable: Boolean,
 ) {
     CenteredScreen {
@@ -57,6 +61,30 @@ fun StartScreen(
         ) {
             Text(if (voiceEnabled) "Voz: sí" else "Voz: no")
         }
+        Text(
+            text = engineLabel(speechStatus.engine),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        if (speechStatus.deviceVoiceMissing) {
+            FilledTonalButton(
+                onClick = onInstallVoice,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            ) {
+                Text(
+                    "Falta la voz en español del reloj",
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
         if (!gpsAvailable) NoGpsLabel()
     }
+}
+
+private fun engineLabel(engine: SpeechEngine) = when (engine) {
+    SpeechEngine.DEVICE -> "Voz: del reloj"
+    SpeechEngine.GEMINI -> "Voz: Gemini"
+    SpeechEngine.NONE -> "Voz: no disponible"
 }

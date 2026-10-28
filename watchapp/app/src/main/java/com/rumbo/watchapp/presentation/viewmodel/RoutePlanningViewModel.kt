@@ -13,6 +13,7 @@ import com.rumbo.watchapp.domain.model.SavedPlace
 import com.rumbo.watchapp.domain.port.AudioRecorder
 import com.rumbo.watchapp.domain.port.NavigationRunner
 import com.rumbo.watchapp.domain.port.SpeechOutput
+import com.rumbo.watchapp.domain.port.SpeechStatus
 import com.rumbo.watchapp.domain.port.VoiceSettings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -41,6 +42,9 @@ class RoutePlanningViewModel(
 
     private val _voiceEnabled = MutableStateFlow(voiceSettings.isEnabled())
     val voiceEnabled: StateFlow<Boolean> = _voiceEnabled.asStateFlow()
+
+    /** Qué voz se está usando, para mostrarlo en Inicio. */
+    val speechStatus: StateFlow<SpeechStatus> = speech.status
 
     private val busy get() = _state.value.let {
         it is PlanState.Listening || it is PlanState.Processing || it is PlanState.LoadingPlaces
