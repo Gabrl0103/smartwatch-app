@@ -4,6 +4,7 @@ import com.rumbo.watchapp.domain.model.Maneuver
 import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.domain.navigation.NavigationEvent
 import com.rumbo.watchapp.domain.navigation.NavigationSnapshot
+import com.rumbo.watchapp.domain.navigation.NavigationStatus
 import com.rumbo.watchapp.domain.port.SpeechPriority
 import kotlin.math.ceil
 import kotlin.math.roundToInt
@@ -12,6 +13,7 @@ const val OFF_ROUTE_PHRASE = "Te saliste de la ruta. Recalculando."
 const val SIGNAL_LOST_PHRASE = "Perdí la señal de GPS."
 const val SIGNAL_RECOVERED_PHRASE = "Señal recuperada."
 const val ARRIVED_PHRASE = "Llegaste a tu destino."
+const val KEEP_GOING_PHRASE = "Sigue la ruta."
 
 /** Una frase y con qué prioridad se dice. */
 data class Phrase(val text: String, val priority: SpeechPriority = SpeechPriority.NORMAL)
@@ -76,6 +78,21 @@ fun navigationPhrase(events: List<NavigationEvent>, snapshot: NavigationSnapshot
     if (NavigationEvent.SignalLost in events) return Phrase(SIGNAL_LOST_PHRASE)
     if (NavigationEvent.SignalRecovered in events) return Phrase(SIGNAL_RECOVERED_PHRASE)
     return null
+}
+
+/** Lo que dice "Repetir": la situación actual completa, aunque ya se haya dicho antes. */
+fun repeatPhrase(snapshot: NavigationSnapshot): Phrase {
+    val step = snapshot.nextStep
+    val distance = snapshot.distanceToNextStepM
+    val text = when {
+        snapshot.status == NavigationStatus.ARRIVED -> ARRIVED_PHRASE
+        snapshot.status == NavigationStatus.OFF_ROUTE -> OFF_ROUTE_PHRASE
+        snapshot.status == NavigationStatus.NO_SIGNAL -> SIGNAL_LOST_PHRASE
+        step == null || distance == null -> KEEP_GOING_PHRASE
+        step.maneuver == Maneuver.ARRIVE -> "Tu destino está a ${spokenDistance(distance)}."
+        else -> turnApproachingPhrase(distance, step.instruction)
+    }
+    return Phrase(text, SpeechPriority.HIGH)
 }
 
 private fun roundTo(value: Double, step: Int): Int = (value / step).roundToInt() * step

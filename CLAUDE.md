@@ -11,7 +11,7 @@ Proyecto: **Rumbo**, app Wear OS de navegación por vibraciones para personas ci
 - La navegación crítica (GPS, vibración, giro/desvío/llegada) se calcula en el reloj, sin depender de la IA ni de la red.
 
 ## Stack
-- Reloj: Kotlin + Jetpack Compose for Wear OS (emulador, formato cuadrado redondeado).
+- Reloj: Kotlin + Jetpack Compose for Wear OS (emulador Wear OS Large Round, pantalla redonda de 454 px).
 - Backend: FastAPI + SQLAlchemy + PostgreSQL. Rutas a pie y geocodificación: Geoapify (modo walk). Voz/IA: Gemini API. TTS: por decidir: Google Text-to-Speech en el emulador o Gemini TTS desde el backend.
 - Voz: el reloj graba audio AAC y lo envía a `POST /voice/interpret`, donde Gemini lo transcribe e interpreta (el emulador no trae reconocimiento de voz).
 - Todo en capas gratis ($0). Despliegue del backend en Render.

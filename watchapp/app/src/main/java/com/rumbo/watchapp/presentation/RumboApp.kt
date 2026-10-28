@@ -19,6 +19,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.wear.compose.material3.AppScaffold
+import com.rumbo.watchapp.application.usecase.TrackingState
+import com.rumbo.watchapp.domain.port.SpeechStatus
+import com.rumbo.watchapp.presentation.screens.BackGesture
 import com.rumbo.watchapp.presentation.screens.ConfirmDeleteScreen
 import com.rumbo.watchapp.presentation.screens.ConfirmScreen
 import com.rumbo.watchapp.presentation.screens.ErrorScreen
@@ -27,6 +30,7 @@ import com.rumbo.watchapp.presentation.screens.NavigationScreen
 import com.rumbo.watchapp.presentation.screens.ProcessingScreen
 import com.rumbo.watchapp.presentation.screens.SavedPlacesScreen
 import com.rumbo.watchapp.presentation.screens.StartScreen
+import com.rumbo.watchapp.presentation.screens.VibrationsScreen
 import com.rumbo.watchapp.presentation.theme.WatchappTheme
 import com.rumbo.watchapp.presentation.viewmodel.PlanState
 import com.rumbo.watchapp.presentation.viewmodel.RetryAction
@@ -42,7 +46,10 @@ private val PERMISSIONS = arrayOf(
 private fun Context.isGranted(permission: String) =
     ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
 
-/** Navegación simple: cada estado del ViewModel es una pantalla. */
+/**
+ * Navegación simple: cada estado del ViewModel es una pantalla. El gesto de volver lo resuelve
+ * el ViewModel ([RoutePlanningViewModel.back]); en Inicio no se intercepta y sale de la app.
+ */
 @Composable
 fun RumboApp(viewModel: RoutePlanningViewModel) {
     val context = LocalContext.current
@@ -105,48 +112,86 @@ fun RumboApp(viewModel: RoutePlanningViewModel) {
 
     WatchappTheme {
         AppScaffold {
-            when (val current = state) {
-                PlanState.Start -> StartScreen(
-                    onSpeak = onSpeak,
-                    onSavedPlaces = viewModel::openSavedPlaces,
+            BackGesture(onBack = if (state == PlanState.Start) null else viewModel::back) {
+                Screen(
+                    state = state,
+                    viewModel = viewModel,
+                    navigation = navigation,
                     voiceEnabled = voiceEnabled,
-                    onVoiceChange = viewModel::setVoiceEnabled,
                     speechStatus = speechStatus,
-                    onInstallVoice = onInstallVoice,
                     gpsAvailable = gpsAvailable,
-                )
-                PlanState.Listening -> ListeningScreen()
-                PlanState.Processing -> ProcessingScreen()
-                PlanState.LoadingPlaces -> ProcessingScreen("Cargando lugares...")
-                is PlanState.SavedPlaces -> SavedPlacesScreen(
-                    places = current.places,
-                    onChoose = viewModel::chooseSavedPlace,
-                    onDelete = viewModel::askDelete,
-                    onBack = viewModel::reset,
-                )
-                is PlanState.ConfirmDelete -> ConfirmDeleteScreen(
-                    place = current.place,
-                    onConfirm = viewModel::confirmDelete,
-                    onCancel = viewModel::cancelDelete,
-                )
-                is PlanState.Confirming -> ConfirmScreen(
-                    route = current.route,
-                    save = current.save,
-                    gpsAvailable = gpsAvailable,
+                    onSpeak = onSpeak,
                     onGo = onGo,
-                    onChange = viewModel::reset,
-                    onSave = viewModel::saveDestination,
-                )
-                is PlanState.OnRoute -> NavigationScreen(state = navigation, onFinish = viewModel::finish)
-                is PlanState.Error -> ErrorScreen(
-                    message = current.message,
-                    onRetry = when (current.retry) {
-                        RetryAction.LISTEN -> onSpeak
-                        RetryAction.SAVED_PLACES -> viewModel::openSavedPlaces
-                    },
-                    onHome = viewModel::reset,
+                    onInstallVoice = onInstallVoice,
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun Screen(
+    state: PlanState,
+    viewModel: RoutePlanningViewModel,
+    navigation: TrackingState,
+    voiceEnabled: Boolean,
+    speechStatus: SpeechStatus,
+    gpsAvailable: Boolean,
+    onSpeak: () -> Unit,
+    onGo: () -> Unit,
+    onInstallVoice: () -> Unit,
+) {
+    when (state) {
+        PlanState.Start -> StartScreen(
+            onSpeak = onSpeak,
+            onSavedPlaces = viewModel::openSavedPlaces,
+            onVibrations = viewModel::openVibrations,
+            voiceEnabled = voiceEnabled,
+            onVoiceChange = viewModel::setVoiceEnabled,
+            speechStatus = speechStatus,
+            onInstallVoice = onInstallVoice,
+            gpsAvailable = gpsAvailable,
+        )
+        PlanState.Listening -> ListeningScreen()
+        PlanState.Processing -> ProcessingScreen()
+        PlanState.LoadingPlaces -> ProcessingScreen("Cargando lugares...")
+        is PlanState.SavedPlaces -> SavedPlacesScreen(
+            places = state.places,
+            onChoose = viewModel::chooseSavedPlace,
+            onDelete = viewModel::askDelete,
+            onBack = viewModel::reset,
+        )
+        is PlanState.ConfirmDelete -> ConfirmDeleteScreen(
+            place = state.place,
+            onConfirm = viewModel::confirmDelete,
+            onCancel = viewModel::cancelDelete,
+        )
+        is PlanState.Confirming -> ConfirmScreen(
+            route = state.route,
+            save = state.save,
+            gpsAvailable = gpsAvailable,
+            onGo = onGo,
+            onChange = viewModel::reset,
+            onSave = viewModel::saveDestination,
+        )
+        PlanState.Vibrations -> VibrationsScreen(
+            onPlay = viewModel::playVibration,
+            onBack = viewModel::reset,
+        )
+        is PlanState.OnRoute -> NavigationScreen(
+            state = navigation,
+            confirmFinish = state.confirmFinish,
+            onRepeat = viewModel::repeatInstruction,
+            onFinish = viewModel::finish,
+            onKeepNavigating = viewModel::keepNavigating,
+        )
+        is PlanState.Error -> ErrorScreen(
+            message = state.message,
+            onRetry = when (state.retry) {
+                RetryAction.LISTEN -> onSpeak
+                RetryAction.SAVED_PLACES -> viewModel::openSavedPlaces
+            },
+            onHome = viewModel::reset,
+        )
     }
 }

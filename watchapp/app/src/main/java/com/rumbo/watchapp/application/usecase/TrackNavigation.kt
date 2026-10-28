@@ -2,9 +2,11 @@ package com.rumbo.watchapp.application.usecase
 
 import com.rumbo.watchapp.application.speech.Phrase
 import com.rumbo.watchapp.application.speech.navigationPhrase
+import com.rumbo.watchapp.application.speech.repeatPhrase
 import com.rumbo.watchapp.application.speech.startPhrase
 import com.rumbo.watchapp.domain.model.Coordinates
 import com.rumbo.watchapp.domain.model.LocationFix
+import com.rumbo.watchapp.domain.model.Maneuver
 import com.rumbo.watchapp.domain.model.Place
 import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.domain.model.VibrationEvent
@@ -35,6 +37,7 @@ data class TrackingState(
     val status: NavigationStatus = NavigationStatus.ON_ROUTE,
     val destinationName: String = "",
     val nextInstruction: String? = null,
+    val nextManeuver: Maneuver? = null,
     val distanceToNextStepM: Double? = null,
     val stepLengthM: Double? = null,
     val remainingM: Double = 0.0,
@@ -123,6 +126,16 @@ class TrackNavigation(
         speech.stop()
     }
 
+    /**
+     * Botón "Repetir": vuelve a vibrar el último patrón y dice la indicación actual completa,
+     * con prioridad alta porque la pidió el usuario. No hace nada si no se está navegando.
+     */
+    fun repeat() {
+        val snapshot = engine?.snapshot ?: return
+        vibrate(_state.value.pattern ?: VibrationPatterns.ON_ROUTE, clock())
+        say(repeatPhrase(snapshot))
+    }
+
     private fun CoroutineScope.handle(events: List<NavigationEvent>, now: Long) {
         VibrationPatterns.mostImportant(events)?.let { vibrate(it, now) }
         engine?.let { navigationPhrase(events, it.snapshot) }?.let(::say)
@@ -202,6 +215,7 @@ class TrackNavigation(
             status = snapshot.status,
             destinationName = route?.destinationName.orEmpty(),
             nextInstruction = snapshot.nextStep?.instruction,
+            nextManeuver = snapshot.nextStep?.maneuver,
             distanceToNextStepM = snapshot.distanceToNextStepM,
             stepLengthM = snapshot.stepLengthM,
             remainingM = snapshot.remainingM,

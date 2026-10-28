@@ -25,8 +25,11 @@ class SpeechPhrasesTest {
         polyline = emptyList(),
     )
 
-    private fun snapshot(nextStep: RouteStep? = turn, distance: Double? = 34.0) =
-        NavigationSnapshot(NavigationStatus.TURN_APPROACHING, nextStep, distance, 120.0, 500.0, 100.0, 2.0)
+    private fun snapshot(
+        nextStep: RouteStep? = turn,
+        distance: Double? = 34.0,
+        status: NavigationStatus = NavigationStatus.TURN_APPROACHING,
+    ) = NavigationSnapshot(status, nextStep, distance, 120.0, 500.0, 100.0, 2.0)
 
     @Test
     fun numbersInWords() {
@@ -148,5 +151,23 @@ class SpeechPhrasesTest {
         assertNull(navigationPhrase(listOf(NavigationEvent.BackOnRoute), snapshot()))
         assertNull(navigationPhrase(listOf(NavigationEvent.NextStepChanged(turn)), snapshot()))
         assertNull(navigationPhrase(emptyList(), snapshot()))
+    }
+
+    @Test
+    fun repeatSaysTheWholeCurrentInstructionWithHighPriority() {
+        assertEquals(
+            Phrase("En treinta metros, gire a la izquierda hacia la Calle 18.", SpeechPriority.HIGH),
+            repeatPhrase(snapshot(status = NavigationStatus.ON_ROUTE)),
+        )
+        val arrive = RouteStep(3, Maneuver.ARRIVE, "Ha llegado.", 0.0, 1.2, -77.2)
+        assertEquals("Tu destino está a cincuenta metros.", repeatPhrase(snapshot(arrive, 48.0)).text)
+        assertEquals(KEEP_GOING_PHRASE, repeatPhrase(snapshot(nextStep = null, distance = null)).text)
+    }
+
+    @Test
+    fun repeatDescribesOffRouteNoSignalAndArrival() {
+        assertEquals(OFF_ROUTE_PHRASE, repeatPhrase(snapshot(status = NavigationStatus.OFF_ROUTE)).text)
+        assertEquals(SIGNAL_LOST_PHRASE, repeatPhrase(snapshot(status = NavigationStatus.NO_SIGNAL)).text)
+        assertEquals(ARRIVED_PHRASE, repeatPhrase(snapshot(status = NavigationStatus.ARRIVED)).text)
     }
 }

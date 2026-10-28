@@ -10,12 +10,16 @@ import com.rumbo.watchapp.application.usecase.TrackingState
 import com.rumbo.watchapp.domain.error.AppError
 import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.domain.model.SavedPlace
+import com.rumbo.watchapp.domain.navigation.NavigationStatus
 import com.rumbo.watchapp.domain.port.AudioRecorder
 import com.rumbo.watchapp.domain.port.NavigationRunner
 import com.rumbo.watchapp.domain.port.SpeechOutput
 import com.rumbo.watchapp.domain.port.SpeechStatus
+import com.rumbo.watchapp.domain.port.VibrationController
 import com.rumbo.watchapp.domain.port.VoiceSettings
+import com.rumbo.watchapp.domain.vibration.VibrationPattern
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +37,8 @@ class RoutePlanningViewModel(
     private val locationTracker: LocationTracker,
     private val navigationRunner: NavigationRunner,
     val navigationState: StateFlow<TrackingState>,
+    private val repeatNavigation: () -> Unit,
+    private val vibration: VibrationController,
     private val speech: SpeechOutput,
     private val voiceSettings: VoiceSettings,
 ) : ViewModel() {
@@ -46,6 +52,9 @@ class RoutePlanningViewModel(
     /** Qué voz se está usando, para mostrarlo en Inicio. */
     val speechStatus: StateFlow<SpeechStatus> = speech.status
 
+    // Grabación o carga en curso; volver al inicio la cancela.
+    private var job: Job? = null
+
     private val busy get() = _state.value.let {
         it is PlanState.Listening || it is PlanState.Processing || it is PlanState.LoadingPlaces
     }
@@ -58,7 +67,7 @@ class RoutePlanningViewModel(
     /** Graba 4 s, interpreta la orden y busca la ruta. El permiso de micrófono ya debe estar dado. */
     fun listen() {
         if (busy) return
-        viewModelScope.launch {
+        job = viewModelScope.launch {
             try {
                 _state.value = PlanState.Listening
                 recorder.start()
@@ -137,6 +146,15 @@ class RoutePlanningViewModel(
         }
     }
 
+    fun openVibrations() {
+        if (!busy) _state.value = PlanState.Vibrations
+    }
+
+    /** Hace sentir un patrón en la pantalla "Vibraciones". */
+    fun playVibration(pattern: VibrationPattern) {
+        if (_state.value == PlanState.Vibrations) vibration.play(pattern)
+    }
+
     /** Interruptor "Voz: sí/no"; al apagarla se calla lo que esté sonando. Las vibraciones siguen. */
     fun setVoiceEnabled(enabled: Boolean) {
         voiceSettings.setEnabled(enabled)
@@ -152,13 +170,44 @@ class RoutePlanningViewModel(
         _state.value = PlanState.OnRoute(current.route)
     }
 
+    /** "Repetir" en ruta: vuelve a vibrar y a decir la indicación actual. */
+    fun repeatInstruction() {
+        if (_state.value is PlanState.OnRoute) repeatNavigation()
+    }
+
     /** Termina la navegación: el servicio apaga GPS y vibraciones; vuelve al inicio. */
     fun finish() {
         navigationRunner.stop()
         reset()
     }
 
+    /** Responde "Seguir" a "¿Terminar la ruta?". */
+    fun keepNavigating() {
+        val current = _state.value
+        if (current is PlanState.OnRoute) _state.value = current.copy(confirmFinish = false)
+    }
+
+    /**
+     * Gesto de volver. En ruta primero pregunta si terminar (salvo que ya se haya llegado); en
+     * Borrar vuelve a la lista; en el resto, a Inicio. En Inicio no hace nada: ahí sale de la app.
+     */
+    fun back() {
+        when (val current = _state.value) {
+            PlanState.Start -> Unit
+            is PlanState.ConfirmDelete -> cancelDelete()
+            is PlanState.OnRoute -> when {
+                current.confirmFinish -> keepNavigating()
+                navigationState.value.status == NavigationStatus.ARRIVED -> finish()
+                else -> _state.value = current.copy(confirmFinish = true)
+            }
+            else -> reset()
+        }
+    }
+
     fun reset() {
+        job?.cancel()
+        job = null
+        if (_state.value == PlanState.Vibrations) vibration.stop()
         speech.stop()
         _state.value = PlanState.Start
     }
@@ -183,7 +232,7 @@ class RoutePlanningViewModel(
 
     // Errores del flujo de lugares guardados: "Reintentar" vuelve a abrir la lista.
     private fun launchSavedPlaces(block: suspend () -> Unit) {
-        viewModelScope.launch {
+        job = viewModelScope.launch {
             try {
                 block()
             } catch (e: CancellationException) {

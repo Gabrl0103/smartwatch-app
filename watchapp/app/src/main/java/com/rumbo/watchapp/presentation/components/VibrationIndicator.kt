@@ -36,10 +36,16 @@ private const val IDLE_MS = 1_000L
 /**
  * Muestra el patrón de vibración: una barra en píldora (22×8 dp) por pulso, que se enciende al
  * ritmo real del patrón (más opaca cuanto más fuerte), y su nombre en texto. Sirve en el
- * emulador, que no vibra, y a quien acompaña al usuario.
+ * emulador, que no vibra, y a quien acompaña al usuario. Sin [showLabel] el nombre no se dibuja
+ * (cuando ya está escrito al lado), pero TalkBack lo sigue leyendo.
  */
 @Composable
-fun VibrationIndicator(pattern: VibrationPattern?, color: Color, modifier: Modifier = Modifier) {
+fun VibrationIndicator(
+    pattern: VibrationPattern?,
+    color: Color,
+    modifier: Modifier = Modifier,
+    showLabel: Boolean = true,
+) {
     if (pattern == null) return
     val pulses = remember(pattern) { pattern.pulses }
     val cycleMs = (pattern.repeatEveryMs ?: (pattern.durationMs + IDLE_MS))
@@ -73,11 +79,13 @@ fun VibrationIndicator(pattern: VibrationPattern?, color: Color, modifier: Modif
                 )
             }
         }
-        Text(
-            text = pattern.label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
+        if (showLabel) {
+            Text(
+                text = pattern.label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }

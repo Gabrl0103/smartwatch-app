@@ -225,6 +225,33 @@ class TrackNavigationTest {
     }
 
     @Test
+    fun repeatVibratesAgainAndSaysTheCurrentInstruction() = runBlocking {
+        val vibration = FakeVibration()
+        val speech = FakeSpeech()
+        val tracking = TrackNavigation(
+            MutableSharedFlow(),
+            FakeRoutes(detour),
+            vibration,
+            FakeVibrationEvents(),
+            speech,
+            clock = { 0L },
+        )
+
+        tracking.repeat()
+        assertTrue(vibration.played.isEmpty())
+
+        tracking.start(lRoute(), this)
+        try {
+            tracking.repeat()
+
+            assertEquals(listOf(VibrationPatterns.ON_ROUTE, VibrationPatterns.ON_ROUTE), vibration.played)
+            assertEquals("En doscientos metros, gire a la derecha." to SpeechPriority.HIGH, speech.spoken.last())
+        } finally {
+            tracking.stop()
+        }
+    }
+
+    @Test
     fun failingVoiceDoesNotStopVibrations() = runBlocking {
         val fixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 16)
         val vibration = FakeVibration()

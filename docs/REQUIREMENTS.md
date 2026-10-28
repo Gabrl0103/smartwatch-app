@@ -24,7 +24,7 @@
 | Texto → voz | Principal: TextToSpeech del reloj en español. Respaldo: Gemini TTS desde el backend (`POST /speech`, modelo `gemini-3.8-flash-tts`, capa gratis) | La voz del reloj no gasta cuota ni red; el emulador Wear OS (API 34) no trae motor TTS, así que ahí habla Gemini |
 | Base de datos | PostgreSQL (Render o Supabase, free tier) | Gratis |
 | Hosting backend | Render (free tier) | $0; el servidor duerme tras inactividad |
-| Tests | pytest (backend) / JUnit (reloj) | Solo domain y application |
+| Tests | pytest (backend) / JUnit (reloj) | domain y application (y el ViewModel del reloj); en el reloj, además, un test instrumentado que genera las capturas |
 
 Costo total: **$0**.
 
@@ -66,10 +66,11 @@ smartwatch-nav/
 │       ├── domain/{model,error,port}/
 │       ├── application/usecase/
 │       ├── infrastructure/{location,vibration,audio,tts,network}/
-│       ├── presentation/{screens,viewmodel,theme}/
+│       ├── presentation/{screens,components,viewmodel,theme,format}/
 │       └── di/
 ├── database/migrations/
-├── docs/REQUIREMENTS.md
+├── docs/{REQUIREMENTS.md,capturas/,demo/}
+├── tools/{route_to_gpx.py,capture_screens.sh}
 ├── .gitignore
 └── README.md
 ```
@@ -200,7 +201,7 @@ vibration_events (log para demo/sustentación)
 
 ## 8. Requerimientos no funcionales
 
-- NFR1: Accesibilidad — nunca comunicar un estado solo con color; siempre texto grande + vibración/audio. Elementos táctiles ≥ 48 px. Pantallas compatibles con TalkBack.
+- NFR1: Accesibilidad — nunca comunicar un estado solo con color; siempre texto grande + vibración/audio. Elementos táctiles ≥ 48 px (los botones miden 52 dp). Pantallas compatibles con TalkBack: descripción en íconos y botones, títulos marcados como encabezado, orden de lectura de arriba abajo (el anillo se lee al final), cada pantalla anuncia su nombre (`paneTitle`) y los cambios de estado e indicación se anuncian solos (`liveRegion`); las distancias no, para no hablar en cada lectura del GPS.
 - NFR2: Funcional en emulador Wear OS sin hardware físico.
 - NFR3: Navegación (GPS + vibración) funciona sin internet una vez calculada la ruta.
 - NFR4: Backend desplegado gratis; se acepta el retraso del primer request por el "sleep" del free tier.
@@ -211,26 +212,44 @@ vibration_events (log para demo/sustentación)
 
 ## 9. Pantallas (reloj)
 
-Diseñadas en Claude Design (lienzo "Rumbo — UI del reloj"), en formato cuadrado redondeado (Wear OS Square) y una versión redonda de referencia.
+Diseñadas en Claude Design (lienzo "Rumbo — UI del reloj"). La app se prueba en el emulador **Wear OS Large Round** (454 × 454 px, 320 dpi = 227 dp); capturas de cada pantalla en `docs/capturas/` (se regeneran con `tools/capture_screens.sh`).
 
-1. Inicio (voz): botón grande de micrófono, "¿A dónde vamos?" y, debajo, botón "Lugares guardados" e interruptor "Voz: sí" / "Voz: no" (el estado va en el texto, no solo en el color; se guarda en SharedPreferences y empieza en sí). Debajo, en texto pequeño, qué voz se usa: "Voz: del reloj", "Voz: Gemini" o "Voz: no disponible"; y, si falta el español del motor, el botón "Falta la voz en español del reloj".
-   - Lugares guardados: lista (`TransformingLazyColumn`); tocar un lugar pide la ruta y pasa a Confirmar; mantenerlo pulsado ofrece borrarlo con confirmación ("¿Borrar «X»?" Cancelar / Borrar). Si está vacía: "Aún no tienes lugares guardados".
-2. Escuchando destino.
-3. Confirmar destino: nombre, distancia y tiempo a pie; Ir / Cambiar y botón secundario "Guardar" ("Guardando..." → "Guardado"; si falla, "No pude guardar el lugar"). Si el destino vino de un lugar guardado ya aparece "Guardado".
-4. En ruta.
-5. Giro próximo.
-6. Desviado.
-7. Sin señal GPS.
-8. Llegada.
-9. Asistente de voz: pregunta del usuario, respuesta hablada y escrita, botón para volver a preguntar.
+**Pantalla redonda.** Todas usan `RumboScreen`: `ScreenScaffold` de Wear (la hora se esconde al desplazar y aparece el indicador de desplazamiento) con márgenes en proporción a la pantalla, 10 % a los lados y 14 % arriba y abajo (en la cuadrada, 5,2 % y 12 %), para que una píldora a lo ancho quepa entera en el círculo en la primera y la última posición y nada quede debajo de la hora. Si el contenido cabe, se centra; si no, se desplaza con el dedo o la corona. Lo que pasa por el borde de arriba o de abajo se achica (hasta 60 %) lo justo para entrar en el círculo y, si se achica más del 75 %, se atenúa, como en las listas de Wear: nada queda cortado. Con anillo, el contenido se aleja también del anillo.
+
+**Gesto de volver.** El "atrás" del sistema (incluido el de TalkBack) y, hasta Android 15, deslizar de izquierda a derecha (`BasicSwipeToDismissBox`; desde Android 16 el sistema convierte ese gesto en "atrás"). Desde Inicio no se intercepta y sale de la app; desde Confirmar, Escuchando, Procesando (cancela la grabación o la carga), Error, Lugares guardados y Vibraciones vuelve a Inicio; desde "¿Borrar?" vuelve a la lista; en ruta pregunta "¿Terminar la ruta?" (Seguir navegando / Terminar), salvo que ya se haya llegado, y volver otra vez equivale a "Seguir navegando".
+
+1. Inicio: badge "Listo para navegar" (y "Sin GPS" si no hay permiso de ubicación), "¿A dónde vamos?" (Poppins 700, 32 sp), botón de micrófono de 108 dp ("Hablar destino"), "Toca y habla", botones "Lugares guardados" y "Vibraciones" (Aprende los patrones), interruptor "Voz: sí" / "Voz: no" (el estado va en el texto, no solo en el color; se guarda en SharedPreferences y empieza en sí) con la voz en uso debajo ("Del reloj", "Gemini" o "No disponible") y, si falta el español del motor, el botón "Falta la voz en español del reloj".
+   - Lugares guardados: lista de píldoras; tocar un lugar pide la ruta y pasa a Confirmar; mantenerlo pulsado ofrece borrarlo con confirmación ("¿Borrar «X»?" Cancelar / Borrar). Si está vacía: "Aún no tienes lugares guardados".
+   - Vibraciones: guía con un botón por patrón (En ruta, Giro próximo, Izquierda, Derecha, Fuera de ruta, Sin señal GPS, Llegada) y su descripción; al tocarlo vibra y debajo se ve el patrón animado.
+2. Escuchando: badge "Escuchando", micrófono que late y "Di el nombre del lugar".
+3. Procesando: badge "Procesando", indicador de carga y "Buscando ruta..." o "Cargando lugares...".
+4. Confirmar destino: badge, nombre, distancia y tiempo a pie; Ir, Cambiar y "Guardar" ("Guardando..." → "Guardado"; si falla, "No pude guardar el lugar"). Si el destino vino de un lugar guardado ya aparece "Guardado".
+5. Error: ícono de advertencia, el mensaje, Reintentar e Inicio.
+6. En ruta: anillo de progreso en el borde (se llena hacia el siguiente paso; deja libre el hueco de la hora), badge del estado, ícono de la maniobra siguiente, la indicación (24 sp; 20 sp si pasa de 16 caracteres; con más de 30 el ícono baja de 72 a 60 dp para que se lea sin desplazar), "En X m" y "Faltan X", indicador de vibración y botones "Repetir" (vuelve a vibrar el último patrón y dice la indicación completa) y "Terminar". Estados, cada uno con su texto, color e ícono:
+
+| Estado | Badge | Color | Ícono | Texto principal |
+|---|---|---|---|---|
+| En ruta | En ruta | `#4F8EFF` | maniobra siguiente (recto, izquierda o derecha) | indicación |
+| Giro próximo | Giro próximo | `#FFC857` | izquierda / derecha | indicación |
+| Maniobra | Gira ahora | `#FFC857` | izquierda / derecha | indicación |
+| Desviado | Fuera de ruta | `#FF8A3D` | advertencia | "Te saliste de la ruta" (+ "Recalculando ruta...") |
+| Sin señal | Sin señal GPS | `#8A93A6` | ubicación tachada | "Buscando señal GPS" |
+| Llegada | Llegaste | `#3DDC84` | check | "Llegaste a (destino)", con el anillo lleno |
+
+7. Asistente de voz: pregunta del usuario, respuesta hablada y escrita, botón para volver a preguntar (pendiente).
 
 ## 10. Estilo visual — Design tokens
 
-- Tipografía: títulos Poppins (600/700), texto Inter (400/500/700). Escala del reloj: 16 / 20 / 24 / 32 / 40 sp.
-- Colores base: fondo `#0B0E14`, superficie `#151922`, texto `#F5F7FA`, texto secundario `#A0A8B8`, primario `#4F8EFF`, secundario `#7C5CFC` (asistente; el chip usa `#9B82FF` para contraste), acento `#FFC857`, borde `#2A2F3A`.
+- Tipografía: títulos Poppins (600/700), texto Inter (400/500/700), empaquetadas como TTF en `res/font` (descargadas de Google Fonts, licencia OFL en `assets/licenses`; sin proveedor de fuentes en línea). Escala del reloj: 16 / 20 / 24 / 32 / 40 sp con interlineado 1.25; ningún texto baja de 16 sp (`presentation/theme/Type.kt`).
+- Colores base (`presentation/theme/Color.kt` y `Theme.kt`): fondo `#0B0E14`, superficie `#151922`, texto `#F5F7FA`, texto secundario `#A0A8B8`, primario `#4F8EFF`, secundario `#7C5CFC` (asistente; el chip usa `#9B82FF` para contraste), acento `#FFC857`, borde `#2A2F3A`. Sobre botones y fondos de color claro el texto va oscuro (`#0B0E14`): sobre `#4F8EFF` da 6.1:1 (el blanco daba 3.2:1) y sobre los demás estados pasa de 6:1.
 - Escala semántica de estados (siempre con texto): en ruta `#4F8EFF`, giro próximo `#FFC857`, desviado `#FF8A3D`, sin señal GPS `#8A93A6`, llegada `#3DDC84`.
-- Formas: radio de pantalla 76 px (cuadrada), botones en píldora, borde fino de 1 px, sin sombras.
-- Elementos: anillo de progreso en el borde con la distancia al siguiente giro; indicador del patrón de vibración en cada estado.
+- Formas: botones en píldora de 52 dp de alto como mínimo, borde fino de 1 dp en `#2A2F3A`, sin sombras.
+- Componentes (`presentation/components`):
+  - `StateBadge`: píldora con el nombre del estado escrito en su color sobre un tinte del 16 % del mismo color y borde de 1 dp; puede anunciarse con TalkBack.
+  - `ProgressRing`: anillo de 6 dp en el borde con hueco arriba para la hora; se llena con la distancia restante al siguiente paso normalizada por el largo del tramo (`TrackingState.stepProgress`).
+  - `StateIcon`: íconos de trazo de 72 dp: micrófono, izquierda, derecha, recto, vuelta en U, rotonda, advertencia, sin señal GPS y llegada, cada uno con su descripción. El backend reduce las maniobras a izquierda/derecha/recto/llegada, así que vuelta en U y rotonda aún no se muestran en ruta.
+  - `VibrationIndicator`: una barra en píldora de 22 × 8 dp por pulso que se enciende al ritmo real del patrón (más opaca cuanto más fuerte) y el nombre del patrón en texto ("2 pulsos cortos").
+  - `PillButton` (primario, secundario y peligro), `MicButton` (108 dp) y `PillSwitch`.
 - Reglas: contraste mínimo 4.5:1 en texto, un estado por pantalla, poca información por vista.
 
 ## 11. Fases
@@ -247,6 +266,7 @@ Diseñadas en Claude Design (lienzo "Rumbo — UI del reloj"), en formato cuadra
 
 ## 13. Changelog
 
+- **v0.19** (2026-10-28): Rediseño de la interfaz del reloj según el diseño de Rumbo, probado en el emulador Wear OS Large Round (454 px). Tema de Compose completo con los tokens (texto oscuro sobre colores claros) y Poppins e Inter empaquetadas en `res/font` con su licencia OFL; escala 16/20/24/32/40 sp. Componentes `StateBadge`, `ProgressRing`, `StateIcon`, `VibrationIndicator` (barras de 22 × 8 dp al ritmo del patrón) y botones en píldora con borde de 1 dp. Todas las pantallas usan `RumboScreen`: márgenes en porcentaje para pantalla redonda, desplazamiento con dedo o corona, la hora se esconde al desplazar y lo que pasa por el borde se achica para no quedar cortado. Pantallas rediseñadas (Inicio, Escuchando, Procesando, Confirmar, Error, En ruta con sus seis estados, Lugares guardados, Borrar) y nueva pantalla "Vibraciones" para aprender los patrones. En ruta: botón "Repetir" (`TrackNavigation.repeat` y `repeatPhrase`) y "¿Terminar la ruta?" al volver. Gesto de volver en toda la app; volver cancela la grabación o la carga en curso. TalkBack: descripciones, encabezados, `paneTitle` y anuncios de estado. El motor expone el largo del tramo (`stepLengthM`) para el anillo. Tests JUnit nuevos del ViewModel (volver, Repetir, Vibraciones), de `repeatPhrase`, `repeat`, `stepProgress` y `VibrationPattern.pulses`; capturas de 19 pantallas en `docs/capturas/` con el test instrumentado `ScreenshotsTest`.
 - **v0.18** (2026-10-28): La voz del reloj (TextToSpeech) pasa a ser la principal y Gemini queda de respaldo. `AndroidTextToSpeech` arranca al abrir la app, prueba es-CO, es-419, es-US, es-MX, es-ES y "es", y deja en el log `Voz` el motor, los idiomas y el elegido o el motivo. `SpeechOutputImpl` usa la voz del reloj si está lista, Gemini (`GeminiSpeechPlayer`, antes `AndroidSpeechPlayer`) solo si no, y deja de llamar a Gemini 30 minutos tras un `QUOTA_EXHAUSTED` (nuevo `QuotaExhaustedError`). Inicio muestra qué voz se usa y, si falta el español del motor, un botón que abre la instalación de voces. El manifiesto ya tenía la consulta `TTS_SERVICE`. En el emulador Wear OS API 34 no hay motor TTS: habla Gemini. Tests de prioridad entre voces y de la pausa por cuota.
 - **v0.17** (2026-10-28): `scripts/try_speech.py --verify` pasa a 2 frases y normaliza números antes de comparar ("50" = "cincuenta", "1,6" = "uno coma seis"), para no dar falsos fallos cuando la transcripción usa cifras.
 - **v0.16** (2026-10-28): Nuevo error de dominio `QuotaExhaustedError` (código `QUOTA_EXHAUSTED`, HTTP 429). `POST /speech` lo devuelve cuando Gemini responde 429, en vez del 502 genérico.
