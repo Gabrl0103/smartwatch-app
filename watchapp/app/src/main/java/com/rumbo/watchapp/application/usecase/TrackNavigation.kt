@@ -4,6 +4,7 @@ import com.rumbo.watchapp.domain.model.Coordinates
 import com.rumbo.watchapp.domain.model.LocationFix
 import com.rumbo.watchapp.domain.model.Place
 import com.rumbo.watchapp.domain.model.Route
+import com.rumbo.watchapp.domain.model.VibrationEvent
 import com.rumbo.watchapp.domain.navigation.LocationFilter
 import com.rumbo.watchapp.domain.navigation.NavigationEngine
 import com.rumbo.watchapp.domain.navigation.NavigationEvent
@@ -11,6 +12,7 @@ import com.rumbo.watchapp.domain.navigation.NavigationStatus
 import com.rumbo.watchapp.domain.navigation.NavigationThresholds
 import com.rumbo.watchapp.domain.port.RoutesRepository
 import com.rumbo.watchapp.domain.port.VibrationController
+import com.rumbo.watchapp.domain.port.VibrationEventsRepository
 import com.rumbo.watchapp.domain.vibration.VibrationPattern
 import com.rumbo.watchapp.domain.vibration.VibrationPatterns
 import kotlinx.coroutines.CancellationException
@@ -38,11 +40,13 @@ data class TrackingState(
 /**
  * Une GPS, motor de navegación y vibraciones. Las lecturas y el ticker corren en el mismo
  * [CoroutineScope]; usar uno de un solo hilo (p. ej. viewModelScope) para no tener carreras.
+ * Cada vibración se anota en [vibrationEvents] en segundo plano; si falla, se sigue navegando.
  */
 class TrackNavigation(
     private val fixes: Flow<LocationFix>,
     private val routes: RoutesRepository,
     private val vibration: VibrationController,
+    private val vibrationEvents: VibrationEventsRepository,
     private val clock: () -> Long,
     private val thresholds: NavigationThresholds = NavigationThresholds(),
     private val tickMs: Long = 1_000,
@@ -51,6 +55,7 @@ class TrackNavigation(
     val state: StateFlow<TrackingState> = _state.asStateFlow()
 
     private var job: Job? = null
+    private var scope: CoroutineScope? = null
     private var route: Route? = null
     private var engine: NavigationEngine? = null
     private var lastPosition: Coordinates? = null
@@ -59,6 +64,7 @@ class TrackNavigation(
 
     fun start(route: Route, scope: CoroutineScope) {
         job?.cancel()
+        this.scope = scope
         recalculating = false
         val now = clock()
         useRoute(route, now)
@@ -87,6 +93,7 @@ class TrackNavigation(
     fun stop() {
         job?.cancel()
         job = null
+        scope = null
         recalculating = false
         engine = null
         route = null
@@ -115,6 +122,20 @@ class TrackNavigation(
         vibration.play(pattern)
         lastVibrationMs = now
         _state.value = _state.value.copy(pattern = pattern)
+        report(pattern)
+    }
+
+    private fun report(pattern: VibrationPattern) {
+        val event = VibrationEvent(pattern.label, route?.id, engine?.snapshot?.nextStep?.order)
+        scope?.launch {
+            try {
+                vibrationEvents.record(event)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Es solo un log para la demo: perderlo no afecta la navegación.
+            }
+        }
     }
 
     private fun CoroutineScope.recalculate() {
@@ -124,8 +145,7 @@ class TrackNavigation(
         recalculating = true
         launch {
             try {
-                val end = current.polyline.lastOrNull()
-                    ?: current.steps.last().let { Coordinates(it.lat, it.lng) }
+                val end = current.end
                 val destination = Place(current.destinationName, end.lat, end.lng)
                 useRoute(routes.create(from, destination), clock())
             } catch (e: CancellationException) {

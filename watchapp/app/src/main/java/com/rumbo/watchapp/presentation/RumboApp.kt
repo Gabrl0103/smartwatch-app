@@ -16,14 +16,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.wear.compose.material3.AppScaffold
+import com.rumbo.watchapp.presentation.screens.ConfirmDeleteScreen
 import com.rumbo.watchapp.presentation.screens.ConfirmScreen
 import com.rumbo.watchapp.presentation.screens.ErrorScreen
 import com.rumbo.watchapp.presentation.screens.ListeningScreen
 import com.rumbo.watchapp.presentation.screens.NavigationScreen
 import com.rumbo.watchapp.presentation.screens.ProcessingScreen
+import com.rumbo.watchapp.presentation.screens.SavedPlacesScreen
 import com.rumbo.watchapp.presentation.screens.StartScreen
 import com.rumbo.watchapp.presentation.theme.WatchappTheme
 import com.rumbo.watchapp.presentation.viewmodel.PlanState
+import com.rumbo.watchapp.presentation.viewmodel.RetryAction
 import com.rumbo.watchapp.presentation.viewmodel.RoutePlanningViewModel
 
 // Android 12+ ignora la ubicación precisa si no se pide junto con la aproximada.
@@ -88,17 +91,42 @@ fun RumboApp(viewModel: RoutePlanningViewModel) {
     WatchappTheme {
         AppScaffold {
             when (val current = state) {
-                PlanState.Start -> StartScreen(onSpeak = onSpeak, gpsAvailable = gpsAvailable)
+                PlanState.Start -> StartScreen(
+                    onSpeak = onSpeak,
+                    onSavedPlaces = viewModel::openSavedPlaces,
+                    gpsAvailable = gpsAvailable,
+                )
                 PlanState.Listening -> ListeningScreen()
                 PlanState.Processing -> ProcessingScreen()
+                PlanState.LoadingPlaces -> ProcessingScreen("Cargando lugares...")
+                is PlanState.SavedPlaces -> SavedPlacesScreen(
+                    places = current.places,
+                    onChoose = viewModel::chooseSavedPlace,
+                    onDelete = viewModel::askDelete,
+                    onBack = viewModel::reset,
+                )
+                is PlanState.ConfirmDelete -> ConfirmDeleteScreen(
+                    place = current.place,
+                    onConfirm = viewModel::confirmDelete,
+                    onCancel = viewModel::cancelDelete,
+                )
                 is PlanState.Confirming -> ConfirmScreen(
                     route = current.route,
+                    save = current.save,
                     gpsAvailable = gpsAvailable,
                     onGo = onGo,
                     onChange = viewModel::reset,
+                    onSave = viewModel::saveDestination,
                 )
                 is PlanState.OnRoute -> NavigationScreen(state = navigation, onFinish = viewModel::finish)
-                is PlanState.Error -> ErrorScreen(message = current.message, onRetry = onSpeak)
+                is PlanState.Error -> ErrorScreen(
+                    message = current.message,
+                    onRetry = when (current.retry) {
+                        RetryAction.LISTEN -> onSpeak
+                        RetryAction.SAVED_PLACES -> viewModel::openSavedPlaces
+                    },
+                    onHome = viewModel::reset,
+                )
             }
         }
     }

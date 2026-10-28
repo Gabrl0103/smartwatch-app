@@ -10,11 +10,11 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 
 @Composable
-fun ProcessingScreen() {
+fun ProcessingScreen(message: String = "Buscando ruta...") {
     CenteredScreen {
         CircularProgressIndicator(modifier = Modifier.size(40.dp))
         Text(
-            text = "Buscando ruta...",
+            text = message,
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
         )

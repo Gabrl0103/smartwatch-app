@@ -12,11 +12,16 @@ data class RouteStep(
     val lng: Double,
 )
 
-/** Ruta a pie calculada por el backend. */
+/** Ruta a pie calculada por el backend. [id] es null si el backend no pudo guardarla. */
 data class Route(
     val destinationName: String,
     val distanceM: Double,
     val durationS: Double,
     val steps: List<RouteStep>,
     val polyline: List<Coordinates>,
-)
+    val id: Long? = null,
+) {
+    /** Punto final de la ruta: último de la polilínea o, si no hay, el del último paso. */
+    val end: Coordinates
+        get() = polyline.lastOrNull() ?: steps.last().let { Coordinates(it.lat, it.lng) }
+}

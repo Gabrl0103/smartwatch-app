@@ -7,11 +7,13 @@ import java.net.SocketTimeoutException
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
 // Render duerme el servicio gratis; la primera petición puede tardar en despertarlo.
 private const val TIMEOUT_MS = 90_000
+private const val JSON_CONTENT_TYPE = "application/json; charset=utf-8"
 
 internal class HttpResponse(val code: Int, val body: String)
 
@@ -44,9 +46,13 @@ internal suspend fun backendRequest(
     }
 }
 
-/** Devuelve el cuerpo si la respuesta es 200; si no, lanza el mensaje de error del backend. */
+/** Envía [json] en el cuerpo de un POST. */
+internal suspend fun backendPostJson(path: String, json: JSONObject): HttpResponse =
+    backendRequest("POST", path, JSON_CONTENT_TYPE, json.toString().toByteArray())
+
+/** Devuelve el cuerpo si la respuesta es 2xx; si no, lanza el mensaje de error del backend. */
 internal fun HttpResponse.requireOk(): String {
-    if (code == HttpURLConnection.HTTP_OK) return body
+    if (code in 200..299) return body
     val serverMessage = runCatching {
         JSONObject(body).getJSONObject("error").getString("message")
     }.getOrNull()
@@ -58,6 +64,14 @@ internal fun HttpResponse.requireOk(): String {
 internal fun <T> parseJson(body: String, parse: (JSONObject) -> T): T =
     try {
         parse(JSONObject(body))
+    } catch (e: JSONException) {
+        throw AppError("El servidor envió una respuesta inesperada")
+    }
+
+internal fun <T> parseJsonArray(body: String, parse: (JSONObject) -> T): List<T> =
+    try {
+        val array = JSONArray(body)
+        List(array.length()) { i -> parse(array.getJSONObject(i)) }
     } catch (e: JSONException) {
         throw AppError("El servidor envió una respuesta inesperada")
     }

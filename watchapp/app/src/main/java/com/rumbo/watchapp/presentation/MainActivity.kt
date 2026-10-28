@@ -18,6 +18,7 @@ class MainActivity : ComponentActivity() {
                 RoutePlanningViewModel(
                     container.audioRecorder,
                     container.planRouteFromVoice,
+                    container.manageSavedPlaces,
                     container.locationTracker,
                     container.navigationRunner,
                     container.trackNavigation.state,

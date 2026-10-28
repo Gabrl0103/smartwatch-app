@@ -1,5 +1,6 @@
 package com.rumbo.watchapp.application.usecase
 
+import com.rumbo.watchapp.domain.error.AppError
 import com.rumbo.watchapp.domain.geo.haversineM
 import com.rumbo.watchapp.domain.model.Coordinates
 import com.rumbo.watchapp.domain.model.LocationFix
@@ -7,9 +8,11 @@ import com.rumbo.watchapp.domain.model.Maneuver
 import com.rumbo.watchapp.domain.model.Place
 import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.domain.model.RouteStep
+import com.rumbo.watchapp.domain.model.VibrationEvent
 import com.rumbo.watchapp.domain.navigation.NavigationStatus
 import com.rumbo.watchapp.domain.port.RoutesRepository
 import com.rumbo.watchapp.domain.port.VibrationController
+import com.rumbo.watchapp.domain.port.VibrationEventsRepository
 import com.rumbo.watchapp.domain.vibration.VibrationPattern
 import com.rumbo.watchapp.domain.vibration.VibrationPatterns
 import com.rumbo.watchapp.testing.at
@@ -34,6 +37,15 @@ class TrackNavigationTest {
 
         override fun stop() {
             stops++
+        }
+    }
+
+    private class FakeVibrationEvents(private val error: Exception? = null) : VibrationEventsRepository {
+        val recorded = mutableListOf<VibrationEvent>()
+
+        override suspend fun record(event: VibrationEvent) {
+            error?.let { throw it }
+            recorded += event
         }
     }
 
@@ -62,7 +74,13 @@ class TrackNavigationTest {
     @Test
     fun startVibratesOnRouteAndPublishesNextStep() = runBlocking {
         val vibration = FakeVibration()
-        val tracking = TrackNavigation(MutableSharedFlow(), FakeRoutes(detour), vibration, clock = { 0L })
+        val tracking = TrackNavigation(
+            MutableSharedFlow(),
+            FakeRoutes(detour),
+            vibration,
+            FakeVibrationEvents(),
+            clock = { 0L },
+        )
 
         tracking.start(lRoute(), this)
         try {
@@ -85,7 +103,14 @@ class TrackNavigationTest {
         val vibration = FakeVibration()
         val routes = FakeRoutes(detour)
         var now = 0L
-        val tracking = TrackNavigation(fixes, routes, vibration, clock = { now }, tickMs = 60_000)
+        val tracking = TrackNavigation(
+            fixes,
+            routes,
+            vibration,
+            FakeVibrationEvents(),
+            clock = { now },
+            tickMs = 60_000,
+        )
 
         tracking.start(lRoute(), this)
         try {
@@ -106,6 +131,47 @@ class TrackNavigationTest {
             assertEquals("Parque de prueba", routes.destination?.name)
             assertEquals("Ha llegado.", tracking.state.value.nextInstruction)
             assertTrue(!tracking.state.value.recalculating)
+        } finally {
+            tracking.stop()
+        }
+    }
+
+    @Test
+    fun eachVibrationIsRecordedWithRouteAndNextStep() = runBlocking {
+        val events = FakeVibrationEvents()
+        val tracking = TrackNavigation(
+            MutableSharedFlow(),
+            FakeRoutes(detour),
+            FakeVibration(),
+            events,
+            clock = { 0L },
+        )
+
+        tracking.start(lRoute().copy(id = 9), this)
+        try {
+            delay(20)
+            assertEquals(listOf(VibrationEvent(VibrationPatterns.ON_ROUTE.label, 9, 2)), events.recorded)
+        } finally {
+            tracking.stop()
+        }
+    }
+
+    @Test
+    fun failingToRecordVibrationDoesNotStopNavigation() = runBlocking {
+        val vibration = FakeVibration()
+        val tracking = TrackNavigation(
+            MutableSharedFlow(),
+            FakeRoutes(detour),
+            vibration,
+            FakeVibrationEvents(AppError("No pude conectar con el servidor")),
+            clock = { 0L },
+        )
+
+        tracking.start(lRoute(), this)
+        try {
+            delay(20)
+            assertEquals(listOf(VibrationPatterns.ON_ROUTE), vibration.played)
+            assertEquals(NavigationStatus.ON_ROUTE, tracking.state.value.status)
         } finally {
             tracking.stop()
         }

@@ -16,12 +16,7 @@ object RoutesApiClient : RoutesRepository {
             .put("origin", point(origin.lat, origin.lng))
             .put("destination", point(destination.lat, destination.lng))
             .put("destination_name", destination.name)
-        val body = backendRequest(
-            "POST",
-            "/routes",
-            "application/json; charset=utf-8",
-            request.toString().toByteArray(),
-        ).requireOk()
+        val body = backendPostJson("/routes", request).requireOk()
         return parseJson(body, ::parseRoute)
     }
 
@@ -49,6 +44,8 @@ object RoutesApiClient : RoutesRepository {
                 val pair = polyline.getJSONArray(i)
                 Coordinates(lat = pair.getDouble(0), lng = pair.getDouble(1))
             },
+            // null si el backend no pudo guardar la ruta; se navega igual.
+            id = if (json.isNull("route_id")) null else json.getLong("route_id"),
         )
     }
 
