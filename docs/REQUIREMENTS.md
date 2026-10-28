@@ -97,7 +97,7 @@ smartwatch-nav/
 - Gemini devuelve PCM 16-bit mono (24 kHz por defecto; la frecuencia viene en el `mimeType`) en base64; el backend lo envuelve en WAV con el módulo `wave`.
 - Caché en memoria de hasta 100 frases (se descarta la menos usada) para no gastar cuota gratuita en frases repetidas. Los errores no se guardan en caché.
 - Errores de Gemini → 502 `EXTERNAL_SERVICE_ERROR`; la cuota agotada (429 de Gemini) → 429 `QUOTA_EXHAUSTED` con "Se agotó la cuota gratuita de voz de Gemini. Intenta más tarde.", para que el reloj deje de pedir voz un rato.
-- Prueba real: desde `backend/`, `python scripts/try_speech.py "Llegaste a tu destino." prueba.wav`. Con `--verify` genera 3 frases, las transcribe con `GEMINI_MODEL` y falla si el audio dice algo más que la frase (similitud < 0,85).
+- Prueba real: desde `backend/`, `python scripts/try_speech.py "Llegaste a tu destino." prueba.wav`. Con `--verify` genera 2 frases, las transcribe con `GEMINI_MODEL` y falla si el audio dice algo más que la frase (similitud < 0,85; compara sin tildes ni signos y con los números en palabras, así "50" cuenta como "cincuenta").
 
 ### Voz en el reloj
 
@@ -244,6 +244,7 @@ Diseñadas en Claude Design (lienzo "Rumbo — UI del reloj"), en formato cuadra
 
 ## 13. Changelog
 
+- **v0.17** (2026-10-28): `scripts/try_speech.py --verify` pasa a 2 frases y normaliza números antes de comparar ("50" = "cincuenta", "1,6" = "uno coma seis"), para no dar falsos fallos cuando la transcripción usa cifras.
 - **v0.16** (2026-10-28): Nuevo error de dominio `QuotaExhaustedError` (código `QUOTA_EXHAUSTED`, HTTP 429). `POST /speech` lo devuelve cuando Gemini responde 429, en vez del 502 genérico.
 - **v0.15** (2026-10-28): Corrige que la voz leyera en voz alta la instrucción de estilo antes de cada frase. Según la guía de Gemini, los modelos TTS 3.8 tratan el texto como transcripción literal, así que el backend ahora envía solo la frase (sin `STYLE_PROMPT` ni system instruction); el acento depende de la voz (`VOICE_NAME`). El cache de audio del reloj pasa a la versión `v2` (`speechCacheFileName`) y borra los WAV viejos. `scripts/try_speech.py --verify` comprueba con 3 frases, transcribiendo con Gemini, que el audio contiene solo la frase; `--voices` lista voces por idioma.
 - **v0.14** (2026-10-28): Voz hablada en el reloj. Puerto `SpeechOutput` (prioridad normal/alta) y `VoiceSettings`; `SpeechOutputImpl` cancela la frase anterior al llegar otra, salvo que la nueva sea normal y la actual alta. `AndroidSpeechPlayer` usa `POST /speech` (`SpeechApiClient`, timeout de 20 s cuando el backend ya despertó), guarda el WAV en el cache del reloj por hash del texto y lo reproduce con `MediaPlayer`; si falla, `TextToSpeech` en es-CO, y si tampoco hay, solo un `Log.w`. `BackendHttp` lee el cuerpo como bytes y acepta timeout por petición. Frases en `application/speech` (números en palabras, distancias redondeadas, minutos) para Confirmar, Ir, giro próximo, maniobra, desvío, sin señal, señal recuperada, llegada y errores en pantalla. `TrackNavigation` habla sin esperar y si la voz falla sigue vibrando. Interruptor "Voz: sí/no" en Inicio. Tests JUnit de frases y de la cancelación por prioridad con un reproductor falso.

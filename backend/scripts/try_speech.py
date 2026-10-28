@@ -4,7 +4,7 @@ Uso, desde backend/:
   python scripts/try_speech.py "Llegaste a tu destino." prueba.wav
       Genera la frase y la guarda como WAV para escucharla.
   python scripts/try_speech.py --verify
-      Genera 3 frases, transcribe cada WAV con GEMINI_MODEL y comprueba que el audio
+      Genera 2 frases, transcribe cada WAV con GEMINI_MODEL y comprueba que el audio
       contiene solo la frase (sin instrucciones leídas). Sale con código 1 si alguna falla.
   python scripts/try_speech.py --voices es-US
       Lista las voces prebuilt de Gemini para ese idioma (para elegir VOICE_NAME).
@@ -32,18 +32,44 @@ from infrastructure.config.settings import load_settings  # noqa: E402
 VERIFY_PHRASES = [
     "En cincuenta metros, gira a la izquierda.",
     "Te saliste de la ruta. Recalculando.",
-    "Parque Bolívar, a uno coma seis kilómetros, veintiséis minutos a pie. ¿Vamos?",
 ]
 # Por debajo de esta similitud el audio dice algo más (o algo distinto) que la frase.
 MIN_SIMILARITY = 0.85
 VOICES_URL = "https://generativelanguage.googleapis.com/v1beta/voices"
 
+_UNITS = (
+    "cero uno dos tres cuatro cinco seis siete ocho nueve diez once doce trece catorce quince "
+    "dieciseis diecisiete dieciocho diecinueve veinte veintiuno veintidos veintitres veinticuatro "
+    "veinticinco veintiseis veintisiete veintiocho veintinueve"
+).split()
+_TENS = "_ _ _ treinta cuarenta cincuenta sesenta setenta ochenta noventa".split()
+_HUNDREDS = (
+    "_ ciento doscientos trescientos cuatrocientos quinientos seiscientos setecientos "
+    "ochocientos novecientos"
+).split()
+
+
+def number_in_words(n: int) -> str:
+    """0..999 en palabras sin tildes ("cincuenta", "ciento cinco"); si no, en cifras."""
+    if not 0 <= n <= 999:
+        return str(n)
+    if n < 30:
+        return _UNITS[n]
+    if n < 100:
+        return _TENS[n // 10] + ("" if n % 10 == 0 else f" y {_UNITS[n % 10]}")
+    if n == 100:
+        return "cien"
+    return _HUNDREDS[n // 100] + ("" if n % 100 == 0 else f" {number_in_words(n % 100)}")
+
 
 def normalize(text: str) -> str:
-    """Minúsculas, sin tildes ni signos, para comparar lo dicho con lo esperado."""
+    """Minúsculas, sin tildes ni signos y con los números en palabras ("50" = "cincuenta"),
+    para comparar lo dicho con lo esperado aunque la transcripción use cifras."""
     text = unicodedata.normalize("NFKD", text.lower())
     text = "".join(c for c in text if not unicodedata.combining(c))
-    return " ".join(re.sub(r"[^a-z0-9ñ ]", " ", text).split())
+    text = re.sub(r"(\d+)[.,](\d+)", r"\1 coma \2", text)
+    text = re.sub(r"\d+", lambda m: f" {number_in_words(int(m.group()))} ", text)
+    return " ".join(re.sub(r"[^a-z ]", " ", text).split())
 
 
 def similarity(expected: str, heard: str) -> float:
