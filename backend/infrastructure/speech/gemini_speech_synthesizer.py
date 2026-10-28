@@ -9,11 +9,9 @@ from domain.errors import ExternalServiceError
 
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
-# Voz prebuilt de Gemini. "Iapetus" figura como clara; el tono calmado lo pide STYLE_PROMPT.
+# Voz prebuilt de Gemini ("clara" según la guía). Los modelos TTS 3.8 leen el texto tal cual,
+# así que no se manda ninguna instrucción de estilo: la voz y el idioma del texto dan el acento.
 VOICE_NAME = "Iapetus"
-STYLE_PROMPT = (
-    "Lee en español latinoamericano neutro, con voz clara, calmada y a ritmo pausado: {text}"
-)
 
 # Gemini entrega PCM 16-bit mono; la frecuencia viene en el mimeType (audio/L16;rate=24000).
 DEFAULT_SAMPLE_RATE = 24000
@@ -38,7 +36,7 @@ class GeminiSpeechSynthesizer:
         if not self._api_key or not self._model:
             raise ExternalServiceError("Falta configurar GEMINI_API_KEY o GEMINI_TTS_MODEL.")
         body = {
-            "contents": [{"parts": [{"text": STYLE_PROMPT.format(text=text)}]}],
+            "contents": [{"parts": [{"text": text}]}],
             "generationConfig": {
                 "responseModalities": ["AUDIO"],
                 "speechConfig": {

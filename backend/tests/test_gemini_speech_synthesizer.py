@@ -45,7 +45,9 @@ def test_sends_text_with_audio_modality_and_voice():
     config = seen["body"]["generationConfig"]
     assert seen["url"].endswith("/tts:generateContent")
     assert seen["key"] == "k"
-    assert "Gira a la izquierda." in seen["body"]["contents"][0]["parts"][0]["text"]
+    # Solo la frase: cualquier instrucción extra en el texto se leería en voz alta.
+    assert seen["body"]["contents"] == [{"parts": [{"text": "Gira a la izquierda."}]}]
+    assert "systemInstruction" not in seen["body"]
     assert config["responseModalities"] == ["AUDIO"]
     assert config["speechConfig"]["voiceConfig"]["prebuiltVoiceConfig"]["voiceName"] == VOICE_NAME
 

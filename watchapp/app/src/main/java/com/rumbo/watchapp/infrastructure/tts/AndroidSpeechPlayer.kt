@@ -7,7 +7,6 @@ import android.util.Log
 import com.rumbo.watchapp.infrastructure.network.SpeechApiClient
 import java.io.File
 import java.io.IOException
-import java.security.MessageDigest
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.CancellationException
@@ -27,6 +26,7 @@ class AndroidSpeechPlayer(
 ) : SpeechPlayer {
 
     private val cacheDir = File(context.applicationContext.cacheDir, "speech")
+    private var staleFilesRemoved = false
 
     override suspend fun play(text: String) {
         val file = try {
@@ -51,10 +51,11 @@ class AndroidSpeechPlayer(
         fallback.speak(text)
     }
 
-    // Reutiliza el WAV si la frase ya se pidió; se escribe aparte y se renombra para no dejar
-    // archivos a medias si se cancela.
+    // Reutiliza el WAV si la frase ya se pidió en esta versión; se escribe aparte y se renombra
+    // para no dejar archivos a medias si se cancela.
     private suspend fun audioFile(text: String): File = withContext(Dispatchers.IO) {
-        val file = File(cacheDir, "${sha256(text)}.wav")
+        removeStaleFiles()
+        val file = File(cacheDir, speechCacheFileName(text))
         if (file.length() > 0) return@withContext file
         val audio = SpeechApiClient.synthesize(text)
         cacheDir.mkdirs()
@@ -62,6 +63,13 @@ class AndroidSpeechPlayer(
         partial.writeBytes(audio)
         if (!partial.renameTo(file)) throw IOException("No pude guardar el audio")
         file
+    }
+
+    // Una vez por proceso: borra los audios de versiones anteriores del cache.
+    private fun removeStaleFiles() {
+        if (staleFilesRemoved) return
+        staleFilesRemoved = true
+        cacheDir.listFiles()?.filter { isStaleSpeechFile(it.name) }?.forEach { it.delete() }
     }
 
     private suspend fun playFile(file: File) = suspendCancellableCoroutine { continuation ->
@@ -95,8 +103,3 @@ class AndroidSpeechPlayer(
         }
     }
 }
-
-private fun sha256(text: String): String =
-    MessageDigest.getInstance("SHA-256")
-        .digest(text.toByteArray())
-        .joinToString("") { "%02x".format(it) }
