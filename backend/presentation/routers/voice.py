@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Request
 
 from application.use_cases.interpret_voice_command import interpret_voice_command
-from infrastructure.config.container import get_voice_assistant
+from application.use_cases.save_history import save_voice_command
+from infrastructure.config.container import get_voice_assistant, get_voice_command_repository
 from presentation.dto.voice import VoiceCommandResponse
 
 router = APIRouter(prefix="/voice")
@@ -13,4 +14,5 @@ async def interpret(request: Request):
     audio = await request.body()
     mime_type = request.headers.get("content-type", "")
     command = interpret_voice_command(get_voice_assistant(), audio, mime_type)
+    save_voice_command(get_voice_command_repository, command)
     return VoiceCommandResponse.from_domain(command)

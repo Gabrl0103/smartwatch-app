@@ -13,3 +13,11 @@ def test_geoapify_adapters_require_api_key(monkeypatch):
         container.get_geocoder()
     with pytest.raises(ExternalServiceError):
         container.get_routing_provider()
+
+
+def test_repositories_require_database_url(monkeypatch):
+    monkeypatch.setattr(container, "load_settings", lambda: Settings("", "", "", ""))
+    container._engine.cache_clear()
+    container.get_saved_place_repository.cache_clear()
+    with pytest.raises(ExternalServiceError):
+        container.get_saved_place_repository()

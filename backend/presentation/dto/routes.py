@@ -28,6 +28,8 @@ class RouteStepResponse(BaseModel):
 
 
 class RouteResponse(BaseModel):
+    # None si no se pudo guardar la ruta; el reloj navega igual.
+    route_id: int | None = None
     destination_name: str
     distance_m: float
     duration_s: float
@@ -35,8 +37,9 @@ class RouteResponse(BaseModel):
     polyline: list[list[float]]
 
     @classmethod
-    def from_domain(cls, route: Route) -> "RouteResponse":
+    def from_domain(cls, route: Route, route_id: int | None = None) -> "RouteResponse":
         return cls(
+            route_id=route_id,
             destination_name=route.destination_name,
             distance_m=route.distance_m,
             duration_s=route.duration_s,

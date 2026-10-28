@@ -1,7 +1,15 @@
 from fastapi import FastAPI
 
 from presentation.middleware.error_handler import register_error_handlers
-from presentation.routers import health, places, routes, voice
+from presentation.routers import (
+    devices,
+    health,
+    places,
+    routes,
+    saved_places,
+    vibration_events,
+    voice,
+)
 
 
 def create_app() -> FastAPI:
@@ -11,4 +19,7 @@ def create_app() -> FastAPI:
     app.include_router(voice.router)
     app.include_router(places.router)
     app.include_router(routes.router)
+    app.include_router(saved_places.router)
+    app.include_router(devices.router)
+    app.include_router(vibration_events.router)
     return app
