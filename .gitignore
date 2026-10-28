@@ -22,3 +22,6 @@ watchapp/.idea/
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Audios de prueba
+*.wav
