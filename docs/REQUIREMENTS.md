@@ -21,7 +21,7 @@
 | Backend | FastAPI (Python) | Curva baja, docs automáticas, fácil de testear |
 | Rutas a pie + geocodificación | Geoapify (modo `walk`) | Gratis con registro (3.000 créditos/día); rutas a pie y geocodificación en un solo servicio |
 | Voz → texto, intención y asistente | Gemini API (capa gratis, AI Studio) | Recibe el audio grabado en el reloj, lo transcribe, extrae la intención y responde; sin tarjeta de crédito. Necesario porque el emulador Wear OS no trae reconocimiento de voz |
-| Texto → voz | Pendiente: Google Text-to-Speech instalado en el emulador o Gemini TTS desde el backend | El emulador Wear OS no trae motor TTS |
+| Texto → voz | Gemini TTS desde el backend (`POST /speech`, modelo `gemini-3.8-flash-tts`, capa gratis) | El emulador Wear OS no trae motor TTS; un solo proveedor de IA y una voz igual en cualquier reloj |
 | Base de datos | PostgreSQL (Render o Supabase, free tier) | Gratis |
 | Hosting backend | Render (free tier) | $0; el servidor duerme tras inactividad |
 | Tests | pytest (backend) / JUnit (reloj) | Solo domain y application |
@@ -55,9 +55,9 @@ smartwatch-nav/
 ├── backend/
 │   ├── domain/{models,errors,ports}/
 │   ├── application/use_cases/
-│   ├── infrastructure/{routing,geocoding,assistant,database,config}/
+│   ├── infrastructure/{routing,geocoding,assistant,speech,database,config}/
 │   ├── presentation/{routers,dto}/
-│   ├── scripts/migrate.py
+│   ├── scripts/{migrate.py,try_speech.py}
 │   ├── tests/
 │   ├── .env.example
 │   └── requirements.txt
@@ -80,7 +80,8 @@ smartwatch-nav/
 - Audio del usuario: micrófono del reloj (en emulador, micrófono del PC), grabado con `MediaRecorder` en AAC y enviado al backend. Prueba del micrófono del emulador superada.
 - Rutas a pie y lugares: Geoapify, consumido solo desde el backend.
 - Transcripción e interpretación de voz y respuestas del asistente: Gemini API, consumido solo desde el backend.
-- Las API keys viven en `backend/.env` (no versionado); se versiona `.env.example`. Variables: `DATABASE_URL`, `GEOAPIFY_API_KEY` (reemplaza a `ORS_API_KEY`), `GEMINI_API_KEY`, `GEMINI_MODEL`.
+- Voz hablada (TTS): Gemini TTS, consumido solo desde el backend (`POST /speech`).
+- Las API keys viven en `backend/.env` (no versionado); se versiona `.env.example`. Variables: `DATABASE_URL`, `GEOAPIFY_API_KEY` (reemplaza a `ORS_API_KEY`), `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_TTS_MODEL` (por defecto `gemini-3.8-flash-tts`; alternativa gratis: `gemini-3.8-flash-lite-tts`).
 
 ### Flujo de voz
 
@@ -89,6 +90,15 @@ smartwatch-nav/
 3. Gemini transcribe el audio y extrae la intención.
 4. El backend responde con el texto y la intención; el reloj confirma o actúa.
 
+### Voz hablada (TTS)
+
+- `POST /speech` recibe `{text}` (máximo 300 caracteres) y responde `audio/wav`.
+- El backend llama a `generateContent` del modelo `GEMINI_TTS_MODEL` con `responseModalities: ["AUDIO"]` y la voz prebuilt `Iapetus` (constante `VOICE_NAME`). El tono calmado y el español latinoamericano neutro se piden en el texto (`STYLE_PROMPT`).
+- Gemini devuelve PCM 16-bit mono (24 kHz por defecto; la frecuencia viene en el `mimeType`) en base64; el backend lo envuelve en WAV con el módulo `wave`.
+- Caché en memoria de hasta 100 frases (se descarta la menos usada) para no gastar cuota gratuita en frases repetidas. Los errores no se guardan en caché.
+- Errores de Gemini → 502 `EXTERNAL_SERVICE_ERROR`; el 429 (cuota agotada) dice "Se agotó la cuota gratuita de voz de Gemini. Intenta más tarde."
+- Prueba real: desde `backend/`, `python scripts/try_speech.py "Llegaste a tu destino." prueba.wav`.
+
 ### Endpoints del backend
 
 | Método | Ruta | Entrada | Salida |
@@ -96,6 +106,7 @@ smartwatch-nav/
 | GET | `/health` | — | Estado del servicio |
 | GET | `/health/db` | — | Estado de la conexión a la base de datos |
 | POST | `/voice/interpret` | Audio crudo en el cuerpo; formato en `Content-Type` (p. ej. `audio/aac`) | `text`, `intent`, `destination`, `question`. Guarda el comando en `voice_commands` (si el guardado falla, se registra en el log y se responde igual) |
+| POST | `/speech` | JSON `{text}` (máximo 300 caracteres) | `audio/wav` con la frase hablada (422 si falta el texto o es muy largo; 502 si Gemini falla o se agota la cuota) |
 | GET | `/places/search` | `q` (texto); `lat`, `lng` opcionales para priorizar cercanía (si faltan, centro de Pasto) | `name`, `lat`, `lng` (404 si no hay resultados) |
 | POST | `/routes` | JSON `{origin: {lat, lng}, destination: {lat, lng}, destination_name}` | `route_id`, `destination_name`, `distance_m`, `duration_s`, `steps: [{order, maneuver (left/right/straight/arrive), instruction, distance_m, lat, lng}]`, `polyline: [[lat, lng], ...]` (422 si faltan coordenadas o están fuera de rango). Guarda la ruta y sus pasos con estado `active`; si el guardado falla, se registra en el log y `route_id` llega `null` |
 | GET | `/saved-places` | — | Lista `[{id, name, lat, lng, created_at}]` ordenada por nombre |
@@ -206,11 +217,11 @@ Diseñadas en Claude Design (lienzo "Rumbo — UI del reloj"), en formato cuadra
 ## 12. Preguntas abiertas
 
 - Requisitos exactos del profesor (rúbrica, formato de entrega, sustentación).
-- TTS: Google Text-to-Speech instalado en el emulador o Gemini TTS desde el backend (el emulador no trae motor TTS).
 - Crear cuentas gratuitas: Geoapify (API key) y Google AI Studio (API key de Gemini); confirmar el nombre del modelo de Gemini disponible en la capa gratis.
 
 ## 13. Changelog
 
+- **v0.13** (2026-10-28): Voz hablada con Gemini TTS desde el backend. Nuevo endpoint `POST /speech` (`{text}` → `audio/wav`), puerto `SpeechSynthesizerPort`, adaptador `GeminiSpeechSynthesizer` (httpx; `generateContent` con `responseModalities: ["AUDIO"]`, voz prebuilt `Iapetus`; convierte el PCM 16-bit mono a WAV) y caso de uso `synthesize_speech` (texto no vacío de hasta 300 caracteres; caché en memoria de 100 frases). Errores de Gemini, incluido el 429 por cuota, salen como `ExternalServiceError` con mensaje claro. Nueva variable `GEMINI_TTS_MODEL` (por defecto `gemini-3.8-flash-tts`, gratis según la página de precios de Gemini) y script `scripts/try_speech.py` para probar la voz real. Queda resuelta la pregunta abierta sobre el TTS.
 - **v0.12** (2026-10-28): Lugares guardados y registro en el reloj. Clientes HTTP `SavedPlacesApiClient`, `DevicesApiClient` y `VibrationEventsApiClient` (HttpURLConnection + org.json); `requireOk` acepta cualquier 2xx y `RoutesApiClient` lee `route_id` (nuevo `Route.id`). Caso de uso `ManageSavedPlaces` (listar, ruta hasta un lugar, guardar el destino con su nombre en el punto final de la ruta, borrar) y `RegisterDevice`: al primer inicio genera un UUID, hace `POST /devices` y guarda en SharedPreferences que ya se registró (si falla, reintenta en el próximo inicio). `TrackNavigation` envía en segundo plano un `POST /vibration-events` por cada vibración (patrón, `route_id` y orden del siguiente paso); si falla, se ignora y la navegación sigue. Pantallas: botón "Lugares guardados" en Inicio, lista con borrado por pulsación larga y confirmación, "Guardar" en Confirmar, botón "Inicio" en la pantalla de error y "Reintentar" que vuelve a la lista cuando el error vino de ahí. Las pantallas centradas se desplazan si el contenido no cabe. Tests JUnit de `ManageSavedPlaces`, `RegisterDevice` y del log de vibraciones.
 - **v0.11** (2026-10-28): Endpoints de persistencia: `GET/POST /saved-places`, `DELETE /saved-places/{id}`, `POST /devices` (idempotente) y `POST /vibration-events`. `POST /routes` guarda la ruta y sus pasos (estado `active`) y devuelve `route_id`; `POST /voice/interpret` guarda el comando. Ese historial se guarda con `save_history` (mejor esfuerzo): si falla la base o falta `DATABASE_URL`, se registra el error y la respuesta principal sale igual. Casos de uso `manage_saved_places`, `register_device`, `record_vibration_event`; validación común en `application/validation.py`. Migraciones aplicadas en Neon y verificadas (7 tablas + `schema_migrations`, usuario semilla, `GET /health/db` ok).
 - **v0.10** (2026-10-28): Base de datos. Migraciones SQL versionadas en `database/migrations/` (`001_create_tables.sql` con las 7 tablas, claves foráneas e índices; `002_seed_default_user.sql` con el usuario fijo id 1 "Usuario") y `backend/scripts/migrate.py`, que las aplica en orden, cada una en su transacción, y anota las corridas en `schema_migrations` (idempotente). Columnas en inglés (p. ej. `status` active/completed/cancelled, `step_order`, `emitted_at`); el id de `devices` lo genera el reloj. Nuevos modelos `SavedPlace`, `Device`, `RouteStatus` y `DEFAULT_USER_ID`, cinco puertos de repositorio y sus implementaciones SQLAlchemy Core (`infrastructure/database/tables.py` + `Sql*Repository`), con tests sobre SQLite en memoria.

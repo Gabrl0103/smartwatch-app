@@ -4,6 +4,7 @@ from functools import lru_cache
 
 from sqlalchemy.engine import Engine
 
+from application.speech_cache import SpeechCache
 from domain.errors import ExternalServiceError
 from domain.ports.database_health import DatabaseHealthPort
 from domain.ports.device_repository import DeviceRepositoryPort
@@ -11,6 +12,7 @@ from domain.ports.geocoding import GeocodingPort
 from domain.ports.route_repository import RouteRepositoryPort
 from domain.ports.routing_provider import RoutingProviderPort
 from domain.ports.saved_place_repository import SavedPlaceRepositoryPort
+from domain.ports.speech_synthesizer import SpeechSynthesizerPort
 from domain.ports.vibration_event_repository import VibrationEventRepositoryPort
 from domain.ports.voice_assistant import VoiceAssistantPort
 from domain.ports.voice_command_repository import VoiceCommandRepositoryPort
@@ -25,6 +27,7 @@ from infrastructure.database.sql_vibration_event_repository import SqlVibrationE
 from infrastructure.database.sql_voice_command_repository import SqlVoiceCommandRepository
 from infrastructure.geocoding.geoapify_geocoder import GeoapifyGeocoder
 from infrastructure.routing.geoapify_routing import GeoapifyRouting
+from infrastructure.speech.gemini_speech_synthesizer import GeminiSpeechSynthesizer
 
 
 @lru_cache
@@ -69,6 +72,17 @@ def get_device_repository() -> DeviceRepositoryPort:
 def get_voice_assistant() -> VoiceAssistantPort:
     settings = load_settings()
     return GeminiVoiceAssistant(settings.gemini_api_key, settings.gemini_model)
+
+
+@lru_cache
+def get_speech_synthesizer() -> SpeechSynthesizerPort:
+    settings = load_settings()
+    return GeminiSpeechSynthesizer(settings.gemini_api_key, settings.gemini_tts_model)
+
+
+@lru_cache
+def get_speech_cache() -> SpeechCache:
+    return SpeechCache()
 
 
 def _geoapify_api_key() -> str:
