@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fondo de Rumbo: la pantalla de arranque usa el mismo que la app para no parpadear. -->
+    <color name="rumbo_background">#FF0B0E14</color>
+</resources>

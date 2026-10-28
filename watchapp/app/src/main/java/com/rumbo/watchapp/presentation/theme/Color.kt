@@ -9,6 +9,11 @@ val TextPrimary = Color(0xFFF5F7FA)
 val TextSecondary = Color(0xFFA0A8B8)
 val Primary = Color(0xFF4F8EFF)
 val Accent = Color(0xFFFFC857)
+val Border = Color(0xFF2A2F3A)
+
+// Texto sobre botones y fondos de color claro (primario, acento y estados): oscuro, porque el
+// blanco sobre #4F8EFF da 3.2:1 y este da 6.1:1. Sobre los demás colores pasa de 6:1.
+val OnColor = Background
 
 // Estados de la navegación
 val StatusOnRoute = Primary

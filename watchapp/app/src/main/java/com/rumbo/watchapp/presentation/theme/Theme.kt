@@ -4,12 +4,16 @@ import androidx.compose.runtime.Composable
 import androidx.wear.compose.material3.ColorScheme
 import androidx.wear.compose.material3.MaterialTheme
 
-// El texto sobre el primario va oscuro: blanco sobre #4F8EFF no llega a contraste 4.5:1.
+// Todo el esquema sale de los tokens de Rumbo. El texto sobre colores claros va en [OnColor].
 private val RumboColors = ColorScheme(
     primary = Primary,
-    onPrimary = Background,
+    primaryDim = Primary,
+    primaryContainer = Surface,
+    onPrimary = OnColor,
+    onPrimaryContainer = TextPrimary,
     tertiary = Accent,
-    onTertiary = Background,
+    tertiaryDim = Accent,
+    onTertiary = OnColor,
     background = Background,
     onBackground = TextPrimary,
     surfaceContainerLow = Surface,
@@ -17,6 +21,11 @@ private val RumboColors = ColorScheme(
     surfaceContainerHigh = Surface,
     onSurface = TextPrimary,
     onSurfaceVariant = TextSecondary,
+    outline = Border,
+    outlineVariant = Border,
+    error = StatusOffRoute,
+    errorDim = StatusOffRoute,
+    onError = OnColor,
 )
 
 @Composable
@@ -25,6 +34,7 @@ fun WatchappTheme(
 ) {
     MaterialTheme(
         colorScheme = RumboColors,
+        typography = RumboTypography,
         content = content
     )
 }
