@@ -38,6 +38,7 @@ private const val IDLE_MS = 1_000L
  * ritmo real del patrón (más opaca cuanto más fuerte), y cómo se siente en texto ("2 pulsos
  * medios"). Sirve en el emulador, que no vibra, y a quien acompaña al usuario. Sin [showLabel]
  * el texto no se dibuja (cuando ya está escrito al lado), pero TalkBack lee nombre y descripción.
+ * Con [showName] escribe además el nombre del patrón ("Izquierda") encima de las barras.
  */
 @Composable
 fun VibrationIndicator(
@@ -45,6 +46,7 @@ fun VibrationIndicator(
     color: Color,
     modifier: Modifier = Modifier,
     showLabel: Boolean = true,
+    showName: Boolean = false,
 ) {
     if (pattern == null) return
     val pulses = remember(pattern) { pattern.pulses }
@@ -63,6 +65,14 @@ fun VibrationIndicator(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        if (showName) {
+            Text(
+                text = pattern.name,
+                style = MaterialTheme.typography.titleSmall,
+                color = color,
+                textAlign = TextAlign.Center,
+            )
+        }
         Canvas(Modifier.size(BarWidth * pulses.size + BarGap * (pulses.size - 1), BarHeight)) {
             val width = BarWidth.toPx()
             val gap = BarGap.toPx()

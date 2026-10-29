@@ -60,6 +60,7 @@ import com.rumbo.watchapp.presentation.theme.Accent
 import com.rumbo.watchapp.presentation.theme.StatusArrived
 import com.rumbo.watchapp.presentation.theme.StatusTurnSoon
 import com.rumbo.watchapp.presentation.theme.WatchappTheme
+import com.rumbo.watchapp.presentation.viewmodel.DemoStep
 import com.rumbo.watchapp.presentation.viewmodel.GPS_SEARCHING_MESSAGE
 import com.rumbo.watchapp.presentation.viewmodel.Permission
 import com.rumbo.watchapp.presentation.viewmodel.SaveStatus
@@ -110,6 +111,17 @@ private fun tracking(
 @Composable
 private fun Navigation(state: TrackingState, confirmFinish: Boolean = false) =
     NavigationScreen(state, confirmFinish, onRepeat = {}, onFinish = {}, onKeepNavigating = {})
+
+@Composable
+private fun Vibrations(supportsAmplitude: Boolean = true, demo: DemoStep? = null) = VibrationsScreen(
+    patterns = VibrationPatterns.forDevice(supportsAmplitude),
+    supportsAmplitude = supportsAmplitude,
+    demo = demo,
+    onPlay = {},
+    onStartDemo = {},
+    onStopDemo = {},
+    onBack = {},
+)
 
 @Composable
 private fun Start(previousDestination: String? = null) = StartScreen(
@@ -186,11 +198,15 @@ class ScreenshotsTest {
             SavedPlacesScreen(PLACES, onChoose = {}, onDelete = {}, onBack = {})
         },
         Shot("17_borrar_lugar") { ConfirmDeleteScreen(PLACES[0], onConfirm = {}, onCancel = {}) },
-        Shot("18_vibraciones") { VibrationsScreen(VibrationPatterns.WITH_AMPLITUDE, onPlay = {}, onBack = {}) },
+        Shot("18_vibraciones") { Vibrations() },
         Shot("19_componentes") { ComponentsGallery() },
         Shot("20_permiso_ubicacion") { PermissionScreen(Permission.LOCATION, onOpenSettings = {}, onHome = {}) },
         Shot("21_buscando_gps") { ProcessingScreen(GPS_SEARCHING_MESSAGE) },
         Shot("22_continuar_ruta") { Start(previousDestination = "Parque Bolívar") },
+        Shot("23_vibraciones_sin_intensidad") { Vibrations(supportsAmplitude = false) },
+        Shot("24_demostracion_vibraciones") {
+            Vibrations(demo = DemoStep(VibrationCue.LEFT, 3, VibrationCue.entries.size))
+        },
     )
 
     @Test

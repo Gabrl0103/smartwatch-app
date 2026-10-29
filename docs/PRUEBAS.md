@@ -82,6 +82,10 @@ y el Parque Bolívar. Comprueban que:
 |---|---|---|---|
 | B1 | Guía | Inicio → "Vibraciones" → tocar cada patrón | Recto: 1 pulso suave cada 6 s; Giro próximo: 2 pulsos muy cortos; Izquierda: 2 pulsos medios; Derecha: 1 pulso largo; Desviado: 3 pulsos largos con pausas cortas; Sin señal: 1 pulso muy largo cada 5 s; Llegada: 5 pulsos crecientes. Cada uno se nota distinto (en el reloj) y en el emulador se ve en Logcat y en las barras animadas |
 | B3 | Reloj sin control de intensidad | Abrir la app y mirar `adb logcat -s Vibracion` | Al arrancar: `Motor de vibración: ...; control de intensidad: sí/no → patrones con amplitud / solo con ritmo y duración`. Sin control, la guía muestra "Recto: 1 pulso corto cada 6 s" y "Llegada: 5 pulsos cada vez más largos", y cada patrón se distingue solo por cuántos pulsos tiene y cuánto duran |
+| B4 | Soporte de intensidad | Abrir "Vibraciones" | Arriba "Intensidad: sí" con "El reloj varía la fuerza" (emulador) o "Intensidad: no" con "Se distinguen por ritmo y duración". Coincide con la línea `control de intensidad` de Logcat |
+| B5 | Barras con nombre | Tocar "Izquierda" | Vibra 2 pulsos medios; debajo del botón aparecen "Izquierda" y 2 barras que se encienden al ritmo del patrón. Logcat `Vibracion: Izquierda: 2 pulsos medios tiempos=[0, 300, 200, 300] ...` |
+| B6 | Secuencia de demostración | Tocar "Secuencia de demostración" | Suenan los 7 patrones en orden (Recto, Giro próximo, Izquierda, Derecha, Desviado, Sin señal, Llegada); cada uno muestra "n de 7", su nombre en grande y sus barras; entre uno y otro, 2 s de pausa tras terminar (en Logcat, duración del patrón + 2 s entre líneas). Al final vuelve a la lista |
+| B7 | Detener la demostración | Durante la demo, tocar "Detener" (o gesto de volver) | La vibración se corta (`Vibracion: Detenida`), no suena ningún patrón más y se vuelve a la lista; volver otra vez va a Inicio |
 | B2 | Salir de la guía | Tocar un patrón largo y volver | La vibración se corta (`Vibracion: Detenida`) |
 
 ### Permisos denegados

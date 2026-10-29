@@ -35,6 +35,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 private const val RECORDING_MS = 4_000L
+// Pausa entre un patrón y el siguiente en la secuencia de demostración.
+const val DEMO_PAUSE_MS = 2_000L
 private const val GENERIC_ERROR = "Algo salió mal, intenta de nuevo"
 const val GPS_SEARCHING_MESSAGE = "Buscando señal GPS"
 
@@ -200,12 +202,41 @@ class RoutePlanningViewModel(
     }
 
     fun openVibrations() {
-        if (!busy) _state.value = PlanState.Vibrations
+        if (!busy) _state.value = PlanState.Vibrations()
     }
 
     /** Hace sentir un patrón en la pantalla "Vibraciones". */
     fun playVibration(cue: VibrationCue) {
-        if (_state.value == PlanState.Vibrations) vibration.play(vibrationPatterns.getValue(cue))
+        if (_state.value == PlanState.Vibrations()) vibration.play(vibrationPatterns.getValue(cue))
+    }
+
+    /**
+     * "Secuencia de demostración": vibra todos los patrones en orden y muestra el nombre de cada
+     * uno mientras suena, con [DEMO_PAUSE_MS] de pausa después de cada patrón. Al terminar
+     * vuelve a la lista.
+     */
+    fun startVibrationDemo() {
+        if (_state.value != PlanState.Vibrations()) return
+        job = viewModelScope.launch {
+            val cues = VibrationCue.entries
+            cues.forEachIndexed { i, cue ->
+                val pattern = vibrationPatterns.getValue(cue)
+                _state.value = PlanState.Vibrations(DemoStep(cue, i + 1, cues.size))
+                vibration.play(pattern)
+                delay(pattern.durationMs + DEMO_PAUSE_MS)
+            }
+            _state.value = PlanState.Vibrations()
+        }
+    }
+
+    /** "Detener" (o volver) durante la demostración: corta la vibración y vuelve a la lista. */
+    fun stopVibrationDemo() {
+        val current = _state.value as? PlanState.Vibrations ?: return
+        if (current.demo == null) return
+        job?.cancel()
+        job = null
+        vibration.stop()
+        _state.value = PlanState.Vibrations()
     }
 
     /** Interruptor "Voz: sí/no"; al apagarla se calla lo que esté sonando. Las vibraciones siguen. */
@@ -276,12 +307,14 @@ class RoutePlanningViewModel(
 
     /**
      * Gesto de volver. En ruta primero pregunta si terminar (salvo que ya se haya llegado); en
-     * Borrar vuelve a la lista; en el resto, a Inicio. En Inicio no hace nada: ahí sale de la app.
+     * Borrar vuelve a la lista; en la demostración de vibraciones la detiene; en el resto, a
+     * Inicio. En Inicio no hace nada: ahí sale de la app.
      */
     fun back() {
         when (val current = _state.value) {
             PlanState.Start -> Unit
             is PlanState.ConfirmDelete -> cancelDelete()
+            is PlanState.Vibrations -> if (current.demo != null) stopVibrationDemo() else reset()
             is PlanState.OnRoute -> when {
                 current.confirmFinish -> keepNavigating()
                 navigationState.value.status == NavigationStatus.ARRIVED -> finish()
@@ -294,7 +327,7 @@ class RoutePlanningViewModel(
     fun reset() {
         job?.cancel()
         job = null
-        if (_state.value == PlanState.Vibrations) vibration.stop()
+        if (_state.value is PlanState.Vibrations) vibration.stop()
         speech.stop()
         _previousRoute.value = if (navigationRunner.activeRoute == null) activeRoutes.load() else null
         _state.value = PlanState.Start

@@ -25,6 +25,7 @@ import com.rumbo.watchapp.domain.port.SpeechStatus
 import com.rumbo.watchapp.domain.port.VoiceRepository
 import com.rumbo.watchapp.domain.port.VoiceSettings
 import com.rumbo.watchapp.domain.vibration.VibrationCue
+import com.rumbo.watchapp.domain.vibration.VibrationPatterns
 import com.rumbo.watchapp.testing.BASE
 import com.rumbo.watchapp.testing.FakeVibration
 import com.rumbo.watchapp.testing.lRoute
@@ -170,6 +171,7 @@ class RoutePlanningViewModelTest {
     private fun build(
         gps: LocationProvider = GoodGps,
         savedPlaces: SavedPlacesRepository = FakeSavedPlaces(listOf(place)),
+        vibration: FakeVibration = this.vibration,
     ): RoutePlanningViewModel {
         val routes = FakeRoutes(route)
         val tracker = LocationTracker(gps, { 0L }, CoroutineScope(dispatcher))
@@ -313,6 +315,71 @@ class RoutePlanningViewModelTest {
         assertEquals(listOf(pattern(VibrationCue.LEFT)), vibration.played)
         assertEquals(1, vibration.stops)
         assertEquals(PlanState.Start, viewModel.state.value)
+    }
+
+    @Test
+    fun vibrationsScreenUsesTheVersionTheWatchUnderstands() {
+        assertTrue(viewModel.supportsAmplitude)
+        assertEquals(VibrationPatterns.WITH_AMPLITUDE, viewModel.vibrationPatterns)
+
+        val onOff = FakeVibration(supportsAmplitude = false)
+        viewModel = build(vibration = onOff)
+        viewModel.openVibrations()
+        viewModel.playVibration(VibrationCue.ON_ROUTE)
+
+        assertFalse(viewModel.supportsAmplitude)
+        assertEquals(VibrationPatterns.WITHOUT_AMPLITUDE, viewModel.vibrationPatterns)
+        assertEquals(listOf(pattern(VibrationCue.ON_ROUTE, supportsAmplitude = false)), onOff.played)
+    }
+
+    @Test
+    fun demoPlaysEveryPatternInOrderWithTwoSecondPauses() {
+        viewModel.openVibrations()
+        viewModel.startVibrationDemo()
+
+        val total = VibrationCue.entries.size
+        assertEquals(PlanState.Vibrations(DemoStep(VibrationCue.ON_ROUTE, 1, total)), viewModel.state.value)
+        assertEquals(listOf(pattern(VibrationCue.ON_ROUTE)), vibration.played)
+
+        // El siguiente suena cuando termina el patrón y pasan 2 s, ni antes ni después.
+        dispatcher.scheduler.advanceTimeBy(pattern(VibrationCue.ON_ROUTE).durationMs + DEMO_PAUSE_MS - 1)
+        assertEquals(1, vibration.played.size)
+        dispatcher.scheduler.advanceTimeBy(1)
+        dispatcher.scheduler.runCurrent()
+        assertEquals(PlanState.Vibrations(DemoStep(VibrationCue.TURN_APPROACHING, 2, total)), viewModel.state.value)
+
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(VibrationCue.entries.map { pattern(it) }, vibration.played)
+        assertEquals(PlanState.Vibrations(), viewModel.state.value)
+    }
+
+    @Test
+    fun stoppingTheDemoCutsTheVibrationAndReturnsToTheList() {
+        viewModel.openVibrations()
+        viewModel.startVibrationDemo()
+
+        viewModel.stopVibrationDemo()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(PlanState.Vibrations(), viewModel.state.value)
+        assertEquals(1, vibration.played.size)
+        assertEquals(1, vibration.stops)
+    }
+
+    @Test
+    fun backDuringTheDemoStopsItAndAgainGoesHome() {
+        viewModel.startVibrationDemo()
+        assertEquals(PlanState.Start, viewModel.state.value)
+
+        viewModel.openVibrations()
+        viewModel.startVibrationDemo()
+        viewModel.back()
+        assertEquals(PlanState.Vibrations(), viewModel.state.value)
+
+        viewModel.back()
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(PlanState.Start, viewModel.state.value)
+        assertEquals(1, vibration.played.size)
     }
 
     @Test

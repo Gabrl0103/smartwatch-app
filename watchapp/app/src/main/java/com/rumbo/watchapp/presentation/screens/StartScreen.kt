@@ -57,7 +57,7 @@ fun StartScreen(
             textAlign = TextAlign.Center,
         )
         PillButton("Lugares guardados", onClick = onSavedPlaces)
-        PillButton("Vibraciones", onClick = onVibrations, secondaryLabel = "Aprende los patrones")
+        PillButton("Vibraciones", onClick = onVibrations, secondaryLabel = "Prueba los patrones")
         // El estado va en el texto ("sí"/"no"), no solo en el color del interruptor.
         PillSwitch(
             checked = voiceEnabled,
