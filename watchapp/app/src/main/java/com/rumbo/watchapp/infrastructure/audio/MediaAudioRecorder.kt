@@ -5,13 +5,33 @@ import android.media.MediaRecorder
 import android.os.Build
 import com.rumbo.watchapp.domain.error.AppError
 import com.rumbo.watchapp.domain.port.AudioRecorder
+import com.rumbo.watchapp.domain.voice.LEVEL_SAMPLE_MS
+import com.rumbo.watchapp.domain.voice.LevelSmoother
+import com.rumbo.watchapp.domain.voice.amplitudeToLevel
 import java.io.File
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 
-/** Graba el micrófono en AAC, el formato que el backend envía a Gemini. */
+/**
+ * Graba el micrófono en AAC, el formato que el backend envía a Gemini. Mientras graba, [levels]
+ * lee [MediaRecorder.getMaxAmplitude] (la amplitud más alta desde la lectura anterior) cada
+ * [LEVEL_SAMPLE_MS] y la pasa a un nivel de 0 a 1 suavizado.
+ */
 class MediaAudioRecorder(private val context: Context) : AudioRecorder {
 
     private val file = File(context.cacheDir, "orden.aac")
     private var recorder: MediaRecorder? = null
+
+    override val levels: Flow<Float> = flow {
+        val smoother = LevelSmoother()
+        while (true) {
+            val current = recorder ?: break
+            val amplitude = runCatching { current.maxAmplitude }.getOrDefault(0)
+            emit(smoother.next(amplitudeToLevel(amplitude)))
+            delay(LEVEL_SAMPLE_MS)
+        }
+    }
 
     @Suppress("DEPRECATION")
     override fun start() {

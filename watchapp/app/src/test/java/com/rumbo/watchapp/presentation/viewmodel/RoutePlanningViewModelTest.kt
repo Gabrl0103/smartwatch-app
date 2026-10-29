@@ -24,8 +24,8 @@ import com.rumbo.watchapp.domain.port.SpeechPriority
 import com.rumbo.watchapp.domain.port.SpeechStatus
 import com.rumbo.watchapp.domain.port.VoiceRepository
 import com.rumbo.watchapp.domain.port.VoiceSettings
-import com.rumbo.watchapp.domain.vibration.VibrationCue
 import com.rumbo.watchapp.domain.vibration.PulseDuration
+import com.rumbo.watchapp.domain.vibration.VibrationCue
 import com.rumbo.watchapp.domain.vibration.VibrationIntensity
 import com.rumbo.watchapp.domain.vibration.VibrationPatterns
 import com.rumbo.watchapp.domain.vibration.VibrationSettings
@@ -39,8 +39,10 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -64,6 +66,7 @@ class RoutePlanningViewModelTest {
     private class FakeRecorder : AudioRecorder {
         var started = false
         var released = false
+        override val levels: Flow<Float> = emptyFlow()
 
         override fun start() {
             started = true
