@@ -83,6 +83,33 @@ class NavigationEngineTest {
     }
 
     @Test
+    fun turnJustPassedWithoutWarningIsStillAnnounced() {
+        walk(*north(100, 140))
+
+        // La lectura cae 5 m después de la esquina sin que hubiera ninguna dentro de los 12 m.
+        val events = walk(5.0 to 200.0)
+
+        assertEquals(
+            listOf(
+                NavigationEvent.TurnApproaching(Maneuver.RIGHT),
+                NavigationEvent.TurnNow(Maneuver.RIGHT),
+                NavigationEvent.NextStepChanged(route.steps[2]),
+            ),
+            events,
+        )
+    }
+
+    @Test
+    fun turnLeftFarBehindIsNotAnnouncedLate() {
+        walk(*north(100, 140))
+
+        // Ya va 30 m por la calle nueva: avisar el giro ahora confundiría.
+        val events = walk(30.0 to 200.0)
+
+        assertEquals(listOf(NavigationEvent.NextStepChanged(route.steps[2])), events)
+    }
+
+    @Test
     fun passingTheTurnMovesToNextStep() {
         walk(*north(100, 195))
 

@@ -130,6 +130,18 @@ class NavigationEngine(
         var index = nextIndex
         while (index < steps.size && stepAlong[index] <= progressM) index++
         if (index == nextIndex) return
+        // Un giro nunca se salta en silencio: si una lectura lo deja atrás sin haberlo avisado (p. ej.
+        // el primero, a pocos metros del inicio, y la primera lectura cae un poco más allá) y se acaba
+        // de pasar, la persona está en la esquina: se avisa igual, en sus dos etapas.
+        val passed = index - 1
+        val turn = steps[passed].maneuver
+        val announced = passed == nextIndex && maneuverAnnounced
+        if ((turn == Maneuver.LEFT || turn == Maneuver.RIGHT) && !announced &&
+            progressM - stepAlong[passed] <= thresholds.maneuverM
+        ) {
+            if (!(passed == nextIndex && approachAnnounced)) events += NavigationEvent.TurnApproaching(turn)
+            events += NavigationEvent.TurnNow(turn)
+        }
         nextIndex = index
         approachAnnounced = false
         maneuverAnnounced = false

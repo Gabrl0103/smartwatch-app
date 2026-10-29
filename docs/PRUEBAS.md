@@ -13,25 +13,31 @@ qué se espera; si algo no coincide, es un error.
 | Recorridos GPX | incluidas en el comando anterior | `DemoGpxNavigationTest` y `DemoGpxTrackingTest` recorren los tres GPX de `docs/demo` segundo a segundo |
 | Capturas | `bash tools/capture_screens.sh` (emulador abierto) | Dibuja todas las pantallas en `docs/capturas` |
 
-Las pruebas con GPX usan como ruta la geometría del GPX normal (es la polilínea que devolvió el
-backend, un punto cada ~5 m) con un paso en cada giro de calle: 12 giros entre el centro de Pasto
-y el Parque Bolívar. Comprueban que:
+Las pruebas con GPX usan la ruta real del backend (`docs/demo/ruta_parque_narino_a_parque_bolivar.json`,
+Plaza de Nariño → Parque Bolívar, 1 791 m, 5 giros), leída con el mismo código que el reloj, y
+recorridos realistas (una lectura por segundo con ruido de GPS de σ ≈ 3 m, velocidad de 1,0 a
+1,6 m/s, pausas en los cruces, precisión de 5 a 15 m, saltos de ~40 m y cortes de 2–3 s; ver
+`docs/demo/README.md`). Comprueban que:
 
-- **Normal**: pasa por En ruta → Giro próximo → Gira ahora en cada giro (un aviso de cada uno por
-  giro, 6 vibraciones de izquierda y 6 de derecha) y termina en Llegaste, sin salirse nunca.
-- **Con desvío**: un solo tramo Fuera de ruta (~44 s), pide recalcular y se recupera; sin internet
-  sigue con la ruta anterior, vibra "fuera de ruta" en cada intento (como mucho 5) y llega igual.
+- **Normal**: cada giro avisa una vez en sus dos etapas (Giro próximo → Gira ahora; vibra su lado
+  una vez) y termina en Llegaste, sin salirse nunca pese al ruido y los saltos.
+- **Ruido con 30 semillas**: el mismo modelo generado en el test (`testing/RealisticWalk.kt`) con 30
+  semillas distintas: ningún desvío ni giro falso, ningún aviso de más ni de menos y siempre llega.
+- **Con desvío**: un solo tramo Fuera de ruta, pide recalcular y se recupera; sin internet sigue
+  con la ruta anterior, vibra "fuera de ruta" en cada intento (como mucho 5) y llega igual.
 - **Sin señal**: un solo tramo Sin señal GPS, "Perdí la señal de GPS." / "Señal recuperada." y
-  llega sin falsos desvíos.
+  llega sin falsos desvíos (el corte breve de 2–3 s no dispara nada).
 - **Sin parpadeos**: ningún estado aparece menos de 3 s entre dos iguales (p. ej. En ruta → Fuera
-  de ruta → En ruta), tampoco con lecturas que saltan 8 m a cada lado de la calle.
+  de ruta → En ruta).
+- **Los GPX parecen reales**: una lectura por segundo con algún corte breve, precisión entre 5 y
+  15 m, mediana de 1–4 m a la ruta, algún salto de más de 30 m y paradas en los cruces.
 
 ## 2. Preparación para las pruebas manuales
 
 - Emulador **Wear OS Large Round** (API 34) con la app instalada (`gradlew installDebug`).
 - Ruta de demostración: en **Extended controls → Location → Routes** importa un GPX de
   `docs/demo` y antes de pedir la ruta pon el reloj en el inicio:
-  `adb emu geo fix -77.2813010 1.2135070` (primero la longitud).
+  `adb emu geo fix -77.278419 1.214997` (primero la longitud).
 - Log en una terminal aparte: `adb logcat -s Nav Vibracion Red`.
 - El emulador no vibra: cada vibración se ve en Logcat (`Vibracion`) y en el indicador de "En ruta".
 - El emulador no trae voz propia: habla Gemini por el backend; si responde 429 se agotó la cuota
