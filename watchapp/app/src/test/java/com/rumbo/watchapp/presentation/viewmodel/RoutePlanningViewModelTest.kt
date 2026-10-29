@@ -29,6 +29,7 @@ import com.rumbo.watchapp.domain.vibration.VibrationCue
 import com.rumbo.watchapp.domain.vibration.VibrationIntensity
 import com.rumbo.watchapp.domain.vibration.VibrationPatterns
 import com.rumbo.watchapp.domain.vibration.VibrationSettings
+import com.rumbo.watchapp.domain.voice.LEVEL_SAMPLE_MS
 import com.rumbo.watchapp.testing.BASE
 import com.rumbo.watchapp.testing.FakeVibration
 import com.rumbo.watchapp.testing.FakeVibrationSettingsStore
@@ -39,10 +40,11 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -65,14 +67,28 @@ class RoutePlanningViewModelTest {
 
     private class FakeRecorder : AudioRecorder {
         var started = false
+        var stopped = false
         var released = false
-        override val levels: Flow<Float> = emptyFlow()
+
+        /** Lo que "dice" la persona: un nivel cada 80 ms; después se repite el último. */
+        var script: List<Float> = listOf(0f)
+
+        override val levels: Flow<Float> = flow {
+            var i = 0
+            while (true) {
+                emit(script.getOrElse(i++) { script.last() })
+                delay(LEVEL_SAMPLE_MS)
+            }
+        }
 
         override fun start() {
             started = true
         }
 
-        override fun stop() = File("audio.aac")
+        override fun stop(): File {
+            stopped = true
+            return File("audio.aac")
+        }
 
         override fun release() {
             released = true
@@ -276,6 +292,58 @@ class RoutePlanningViewModelTest {
 
         assertEquals(PlanState.Start, viewModel.state.value)
         assertFalse(runner.running)
+    }
+
+    private fun levels(durationMs: Long, level: Float) = List((durationMs / LEVEL_SAMPLE_MS).toInt()) { level }
+
+    @Test
+    fun listeningStopsByItselfWhenThePersonFinishesSpeaking() {
+        // 400 ms de espera, 1,6 s hablando y silencio: la lectura 40 (a los 3 120 ms) cierra.
+        recorder.script = levels(400, 0.05f) + levels(1_600, 0.8f) + listOf(0.05f)
+        viewModel.listen()
+
+        dispatcher.scheduler.advanceTimeBy(1_000)
+        assertEquals(PlanState.Listening, viewModel.state.value)
+        assertEquals(0.8f, viewModel.voiceLevel.value)
+
+        dispatcher.scheduler.advanceTimeBy(3_119 - 1_000)
+        assertEquals(PlanState.Listening, viewModel.state.value)
+        dispatcher.scheduler.advanceTimeBy(1)
+        dispatcher.scheduler.runCurrent()
+
+        assertTrue(recorder.stopped)
+        assertEquals(1, voice.calls)
+        assertEquals(0f, viewModel.voiceLevel.value)
+    }
+
+    @Test
+    fun listeningWithoutVoiceStopsAtEightSeconds() {
+        recorder.script = listOf(0.1f)
+        viewModel.listen()
+
+        dispatcher.scheduler.advanceTimeBy(7_919)
+        assertEquals(PlanState.Listening, viewModel.state.value)
+        dispatcher.scheduler.advanceTimeBy(1)
+        dispatcher.scheduler.runCurrent()
+
+        assertTrue(recorder.stopped)
+        assertEquals(1, voice.calls)
+    }
+
+    @Test
+    fun cancelStopsListeningWithoutSending() {
+        recorder.script = listOf(0.8f)
+        viewModel.listen()
+        dispatcher.scheduler.advanceTimeBy(1_000)
+
+        viewModel.cancelListening()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(PlanState.Start, viewModel.state.value)
+        assertTrue(recorder.released)
+        assertFalse(recorder.stopped)
+        assertEquals(0, voice.calls)
+        assertEquals(0f, viewModel.voiceLevel.value)
     }
 
     @Test

@@ -25,6 +25,8 @@ import com.rumbo.watchapp.domain.vibration.VibrationPattern
 import com.rumbo.watchapp.domain.vibration.VibrationPatterns
 import com.rumbo.watchapp.domain.vibration.VibrationSettings
 import com.rumbo.watchapp.domain.vibration.next
+import com.rumbo.watchapp.domain.voice.MAX_RECORDING_MS
+import com.rumbo.watchapp.domain.voice.SpeechEndDetector
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -32,13 +34,17 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
-private const val RECORDING_MS = 4_000L
+// Por si el micrófono deja de dar niveles: se corta igual un poco después del máximo.
+private const val LISTEN_TIMEOUT_MS = MAX_RECORDING_MS + 1_000
 // Pausa entre un patrón y el siguiente en la secuencia de demostración.
 const val DEMO_PAUSE_MS = 2_000L
 
@@ -89,6 +95,11 @@ class RoutePlanningViewModel(
             VibrationPatterns.forDevice(supportsAmplitude, _vibrationSettings.value),
         )
 
+    private val _voiceLevel = MutableStateFlow(0f)
+
+    /** Nivel de la voz de 0 a 1 mientras se graba la orden; 0 el resto del tiempo. */
+    val voiceLevel: StateFlow<Float> = _voiceLevel.asStateFlow()
+
     private val _previousRoute = MutableStateFlow<Route?>(null)
 
     /** Ruta que quedó a medias (el proceso murió navegando): Inicio ofrece "Continuar ruta anterior". */
@@ -138,14 +149,18 @@ class RoutePlanningViewModel(
         locationTracker.start()
     }
 
-    /** Graba 4 s, interpreta la orden y busca la ruta. El permiso de micrófono ya debe estar dado. */
+    /**
+     * Graba la orden hasta que la persona termina de hablar (ver [SpeechEndDetector]: 1,2 s de
+     * silencio tras la voz, como mucho 8 s), la interpreta y busca la ruta. Mientras graba,
+     * [voiceLevel] mueve las barras de "Escuchando". El permiso de micrófono ya debe estar dado.
+     */
     fun listen() {
         if (busy) return
         job = viewModelScope.launch {
             try {
                 _state.value = PlanState.Listening
                 recorder.start()
-                delay(RECORDING_MS)
+                awaitEndOfSpeech()
                 val audio = recorder.stop()
                 _state.value = PlanState.Processing
                 confirm(planRoute(audio))
@@ -158,7 +173,26 @@ class RoutePlanningViewModel(
             } catch (e: Exception) {
                 recorder.release()
                 showError(GENERIC_ERROR)
+            } finally {
+                _voiceLevel.value = 0f
             }
+        }
+    }
+
+    /** "Cancelar" en Escuchando: deja de grabar sin enviar nada y vuelve a Inicio. */
+    fun cancelListening() {
+        if (_state.value == PlanState.Listening) reset()
+    }
+
+    private suspend fun awaitEndOfSpeech() {
+        val detector = SpeechEndDetector()
+        withTimeoutOrNull(LISTEN_TIMEOUT_MS) {
+            recorder.levels
+                .takeWhile { level ->
+                    _voiceLevel.value = level
+                    !detector.onLevel(level)
+                }
+                .collect()
         }
     }
 

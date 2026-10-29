@@ -53,11 +53,12 @@ recorridos realistas (una lectura por segundo con ruido de GPS de σ ≈ 3 m, ve
 
 | # | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|
-| V1 | Pedir destino por voz | Inicio → tocar el micrófono → decir "llévame al Parque Bolívar" | "Escuchando" con el micrófono latiendo 4 s, "Procesando" ("Buscando ruta..."), luego "Confirmar destino" con el nombre, la distancia y los minutos a pie; la voz dice "Parque Bolívar, a ..., ... minutos a pie. ¿Vamos?" |
+| V1 | Pedir destino por voz | Inicio → tocar el micrófono → decir "llévame al Parque Bolívar" | "Escuchando" con las barras moviéndose con la voz; al callarse, ~1,2 s después pasa solo a "Procesando" ("Buscando ruta..."), luego "Confirmar destino" con el nombre, la distancia y los minutos a pie; la voz dice "Parque Bolívar, a ..., ... minutos a pie. ¿Vamos?" |
 | V2 | Orden sin destino | Tocar el micrófono y decir "¿qué hora es?" | Error "No entendí el destino, intenta de nuevo" (en pantalla y en voz) con Reintentar e Inicio |
 | V3 | Lugar inexistente | Decir "llévame a Xyzzy" | Error "No encontré «Xyzzy», intenta con otro nombre" |
 | V4 | Voz apagada | Inicio → "Voz: sí" → pasa a "Voz: no" → hacer V1 e Ir | No se oye nada; las vibraciones siguen. El estado queda guardado al reabrir la app |
-| V5 | Volver mientras escucha | Tocar el micrófono y hacer el gesto de volver | Vuelve a Inicio, la grabación se cancela y no se pide ruta |
+| V5 | Volver mientras escucha | Tocar el micrófono y hacer el gesto de volver (o tocar "Cancelar") | Vuelve a Inicio, la grabación se cancela y no se pide ruta |
+| V6 | No decir nada | Tocar el micrófono y quedarse callado | A los 8 s deja de grabar solo y avisa que no entendió |
 
 ### Ruta y navegación
 
