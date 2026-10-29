@@ -58,7 +58,7 @@ y el Parque Bolívar. Comprueban que:
 | # | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|
 | R1 | Iniciar ruta | Desde Confirmar tocar "Ir" | "En ruta" con el anillo, la maniobra siguiente, "En X m" y "Faltan X"; voz "Iniciando ruta. ..."; aparece la notificación "Rumbo: navegando"; Logcat `Nav: Estado - → ON_ROUTE` |
-| R2 | Giros | Cargar `ruta_parque_narino_a_parque_bolivar.gpx` y Play route | Antes de cada giro "Giro próximo" (amarillo, 2 pulsos muy cortos, "En treinta metros, gire...") y en el giro "Gira ahora" (izquierda: 2 pulsos medios; derecha: 1 pulso largo). Logcat `Estado ON_ROUTE → TURN_APPROACHING → MANEUVER` una vez por giro |
+| R2 | Giros | Cargar `ruta_parque_narino_a_parque_bolivar.gpx` y Play route | Antes de cada giro "Giro próximo" (amarillo, 2 pulsos muy cortos, "En treinta metros, gire...") y en el giro "Gira ahora" (izquierda: 2 pulsos medios; derecha: 1 pulso largo): cada giro vibra en esas dos etapas. Logcat `Estado ON_ROUTE → TURN_APPROACHING → MANEUVER` una vez por giro |
 | R3 | Pantalla apagada | En ruta, apagar la pantalla (`adb shell input keyevent KEYCODE_SLEEP`) y seguir el GPX | Logcat sigue mostrando vibraciones ("Recto: 1 pulso suave cada 6 s", o "1 pulso corto" si el reloj no controla la intensidad) y cambios de estado; al encender la pantalla se ve el estado actual |
 | R4 | Pantalla encendida y atenuada | En ruta, no tocar nada 15 s | La pantalla no se apaga sola; baja a ~30 % de brillo. Al tocarla o en el siguiente giro vuelve al brillo normal |
 | R5 | Volver a la app | En ruta, salir con el botón de inicio del reloj y abrir Rumbo (o tocar la notificación) | Abre directo en "En ruta", con la ruta que seguía |
@@ -86,6 +86,8 @@ y el Parque Bolívar. Comprueban que:
 | B5 | Barras con nombre | Tocar "Izquierda" | Vibra 2 pulsos medios; debajo del botón aparecen "Izquierda" y 2 barras que se encienden al ritmo del patrón. Logcat `Vibracion: Izquierda: 2 pulsos medios tiempos=[0, 300, 200, 300] ...` |
 | B6 | Secuencia de demostración | Tocar "Secuencia de demostración" | Suenan los 7 patrones en orden (Recto, Giro próximo, Izquierda, Derecha, Desviado, Sin señal, Llegada); cada uno muestra "n de 7", su nombre en grande y sus barras; entre uno y otro, 2 s de pausa tras terminar (en Logcat, duración del patrón + 2 s entre líneas). Al final vuelve a la lista |
 | B7 | Detener la demostración | Durante la demo, tocar "Detener" (o gesto de volver) | La vibración se corta (`Vibracion: Detenida`), no suena ningún patrón más y se vuelve a la lista; volver otra vez va a Inicio |
+| B8 | Ajustes de vibración | Tocar "Intensidad: normal" y luego "Duración: normal" | Pasan a "Intensidad: fuerte" y "Duración: larga" ("Pulsos 30 % más largos"); cada toque vibra "Izquierda" con el ajuste nuevo (Logcat `tiempos=[0, 390, 200, 390] amplitudes=[0, 200, 0, 200]`). Otro toque en Intensidad pasa a "suave" y luego a "normal". Sin control de intensidad el botón dice "Este reloj no la controla" |
+| B9 | Ajustes guardados | Cambiar los ajustes, `adb shell am force-stop com.rumbo.watchapp` y volver a abrir "Vibraciones" | Los ajustes siguen como se dejaron; en ruta las vibraciones salen con ellos (Logcat `Vibracion`) |
 | B2 | Salir de la guía | Tocar un patrón largo y volver | La vibración se corta (`Vibracion: Detenida`) |
 
 ### Permisos denegados

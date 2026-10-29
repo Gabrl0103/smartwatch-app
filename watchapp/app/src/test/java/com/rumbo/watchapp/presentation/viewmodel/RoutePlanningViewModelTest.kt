@@ -25,9 +25,13 @@ import com.rumbo.watchapp.domain.port.SpeechStatus
 import com.rumbo.watchapp.domain.port.VoiceRepository
 import com.rumbo.watchapp.domain.port.VoiceSettings
 import com.rumbo.watchapp.domain.vibration.VibrationCue
+import com.rumbo.watchapp.domain.vibration.PulseDuration
+import com.rumbo.watchapp.domain.vibration.VibrationIntensity
 import com.rumbo.watchapp.domain.vibration.VibrationPatterns
+import com.rumbo.watchapp.domain.vibration.VibrationSettings
 import com.rumbo.watchapp.testing.BASE
 import com.rumbo.watchapp.testing.FakeVibration
+import com.rumbo.watchapp.testing.FakeVibrationSettingsStore
 import com.rumbo.watchapp.testing.lRoute
 import com.rumbo.watchapp.testing.pattern
 import java.io.File
@@ -161,6 +165,7 @@ class RoutePlanningViewModelTest {
     private val voice = FakeVoice()
     private val runner = FakeRunner()
     private val vibration = FakeVibration()
+    private val vibrationSettings = FakeVibrationSettingsStore()
     private val speech = FakeSpeech()
     private val navigation = MutableStateFlow(TrackingState())
     private val serverWaking = MutableStateFlow(false)
@@ -184,6 +189,7 @@ class RoutePlanningViewModelTest {
             navigation,
             { repeats++ },
             vibration,
+            vibrationSettings,
             speech,
             VoiceOn,
             serverWaking,
@@ -320,7 +326,7 @@ class RoutePlanningViewModelTest {
     @Test
     fun vibrationsScreenUsesTheVersionTheWatchUnderstands() {
         assertTrue(viewModel.supportsAmplitude)
-        assertEquals(VibrationPatterns.WITH_AMPLITUDE, viewModel.vibrationPatterns)
+        assertEquals(VibrationPatterns.WITH_AMPLITUDE, viewModel.vibrationPatterns.value)
 
         val onOff = FakeVibration(supportsAmplitude = false)
         viewModel = build(vibration = onOff)
@@ -328,8 +334,46 @@ class RoutePlanningViewModelTest {
         viewModel.playVibration(VibrationCue.ON_ROUTE)
 
         assertFalse(viewModel.supportsAmplitude)
-        assertEquals(VibrationPatterns.WITHOUT_AMPLITUDE, viewModel.vibrationPatterns)
+        assertEquals(VibrationPatterns.WITHOUT_AMPLITUDE, viewModel.vibrationPatterns.value)
         assertEquals(listOf(pattern(VibrationCue.ON_ROUTE, supportsAmplitude = false)), onOff.played)
+    }
+
+    @Test
+    fun vibrationSettingsAreSavedAppliedAndFeltRightAway() {
+        viewModel.changeVibrationIntensity()
+        assertEquals(VibrationSettings(), viewModel.vibrationSettings.value)
+
+        viewModel.openVibrations()
+        viewModel.changeVibrationIntensity()
+        viewModel.changeVibrationDuration()
+
+        val settings = VibrationSettings(VibrationIntensity.STRONG, PulseDuration.LONG)
+        assertEquals(settings, vibrationSettings.saved)
+        assertEquals(settings, viewModel.vibrationSettings.value)
+        // Cada cambio vibra el ejemplo con el ajuste nuevo.
+        assertEquals(
+            listOf(
+                VibrationPatterns.of(SETTINGS_SAMPLE, true, VibrationSettings(VibrationIntensity.STRONG)),
+                VibrationPatterns.of(SETTINGS_SAMPLE, true, settings),
+            ),
+            vibration.played,
+        )
+        // La lista y lo que se toca usan los mismos ajustes.
+        assertEquals(VibrationPatterns.forDevice(true, settings), viewModel.vibrationPatterns.value)
+        viewModel.playVibration(VibrationCue.RIGHT)
+        assertEquals(listOf(910L), vibration.played.last().pulseDurationsMs)
+
+        viewModel.changeVibrationIntensity()
+        assertEquals(VibrationIntensity.SOFT, vibrationSettings.saved.intensity)
+    }
+
+    @Test
+    fun savedVibrationSettingsAreLoadedOnStart() {
+        vibrationSettings.saved = VibrationSettings(duration = PulseDuration.LONG)
+        viewModel = build()
+
+        assertEquals(PulseDuration.LONG, viewModel.vibrationSettings.value.duration)
+        assertEquals(listOf(390L, 390L), viewModel.vibrationPatterns.value.getValue(VibrationCue.LEFT).pulseDurationsMs)
     }
 
     @Test

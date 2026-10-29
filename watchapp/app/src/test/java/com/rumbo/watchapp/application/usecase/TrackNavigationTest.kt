@@ -18,7 +18,11 @@ import com.rumbo.watchapp.domain.port.SpeechOutput
 import com.rumbo.watchapp.domain.port.SpeechPriority
 import com.rumbo.watchapp.domain.port.SpeechStatus
 import com.rumbo.watchapp.domain.port.VibrationEventsRepository
+import com.rumbo.watchapp.domain.vibration.PulseDuration
 import com.rumbo.watchapp.domain.vibration.VibrationCue
+import com.rumbo.watchapp.domain.vibration.VibrationIntensity
+import com.rumbo.watchapp.domain.vibration.VibrationPatterns
+import com.rumbo.watchapp.domain.vibration.VibrationSettings
 import com.rumbo.watchapp.testing.FakeVibration
 import com.rumbo.watchapp.testing.at
 import com.rumbo.watchapp.testing.fixAt
@@ -163,6 +167,70 @@ class TrackNavigationTest {
         tracking.stop()
 
         assertEquals(listOf(pattern(VibrationCue.ON_ROUTE, supportsAmplitude = false)), vibration.played)
+    }
+
+    @Test
+    fun vibrationSettingsApplyToNavigation() = runBlocking {
+        val vibration = FakeVibration()
+        val settings = VibrationSettings(VibrationIntensity.STRONG, PulseDuration.LONG)
+        val tracking = TrackNavigation(
+            MutableSharedFlow(),
+            FakeRoutes(detour),
+            vibration,
+            FakeVibrationEvents(),
+            FakeSpeech(),
+            clock = { 0L },
+            vibrationSettings = { settings },
+        )
+
+        tracking.start(lRoute(), this)
+        tracking.stop()
+
+        // Recto: 300 ms a fuerza 60 pasa a 390 ms a fuerza 75.
+        assertEquals(listOf(VibrationPatterns.of(VibrationCue.ON_ROUTE, true, settings)), vibration.played)
+        assertEquals(listOf(390L), vibration.played.single().pulseDurationsMs)
+        assertEquals(listOf(75), vibration.played.single().pulseAmplitudes)
+    }
+
+    @Test
+    fun turnReachedWithoutWarningVibratesBothStagesAndRepeatsThem() = runBlocking {
+        val fixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 16)
+        val vibration = FakeVibration()
+        val events = FakeVibrationEvents()
+        var now = 0L
+        val tracking = TrackNavigation(
+            fixes,
+            FakeRoutes(detour),
+            vibration,
+            events,
+            FakeSpeech(),
+            clock = { now },
+            tickMs = 60_000,
+        )
+        val twoStages = VibrationPatterns.forCues(
+            listOf(VibrationCue.TURN_APPROACHING, VibrationCue.RIGHT),
+            supportsAmplitude = true,
+            settings = VibrationSettings(),
+        )
+
+        tracking.start(lRoute(), this)
+        try {
+            delay(20)
+            // La primera lectura ya está a 8 m del giro a la derecha.
+            now = 1_000
+            fixes.emit(fixAt(0.0, 192.0, now))
+            delay(50)
+
+            assertEquals(NavigationStatus.MANEUVER, tracking.state.value.status)
+            assertEquals(listOf(pattern(VibrationCue.ON_ROUTE), twoStages), vibration.played)
+            assertEquals(listOf(100L, 100L, 700L), twoStages.pulseDurationsMs)
+            assertEquals(twoStages.label, events.recorded.last().pattern)
+
+            tracking.repeat()
+            assertEquals(twoStages, vibration.played.last())
+        } finally {
+            tracking.stop()
+        }
     }
 
     @Test

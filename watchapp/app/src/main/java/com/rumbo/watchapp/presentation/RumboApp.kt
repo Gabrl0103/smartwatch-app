@@ -17,6 +17,9 @@ import androidx.wear.compose.material3.AppScaffold
 import com.rumbo.watchapp.application.usecase.TrackingState
 import com.rumbo.watchapp.domain.model.SavedPlace
 import com.rumbo.watchapp.domain.port.SpeechStatus
+import com.rumbo.watchapp.domain.vibration.VibrationCue
+import com.rumbo.watchapp.domain.vibration.VibrationPattern
+import com.rumbo.watchapp.domain.vibration.VibrationSettings
 import com.rumbo.watchapp.presentation.screens.BackGesture
 import com.rumbo.watchapp.presentation.screens.ConfirmDeleteScreen
 import com.rumbo.watchapp.presentation.screens.ConfirmScreen
@@ -49,6 +52,8 @@ fun RumboApp(viewModel: RoutePlanningViewModel) {
     val speechStatus by viewModel.speechStatus.collectAsState()
     val waitMessage by viewModel.waitMessage.collectAsState()
     val previousRoute by viewModel.previousRoute.collectAsState()
+    val vibrationSettings by viewModel.vibrationSettings.collectAsState()
+    val vibrationPatterns by viewModel.vibrationPatterns.collectAsState()
     var gpsAvailable by remember { mutableStateOf(context.isGranted(Permission.LOCATION)) }
     val refreshGps = {
         gpsAvailable = context.isGranted(Permission.LOCATION)
@@ -107,6 +112,8 @@ fun RumboApp(viewModel: RoutePlanningViewModel) {
                     gpsAvailable = gpsAvailable,
                     waitMessage = waitMessage,
                     previousDestination = previousRoute?.destinationName,
+                    vibrationSettings = vibrationSettings,
+                    vibrationPatterns = vibrationPatterns,
                     onSpeak = onSpeak,
                     onContinue = onContinue,
                     onChooseSavedPlace = onChooseSavedPlace,
@@ -129,6 +136,8 @@ private fun Screen(
     gpsAvailable: Boolean,
     waitMessage: String?,
     previousDestination: String?,
+    vibrationSettings: VibrationSettings,
+    vibrationPatterns: Map<VibrationCue, VibrationPattern>,
     onSpeak: () -> Unit,
     onContinue: () -> Unit,
     onChooseSavedPlace: (SavedPlace) -> Unit,
@@ -172,10 +181,13 @@ private fun Screen(
             onSave = viewModel::saveDestination,
         )
         is PlanState.Vibrations -> VibrationsScreen(
-            patterns = viewModel.vibrationPatterns,
+            patterns = vibrationPatterns,
             supportsAmplitude = viewModel.supportsAmplitude,
+            settings = vibrationSettings,
             demo = state.demo,
             onPlay = viewModel::playVibration,
+            onChangeIntensity = viewModel::changeVibrationIntensity,
+            onChangeDuration = viewModel::changeVibrationDuration,
             onStartDemo = viewModel::startVibrationDemo,
             onStopDemo = viewModel::stopVibrationDemo,
             onBack = viewModel::reset,

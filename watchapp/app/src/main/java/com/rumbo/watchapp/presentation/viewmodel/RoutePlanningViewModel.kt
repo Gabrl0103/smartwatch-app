@@ -18,10 +18,13 @@ import com.rumbo.watchapp.domain.port.NavigationRunner
 import com.rumbo.watchapp.domain.port.SpeechOutput
 import com.rumbo.watchapp.domain.port.SpeechStatus
 import com.rumbo.watchapp.domain.port.VibrationController
+import com.rumbo.watchapp.domain.port.VibrationSettingsStore
 import com.rumbo.watchapp.domain.port.VoiceSettings
 import com.rumbo.watchapp.domain.vibration.VibrationCue
 import com.rumbo.watchapp.domain.vibration.VibrationPattern
 import com.rumbo.watchapp.domain.vibration.VibrationPatterns
+import com.rumbo.watchapp.domain.vibration.VibrationSettings
+import com.rumbo.watchapp.domain.vibration.next
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -30,6 +33,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -37,6 +41,9 @@ import kotlinx.coroutines.launch
 private const val RECORDING_MS = 4_000L
 // Pausa entre un patrón y el siguiente en la secuencia de demostración.
 const val DEMO_PAUSE_MS = 2_000L
+
+// Lo que vibra al cambiar un ajuste, para sentir la diferencia enseguida.
+val SETTINGS_SAMPLE = VibrationCue.LEFT
 private const val GENERIC_ERROR = "Algo salió mal, intenta de nuevo"
 const val GPS_SEARCHING_MESSAGE = "Buscando señal GPS"
 
@@ -49,6 +56,7 @@ class RoutePlanningViewModel(
     val navigationState: StateFlow<TrackingState>,
     private val repeatNavigation: () -> Unit,
     private val vibration: VibrationController,
+    private val vibrationSettingsStore: VibrationSettingsStore,
     private val speech: SpeechOutput,
     private val voiceSettings: VoiceSettings,
     serverWaking: StateFlow<Boolean>,
@@ -67,8 +75,19 @@ class RoutePlanningViewModel(
     /** Si el motor controla la intensidad; elige la versión de los patrones que se enseña y vibra. */
     val supportsAmplitude: Boolean = vibration.supportsAmplitude
 
-    /** Los patrones tal como los siente este reloj, para la pantalla "Vibraciones". */
-    val vibrationPatterns: Map<VibrationCue, VibrationPattern> = VibrationPatterns.forDevice(supportsAmplitude)
+    private val _vibrationSettings = MutableStateFlow(vibrationSettingsStore.load())
+
+    /** Ajustes "Intensidad" y "Duración"; los mismos que usa la navegación. */
+    val vibrationSettings: StateFlow<VibrationSettings> = _vibrationSettings.asStateFlow()
+
+    /** Los patrones tal como los siente este reloj con los ajustes, para la pantalla "Vibraciones". */
+    val vibrationPatterns: StateFlow<Map<VibrationCue, VibrationPattern>> = _vibrationSettings
+        .map { VibrationPatterns.forDevice(supportsAmplitude, it) }
+        .stateIn(
+            viewModelScope,
+            SharingStarted.Eagerly,
+            VibrationPatterns.forDevice(supportsAmplitude, _vibrationSettings.value),
+        )
 
     private val _previousRoute = MutableStateFlow<Route?>(null)
 
@@ -207,8 +226,14 @@ class RoutePlanningViewModel(
 
     /** Hace sentir un patrón en la pantalla "Vibraciones". */
     fun playVibration(cue: VibrationCue) {
-        if (_state.value == PlanState.Vibrations()) vibration.play(vibrationPatterns.getValue(cue))
+        if (_state.value == PlanState.Vibrations()) vibration.play(patternFor(cue))
     }
+
+    /** Ajuste "Intensidad": pasa al siguiente (suave → normal → fuerte), lo guarda y lo hace sentir. */
+    fun changeVibrationIntensity() = changeVibrationSettings { it.copy(intensity = it.intensity.next()) }
+
+    /** Ajuste "Duración": cambia entre normal y larga, lo guarda y lo hace sentir. */
+    fun changeVibrationDuration() = changeVibrationSettings { it.copy(duration = it.duration.next()) }
 
     /**
      * "Secuencia de demostración": vibra todos los patrones en orden y muestra el nombre de cada
@@ -220,7 +245,7 @@ class RoutePlanningViewModel(
         job = viewModelScope.launch {
             val cues = VibrationCue.entries
             cues.forEachIndexed { i, cue ->
-                val pattern = vibrationPatterns.getValue(cue)
+                val pattern = patternFor(cue)
                 _state.value = PlanState.Vibrations(DemoStep(cue, i + 1, cues.size))
                 vibration.play(pattern)
                 delay(pattern.durationMs + DEMO_PAUSE_MS)
@@ -337,6 +362,17 @@ class RoutePlanningViewModel(
     fun showError(message: String, retry: RetryAction = RetryAction.LISTEN) {
         _state.value = PlanState.Error(message, retry)
         speech.speak(message)
+    }
+
+    private fun patternFor(cue: VibrationCue): VibrationPattern =
+        VibrationPatterns.of(cue, supportsAmplitude, _vibrationSettings.value)
+
+    private fun changeVibrationSettings(change: (VibrationSettings) -> VibrationSettings) {
+        if (_state.value != PlanState.Vibrations()) return
+        val settings = change(_vibrationSettings.value)
+        vibrationSettingsStore.save(settings)
+        _vibrationSettings.value = settings
+        vibration.play(patternFor(SETTINGS_SAMPLE))
     }
 
     private fun startNavigation(route: Route) {

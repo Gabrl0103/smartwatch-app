@@ -17,7 +17,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
 import com.rumbo.watchapp.domain.vibration.VibrationCue
+import com.rumbo.watchapp.domain.vibration.PulseDuration
 import com.rumbo.watchapp.domain.vibration.VibrationPattern
+import com.rumbo.watchapp.domain.vibration.VibrationSettings
 import com.rumbo.watchapp.presentation.components.PillButton
 import com.rumbo.watchapp.presentation.components.PillStyle
 import com.rumbo.watchapp.presentation.components.StateBadge
@@ -40,17 +42,21 @@ fun VibrationCue.color(): Color = when (this) {
 }
 
 /**
- * Probar vibraciones. Arriba dice si el reloj controla la intensidad; debajo, cada patrón de
- * [patterns] (la versión que entiende este reloj) con su nombre y cómo se siente: al tocarlo
- * vibra y se ven las barras animadas con su nombre. Con [demo] muestra en grande el patrón que
- * está sonando en la secuencia de demostración.
+ * Probar vibraciones. Arriba dice si el reloj controla la intensidad y están los ajustes
+ * "Intensidad" y "Duración" ([settings]; cada toque pasa al siguiente valor); debajo, cada patrón
+ * de [patterns] (la versión que entiende este reloj, con los ajustes aplicados) con su nombre y
+ * cómo se siente: al tocarlo vibra y se ven las barras animadas con su nombre. Con [demo]
+ * muestra en grande el patrón que está sonando en la secuencia de demostración.
  */
 @Composable
 fun VibrationsScreen(
     patterns: Map<VibrationCue, VibrationPattern>,
     supportsAmplitude: Boolean,
+    settings: VibrationSettings,
     demo: DemoStep?,
     onPlay: (VibrationCue) -> Unit,
+    onChangeIntensity: () -> Unit,
+    onChangeDuration: () -> Unit,
     onStartDemo: () -> Unit,
     onStopDemo: () -> Unit,
     onBack: () -> Unit,
@@ -58,8 +64,33 @@ fun VibrationsScreen(
     if (demo != null) {
         DemoScreen(demo, patterns.getValue(demo.cue), onStopDemo)
     } else {
-        Guide(patterns, supportsAmplitude, onPlay, onStartDemo, onBack)
+        Guide(patterns, supportsAmplitude, onPlay, onStartDemo, onBack) {
+            Settings(settings, supportsAmplitude, onChangeIntensity, onChangeDuration)
+        }
     }
+}
+
+/** Los ajustes dicen su valor en el texto ("Intensidad: suave"); tocar pasa al siguiente y vibra. */
+@Composable
+private fun Settings(
+    settings: VibrationSettings,
+    supportsAmplitude: Boolean,
+    onChangeIntensity: () -> Unit,
+    onChangeDuration: () -> Unit,
+) {
+    PillButton(
+        "Intensidad: ${settings.intensity.label}",
+        onClick = onChangeIntensity,
+        secondaryLabel = if (supportsAmplitude) "Toca para cambiar" else "Este reloj no la controla",
+    )
+    PillButton(
+        "Duración: ${settings.duration.label}",
+        onClick = onChangeDuration,
+        secondaryLabel = when (settings.duration) {
+            PulseDuration.LONG -> "Pulsos 30 % más largos"
+            PulseDuration.NORMAL -> "Toca para alargar"
+        },
+    )
 }
 
 @Composable
@@ -69,6 +100,7 @@ private fun Guide(
     onPlay: (VibrationCue) -> Unit,
     onStartDemo: () -> Unit,
     onBack: () -> Unit,
+    settings: @Composable () -> Unit,
 ) {
     var selected by remember { mutableStateOf<VibrationCue?>(null) }
     // Cada toque reinicia la animación para que vaya a la par con la vibración.
@@ -91,6 +123,7 @@ private fun Guide(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
+        settings()
         PillButton(
             "Secuencia de demostración",
             onClick = onStartDemo,

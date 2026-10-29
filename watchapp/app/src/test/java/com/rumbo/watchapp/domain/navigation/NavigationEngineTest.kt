@@ -68,6 +68,21 @@ class NavigationEngineTest {
     }
 
     @Test
+    fun jumpingStraightIntoTheManeuverStillWarnsInTwoStages() {
+        walk(*north(100, 140))
+
+        // Un salto del GPS de 60 m a 8 m del giro: nunca hubo lectura en la zona de giro próximo.
+        val events = walk(0.0 to 192.0)
+
+        assertEquals(
+            listOf(NavigationEvent.TurnApproaching(Maneuver.RIGHT), NavigationEvent.TurnNow(Maneuver.RIGHT)),
+            events,
+        )
+        assertEquals(NavigationStatus.MANEUVER, engine.snapshot.status)
+        assertEquals(emptyList<NavigationEvent>(), walk(0.0 to 195.0))
+    }
+
+    @Test
     fun passingTheTurnMovesToNextStep() {
         walk(*north(100, 195))
 

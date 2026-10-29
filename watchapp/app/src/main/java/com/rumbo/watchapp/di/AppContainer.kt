@@ -12,6 +12,7 @@ import com.rumbo.watchapp.domain.port.AudioRecorder
 import com.rumbo.watchapp.domain.port.ServerStatus
 import com.rumbo.watchapp.domain.port.SpeechOutput
 import com.rumbo.watchapp.domain.port.VibrationController
+import com.rumbo.watchapp.domain.port.VibrationSettingsStore
 import com.rumbo.watchapp.domain.port.VoiceSettings
 import com.rumbo.watchapp.infrastructure.audio.MediaAudioRecorder
 import com.rumbo.watchapp.infrastructure.location.AndroidLocationProvider
@@ -27,6 +28,7 @@ import com.rumbo.watchapp.infrastructure.network.VibrationEventsApiClient
 import com.rumbo.watchapp.infrastructure.network.VoiceApiClient
 import com.rumbo.watchapp.infrastructure.storage.PreferencesActiveRouteStore
 import com.rumbo.watchapp.infrastructure.storage.PreferencesDeviceStore
+import com.rumbo.watchapp.infrastructure.storage.PreferencesVibrationSettingsStore
 import com.rumbo.watchapp.infrastructure.storage.PreferencesVoiceSettings
 import com.rumbo.watchapp.infrastructure.tts.AndroidTextToSpeech
 import com.rumbo.watchapp.infrastructure.tts.GeminiSpeechPlayer
@@ -61,8 +63,9 @@ class AppContainer(context: Context) {
         clock = clock,
         onError = { Log.w("Voz", "No se pudo hablar: ${it.message}") },
     )
-    // Uno solo para la navegación y para probar los patrones en "Vibraciones".
+    // Uno solo para la navegación y para probar los patrones en "Vibraciones", con los mismos ajustes.
     val vibration: VibrationController = AndroidVibrationController(appContext)
+    val vibrationSettings: VibrationSettingsStore = PreferencesVibrationSettingsStore(appContext)
     val locationTracker = LocationTracker(AndroidLocationProvider(appContext), clock, appScope)
     val serverStatus: ServerStatus = BackendServerStatus
     val planRouteFromVoice = PlanRouteFromVoice(
@@ -86,6 +89,7 @@ class AppContainer(context: Context) {
         clock = clock,
         activeRoutes = activeRoutes,
         logger = AndroidLogger,
+        vibrationSettings = vibrationSettings::load,
     )
     val navigationRunner = ForegroundNavigationRunner(appContext, trackNavigation, locationTracker, appScope)
 

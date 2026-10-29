@@ -20,7 +20,7 @@ misma pantalla desplazada hasta el final.
 | `14_llegaste.png` | Llegaste |
 | `15_terminar_ruta.png` | "¿Terminar la ruta?" tras el gesto de volver en ruta |
 | `16_lugares_guardados.png`, `17_borrar_lugar.png` | Lugares guardados y borrar |
-| `18_vibraciones.png` | Probar vibraciones: "Intensidad: sí", Secuencia de demostración y cada patrón con su descripción |
+| `18_vibraciones.png` | Probar vibraciones: "Intensidad: sí", ajustes de intensidad y duración, Secuencia de demostración y cada patrón con su descripción |
 | `19_componentes.png` | StateBadge, ProgressRing, StateIcon (todos), VibrationIndicator y botón |
 | `20_permiso_ubicacion.png` | Permiso necesario (ubicación negada): Abrir ajustes / Inicio |
 | `21_buscando_gps.png` | Procesando mientras espera una lectura GPS buena |

@@ -24,6 +24,7 @@ class MainActivity : ComponentActivity() {
                     container.trackNavigation.state,
                     container.trackNavigation::repeat,
                     container.vibration,
+                    container.vibrationSettings,
                     container.speech,
                     container.voiceSettings,
                     container.serverStatus.waking,

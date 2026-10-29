@@ -171,4 +171,88 @@ class VibrationPatternsTest {
         assertEquals(ARRIVED, VibrationPatterns.mostImportant(events))
         assertNull(VibrationPatterns.mostImportant(emptyList()))
     }
+
+    private val allSettings = VibrationIntensity.entries.flatMap { intensity ->
+        PulseDuration.entries.map { VibrationSettings(intensity, it) }
+    }
+
+    @Test
+    fun normalSettingsChangeNothing() {
+        listOf(true, false).forEach { amplitude ->
+            assertEquals(VibrationPatterns.forDevice(amplitude), VibrationPatterns.forDevice(amplitude, VibrationSettings()))
+        }
+    }
+
+    @Test
+    fun longDurationStretchesPulsesThirtyPercentButNotPauses() {
+        val long = VibrationSettings(duration = PulseDuration.LONG)
+        listOf(true, false).forEach { amplitude ->
+            val left = VibrationPatterns.of(LEFT, amplitude, long)
+            assertEquals(listOf(390L, 390L), left.pulseDurationsMs)
+            assertEquals(listOf(200L), left.gapsMs)
+        }
+        assertEquals(listOf(1_300L), VibrationPatterns.of(NO_SIGNAL, true, long).pulseDurationsMs)
+        assertEquals(5_000L, VibrationPatterns.of(NO_SIGNAL, true, long).repeatEveryMs)
+    }
+
+    @Test
+    fun intensityScalesStrengthOnlyWhenTheWatchControlsIt() {
+        assertEquals(listOf(96, 96), VibrationPatterns.of(LEFT, true, VibrationSettings(VibrationIntensity.SOFT)).pulseAmplitudes)
+        assertEquals(listOf(200, 200), VibrationPatterns.of(LEFT, true, VibrationSettings(VibrationIntensity.STRONG)).pulseAmplitudes)
+        allSettings.forEach { settings ->
+            assertEquals(
+                VibrationPatterns.of(LEFT, supportsAmplitude = false).pulseAmplitudes,
+                VibrationPatterns.of(LEFT, false, settings).pulseAmplitudes,
+            )
+        }
+    }
+
+    @Test
+    fun everySettingKeepsPatternsValidAndDistinguishable() {
+        allSettings.forEach { settings ->
+            listOf(true, false).forEach { amplitude ->
+                val version = VibrationPatterns.forDevice(amplitude, settings)
+                assertTrue(version.values.flatMap { it.pulseAmplitudes }.all { it in 1..255 })
+                version.values.forEach { assertTrue(it.label, it.durationMs < (it.repeatEveryMs ?: Long.MAX_VALUE)) }
+                pairs(version.values).forEach { (a, b) ->
+                    assertTrue("$settings: ${a.label} se confunde con ${b.label}", distinguishableByRhythm(a, b))
+                }
+            }
+            val arrived = VibrationPatterns.of(ARRIVED, true, settings).pulseAmplitudes
+            assertTrue("$settings", arrived.zipWithNext().all { (a, b) -> b > a })
+        }
+    }
+
+    @Test
+    fun settingsCycleWithOneButton() {
+        assertEquals(VibrationIntensity.STRONG, VibrationIntensity.NORMAL.next())
+        assertEquals(VibrationIntensity.SOFT, VibrationIntensity.STRONG.next())
+        assertEquals(PulseDuration.LONG, PulseDuration.NORMAL.next())
+        assertEquals(PulseDuration.NORMAL, PulseDuration.LONG.next())
+    }
+
+    @Test
+    fun turnVibratesInTwoStagesWhenBothArriveTogether() = with(VibrationPatterns) {
+        val left = NavigationEvent.TurnNow(Maneuver.LEFT)
+        val approaching = NavigationEvent.TurnApproaching(Maneuver.LEFT)
+        assertEquals(listOf(TURN_APPROACHING, LEFT), cuesFor(listOf(approaching, left)))
+        assertEquals(listOf(TURN_APPROACHING), cuesFor(listOf(approaching)))
+        assertEquals(listOf(RIGHT), cuesFor(listOf(NavigationEvent.TurnNow(Maneuver.RIGHT))))
+        assertEquals(listOf(ARRIVED), cuesFor(listOf(approaching, left, NavigationEvent.Arrived)))
+        assertEquals(emptyList<VibrationCue>(), cuesFor(listOf(NavigationEvent.RecalculateRequested)))
+
+        val twoStages = forCues(listOf(TURN_APPROACHING, LEFT), true, VibrationSettings())
+        assertEquals(listOf(100L, 100L, 300L, 300L), twoStages.pulseDurationsMs)
+        assertEquals(listOf(150L, TWO_STAGE_GAP_MS, 200L), twoStages.gapsMs)
+        assertEquals("Giro próximo, luego izquierda: 2 pulsos muy cortos y 2 pulsos medios", twoStages.label)
+        assertNull(twoStages.repeatEveryMs)
+        // Cabe en el log de vibraciones del backend (100 caracteres).
+        assertTrue(forCues(listOf(TURN_APPROACHING, RIGHT), false, VibrationSettings()).label.length <= 100)
+        // La pausa entre etapas no se alarga con "Duración: larga".
+        val long = forCues(listOf(TURN_APPROACHING, RIGHT), false, VibrationSettings(duration = PulseDuration.LONG))
+        assertEquals(listOf(130L, 130L, 910L), long.pulseDurationsMs)
+        assertEquals(listOf(150L, TWO_STAGE_GAP_MS), long.gapsMs)
+        // La pausa entre etapas es más larga que cualquiera dentro de un patrón: se sienten dos avisos.
+        assertTrue(versions.flatMap { it.values }.flatMap { it.gapsMs }.all { it < TWO_STAGE_GAP_MS })
+    }
 }

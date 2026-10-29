@@ -162,6 +162,9 @@ class NavigationEngine(
         val distance = distanceToNextStep()
         if (maneuverAnnounced || distance <= thresholds.maneuverM) {
             if (!maneuverAnnounced) {
+                // Cada giro avisa en dos etapas: si se llega a la maniobra sin haber avisado del
+                // giro próximo (un salto del GPS o un tramo corto), se avisan las dos juntas.
+                if (!approachAnnounced) events += NavigationEvent.TurnApproaching(step.maneuver)
                 maneuverAnnounced = true
                 approachAnnounced = true
                 events += NavigationEvent.TurnNow(step.maneuver)

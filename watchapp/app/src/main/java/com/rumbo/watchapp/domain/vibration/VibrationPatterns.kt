@@ -13,6 +13,9 @@ import com.rumbo.watchapp.domain.vibration.VibrationCue.TURN_APPROACHING
 // "Motor encendido" en la versión sin amplitud: el reloj usa su fuerza por defecto.
 private const val ON = 255
 
+/** Pausa entre las dos etapas de un giro cuando vibran juntas: giro próximo y la maniobra. */
+const val TWO_STAGE_GAP_MS = 600L
+
 /**
  * Lenguaje de vibraciones de Rumbo. Cada aviso se reconoce solo por su ritmo (número de pulsos,
  * duración y pausas): muy corto 100 ms, medio 300 ms, largo 600–700 ms y muy largo 1 s. Hay dos
@@ -112,6 +115,17 @@ object VibrationPatterns {
     fun of(cue: VibrationCue, supportsAmplitude: Boolean): VibrationPattern =
         forDevice(supportsAmplitude).getValue(cue)
 
+    /** El patrón de [cue] como se siente en este reloj con los ajustes del usuario. */
+    fun of(cue: VibrationCue, supportsAmplitude: Boolean, settings: VibrationSettings): VibrationPattern =
+        of(cue, supportsAmplitude).adjusted(settings, supportsAmplitude)
+
+    fun forDevice(supportsAmplitude: Boolean, settings: VibrationSettings): Map<VibrationCue, VibrationPattern> =
+        VibrationCue.entries.associateWith { of(it, supportsAmplitude, settings) }
+
+    /** Los avisos de [cues] seguidos en una sola onda (giro en dos etapas), con los ajustes aplicados. */
+    fun forCues(cues: List<VibrationCue>, supportsAmplitude: Boolean, settings: VibrationSettings): VibrationPattern =
+        cues.map { of(it, supportsAmplitude, settings) }.reduce { first, second -> first.then(second, TWO_STAGE_GAP_MS) }
+
     fun forEvent(event: NavigationEvent): VibrationCue? = when (event) {
         is NavigationEvent.TurnApproaching -> TURN_APPROACHING
         is NavigationEvent.TurnNow -> when (event.maneuver) {
@@ -128,4 +142,15 @@ object VibrationPatterns {
 
     fun mostImportant(events: List<NavigationEvent>): VibrationCue? =
         events.mapNotNull(::forEvent).minByOrNull { PRIORITY.indexOf(it) }
+
+    /**
+     * Qué vibrar tras una lectura: el aviso más importante. Cada giro vibra en dos etapas; si el
+     * aviso de giro próximo y la maniobra llegan en la misma lectura (un salto del GPS o un tramo
+     * corto), vibran los dos, primero el corto de giro próximo y luego izquierda o derecha.
+     */
+    fun cuesFor(events: List<NavigationEvent>): List<VibrationCue> {
+        val main = mostImportant(events) ?: return emptyList()
+        val approaching = events.any { it is NavigationEvent.TurnApproaching }
+        return if ((main == LEFT || main == RIGHT) && approaching) listOf(TURN_APPROACHING, main) else listOf(main)
+    }
 }

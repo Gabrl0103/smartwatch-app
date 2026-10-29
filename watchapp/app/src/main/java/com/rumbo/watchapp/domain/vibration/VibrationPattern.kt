@@ -1,5 +1,8 @@
 package com.rumbo.watchapp.domain.vibration
 
+import kotlin.math.roundToInt
+import kotlin.math.roundToLong
+
 /**
  * Forma de onda de una vibración: [timingsMs] alterna pausa, vibra, pausa, vibra...
  * (empieza con pausa) y [amplitudes] da la fuerza de cada tramo (0 en pausas, 1–255 al vibrar).
@@ -39,6 +42,29 @@ data class VibrationPattern(
     /** Pausas entre un pulso y el siguiente (sin la pausa inicial); junto con los pulsos, el ritmo. */
     val gapsMs: List<Long>
         get() = pulses.zipWithNext { a, b -> b.startMs - (a.startMs + a.durationMs) }
+
+    /**
+     * El patrón con los ajustes del usuario: cada pulso dura [PulseDuration.factor] veces más (las
+     * pausas no cambian) y, si el reloj controla la intensidad, su fuerza se multiplica por
+     * [VibrationIntensity.factor] (sin bajar de 1 ni pasar de 255).
+     */
+    fun adjusted(settings: VibrationSettings, supportsAmplitude: Boolean): VibrationPattern {
+        val strength = if (supportsAmplitude) settings.intensity.factor else 1.0
+        return copy(
+            timingsMs = timingsMs.mapIndexed { i, ms ->
+                if (amplitudes[i] > 0) (ms * settings.duration.factor).roundToLong() else ms
+            },
+            amplitudes = amplitudes.map { if (it > 0) (it * strength).roundToInt().coerceIn(1, 255) else 0 },
+        )
+    }
+
+    /** Este patrón y, tras [gapMs] de pausa, [next], en una sola onda que no se repite. */
+    fun then(next: VibrationPattern, gapMs: Long): VibrationPattern = VibrationPattern(
+        name = "$name, luego ${next.name.lowercase()}",
+        description = "$description y ${next.description}",
+        timingsMs = timingsMs + (gapMs + next.timingsMs.first()) + next.timingsMs.drop(1),
+        amplitudes = amplitudes + 0 + next.amplitudes.drop(1),
+    )
 }
 
 /** Un tramo en que el motor vibra: empieza en [startMs], dura [durationMs] y tiene fuerza [amplitude]. */

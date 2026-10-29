@@ -39,6 +39,7 @@ import com.rumbo.watchapp.domain.port.SpeechStatus
 import com.rumbo.watchapp.domain.vibration.VibrationCue
 import com.rumbo.watchapp.domain.vibration.VibrationPattern
 import com.rumbo.watchapp.domain.vibration.VibrationPatterns
+import com.rumbo.watchapp.domain.vibration.VibrationSettings
 import com.rumbo.watchapp.presentation.components.PillButton
 import com.rumbo.watchapp.presentation.components.PillStyle
 import com.rumbo.watchapp.presentation.components.ProgressRing
@@ -116,8 +117,11 @@ private fun Navigation(state: TrackingState, confirmFinish: Boolean = false) =
 private fun Vibrations(supportsAmplitude: Boolean = true, demo: DemoStep? = null) = VibrationsScreen(
     patterns = VibrationPatterns.forDevice(supportsAmplitude),
     supportsAmplitude = supportsAmplitude,
+    settings = VibrationSettings(),
     demo = demo,
     onPlay = {},
+    onChangeIntensity = {},
+    onChangeDuration = {},
     onStartDemo = {},
     onStopDemo = {},
     onBack = {},

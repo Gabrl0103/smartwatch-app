@@ -26,6 +26,7 @@ import com.rumbo.watchapp.domain.port.VibrationEventsRepository
 import com.rumbo.watchapp.domain.vibration.VibrationCue
 import com.rumbo.watchapp.domain.vibration.VibrationPattern
 import com.rumbo.watchapp.domain.vibration.VibrationPatterns
+import com.rumbo.watchapp.domain.vibration.VibrationSettings
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -67,9 +68,11 @@ data class TrackingState(
 
 /**
  * Une GPS, motor de navegación y vibraciones. Cada aviso vibra con la versión de su patrón que
- * entiende el motor ([VibrationController.supportsAmplitude]). Las lecturas y el ticker corren
- * en el mismo [CoroutineScope]; usar uno de un solo hilo (p. ej. viewModelScope) para no tener
- * carreras.
+ * entiende el motor ([VibrationController.supportsAmplitude]) y los ajustes de intensidad y
+ * duración de [vibrationSettings], leídos en cada aviso para que un cambio se note enseguida.
+ * Cada giro vibra en dos etapas: giro próximo y, en la maniobra, izquierda o derecha. Las
+ * lecturas y el ticker corren en el mismo [CoroutineScope]; usar uno de un solo hilo (p. ej.
+ * viewModelScope) para no tener carreras.
  * Cada vibración se anota en [vibrationEvents] en segundo plano; si falla, se sigue navegando.
  * La voz ([speech]) solo acompaña: dice el inicio y los avisos importantes sin esperar a que
  * terminen, y si falla las vibraciones siguen igual.
@@ -90,6 +93,7 @@ class TrackNavigation(
     private val tickMs: Long = 1_000,
     private val activeRoutes: ActiveRouteStore? = null,
     private val logger: Logger = NoLogger,
+    private val vibrationSettings: () -> VibrationSettings = { VibrationSettings() },
 ) {
     private val _state = MutableStateFlow(TrackingState())
     val state: StateFlow<TrackingState> = _state.asStateFlow()
@@ -100,7 +104,7 @@ class TrackNavigation(
     private var engine: NavigationEngine? = null
     private var lastPosition: Coordinates? = null
     private var lastVibrationMs = 0L
-    private var lastCue: VibrationCue? = null
+    private var lastCues: List<VibrationCue> = emptyList()
     private var lastStatus: NavigationStatus? = null
     private var recalculating = false
     private var recalculations = 0
@@ -151,7 +155,7 @@ class TrackNavigation(
         engine = null
         route = null
         lastStatus = null
-        lastCue = null
+        lastCues = emptyList()
         _state.value = TrackingState()
         vibration.stop()
         speech.stop()
@@ -166,12 +170,12 @@ class TrackNavigation(
     fun repeat() {
         val snapshot = engine?.snapshot ?: return
         logger.info(TAG, "Repetir indicación")
-        vibrate(lastCue ?: VibrationCue.ON_ROUTE, clock())
+        vibrate(lastCues.ifEmpty { listOf(VibrationCue.ON_ROUTE) }, clock())
         say(repeatPhrase(snapshot))
     }
 
     private fun CoroutineScope.handle(events: List<NavigationEvent>, now: Long) {
-        VibrationPatterns.mostImportant(events)?.let { vibrate(it, now) }
+        VibrationPatterns.cuesFor(events).takeIf { it.isNotEmpty() }?.let { vibrate(it, now) }
         engine?.let { navigationPhrase(events, it.snapshot) }?.let(::say)
         events.filterIsInstance<NavigationEvent.NextStepChanged>().forEach {
             logger.info(TAG, "Siguiente paso ${it.step.order}: ${it.step.instruction}")
@@ -197,17 +201,19 @@ class TrackNavigation(
             NavigationStatus.NO_SIGNAL -> VibrationCue.NO_SIGNAL
             else -> null
         } ?: return
-        val period = patternFor(cue).repeatEveryMs ?: return
+        val period = patternFor(listOf(cue)).repeatEveryMs ?: return
         if (now - lastVibrationMs >= period) vibrate(cue, now)
     }
 
-    private fun patternFor(cue: VibrationCue): VibrationPattern =
-        VibrationPatterns.of(cue, vibration.supportsAmplitude)
+    private fun patternFor(cues: List<VibrationCue>): VibrationPattern =
+        VibrationPatterns.forCues(cues, vibration.supportsAmplitude, vibrationSettings())
 
-    private fun vibrate(cue: VibrationCue, now: Long) {
-        val pattern = patternFor(cue)
+    private fun vibrate(cue: VibrationCue, now: Long) = vibrate(listOf(cue), now)
+
+    private fun vibrate(cues: List<VibrationCue>, now: Long) {
+        val pattern = patternFor(cues)
         vibration.play(pattern)
-        lastCue = cue
+        lastCues = cues
         lastVibrationMs = now
         _state.value = _state.value.copy(pattern = pattern)
         report(pattern)
