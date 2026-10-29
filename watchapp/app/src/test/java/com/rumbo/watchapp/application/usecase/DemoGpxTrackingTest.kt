@@ -14,11 +14,11 @@ import com.rumbo.watchapp.domain.port.RoutesRepository
 import com.rumbo.watchapp.domain.port.SpeechOutput
 import com.rumbo.watchapp.domain.port.SpeechPriority
 import com.rumbo.watchapp.domain.port.SpeechStatus
-import com.rumbo.watchapp.domain.port.VibrationController
 import com.rumbo.watchapp.domain.port.VibrationEventsRepository
-import com.rumbo.watchapp.domain.vibration.VibrationPattern
-import com.rumbo.watchapp.domain.vibration.VibrationPatterns
+import com.rumbo.watchapp.domain.vibration.VibrationCue
+import com.rumbo.watchapp.testing.FakeVibration
 import com.rumbo.watchapp.testing.GpxPoint
+import com.rumbo.watchapp.testing.pattern
 import com.rumbo.watchapp.testing.readGpx
 import com.rumbo.watchapp.testing.routeFromGpx
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -41,15 +41,6 @@ class DemoGpxTrackingTest {
 
     private val route = routeFromGpx(readGpx("ruta_parque_narino_a_parque_bolivar.gpx"))
 
-    private class FakeVibration : VibrationController {
-        val played = mutableListOf<VibrationPattern>()
-
-        override fun play(pattern: VibrationPattern) {
-            played += pattern
-        }
-
-        override fun stop() = Unit
-    }
 
     private object NoEvents : VibrationEventsRepository {
         override suspend fun record(event: VibrationEvent) = Unit
@@ -102,11 +93,11 @@ class DemoGpxTrackingTest {
         val tracking = walk("ruta_parque_narino_a_parque_bolivar.gpx", OfflineRoutes(), vibration, speech)
 
         assertEquals(NavigationStatus.ARRIVED, tracking.state.value.status)
-        assertEquals(6, vibration.played.count { it == VibrationPatterns.LEFT })
-        assertEquals(6, vibration.played.count { it == VibrationPatterns.RIGHT })
-        assertEquals(12, vibration.played.count { it == VibrationPatterns.TURN_APPROACHING })
-        assertEquals(VibrationPatterns.ARRIVED, vibration.played.last())
-        assertTrue(VibrationPatterns.OFF_ROUTE !in vibration.played)
+        assertEquals(6, vibration.played.count { it == pattern(VibrationCue.LEFT) })
+        assertEquals(6, vibration.played.count { it == pattern(VibrationCue.RIGHT) })
+        assertEquals(12, vibration.played.count { it == pattern(VibrationCue.TURN_APPROACHING) })
+        assertEquals(pattern(VibrationCue.ARRIVED), vibration.played.last())
+        assertTrue(pattern(VibrationCue.OFF_ROUTE) !in vibration.played)
         assertEquals(ARRIVED_PHRASE, speech.spoken.last())
         tracking.stop()
     }
@@ -121,9 +112,9 @@ class DemoGpxTrackingTest {
         // ~44 s fuera de ruta: un intento cada 10 s, todos fallidos, sin pasar del tope de 5.
         assertTrue("intentos: ${routes.calls}", routes.calls in 3..5)
         // Un aviso al salirse y uno por cada intento fallido.
-        assertEquals(1 + routes.calls, vibration.played.count { it == VibrationPatterns.OFF_ROUTE })
+        assertEquals(1 + routes.calls, vibration.played.count { it == pattern(VibrationCue.OFF_ROUTE) })
         assertEquals(NavigationStatus.ARRIVED, tracking.state.value.status)
-        assertEquals(VibrationPatterns.ARRIVED, vibration.played.last())
+        assertEquals(pattern(VibrationCue.ARRIVED), vibration.played.last())
         tracking.stop()
     }
 
@@ -134,7 +125,7 @@ class DemoGpxTrackingTest {
 
         val tracking = walk("ruta_sin_senal.gpx", OfflineRoutes(), vibration, speech)
 
-        assertTrue(VibrationPatterns.NO_SIGNAL in vibration.played)
+        assertTrue(pattern(VibrationCue.NO_SIGNAL) in vibration.played)
         assertTrue(SIGNAL_LOST_PHRASE in speech.spoken)
         assertTrue(SIGNAL_RECOVERED_PHRASE in speech.spoken)
         assertEquals(NavigationStatus.ARRIVED, tracking.state.value.status)

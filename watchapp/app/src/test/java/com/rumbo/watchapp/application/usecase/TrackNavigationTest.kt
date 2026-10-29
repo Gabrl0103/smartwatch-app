@@ -17,13 +17,13 @@ import com.rumbo.watchapp.domain.port.RoutesRepository
 import com.rumbo.watchapp.domain.port.SpeechOutput
 import com.rumbo.watchapp.domain.port.SpeechPriority
 import com.rumbo.watchapp.domain.port.SpeechStatus
-import com.rumbo.watchapp.domain.port.VibrationController
 import com.rumbo.watchapp.domain.port.VibrationEventsRepository
-import com.rumbo.watchapp.domain.vibration.VibrationPattern
-import com.rumbo.watchapp.domain.vibration.VibrationPatterns
+import com.rumbo.watchapp.domain.vibration.VibrationCue
+import com.rumbo.watchapp.testing.FakeVibration
 import com.rumbo.watchapp.testing.at
 import com.rumbo.watchapp.testing.fixAt
 import com.rumbo.watchapp.testing.lRoute
+import com.rumbo.watchapp.testing.pattern
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,18 +35,6 @@ import org.junit.Test
 
 class TrackNavigationTest {
 
-    private class FakeVibration : VibrationController {
-        val played = mutableListOf<VibrationPattern>()
-        var stops = 0
-
-        override fun play(pattern: VibrationPattern) {
-            played += pattern
-        }
-
-        override fun stop() {
-            stops++
-        }
-    }
 
     private class FakeVibrationEvents(private val error: Exception? = null) : VibrationEventsRepository {
         val recorded = mutableListOf<VibrationEvent>()
@@ -145,10 +133,10 @@ class TrackNavigationTest {
         tracking.start(lRoute(), this)
         try {
             val state = tracking.state.value
-            assertEquals(listOf(VibrationPatterns.ON_ROUTE), vibration.played)
+            assertEquals(listOf(pattern(VibrationCue.ON_ROUTE)), vibration.played)
             assertEquals(NavigationStatus.ON_ROUTE, state.status)
             assertEquals("Gire a la derecha.", state.nextInstruction)
-            assertEquals(VibrationPatterns.ON_ROUTE, state.pattern)
+            assertEquals(pattern(VibrationCue.ON_ROUTE), state.pattern)
             assertEquals(400.0, state.remainingM, 0.5)
             assertEquals(200.0, state.stepLengthM!!, 0.5)
             assertEquals(0f, state.stepProgress, 0.01f)
@@ -157,6 +145,24 @@ class TrackNavigationTest {
         }
         assertEquals(1, vibration.stops)
         assertEquals(TrackingState(), tracking.state.value)
+    }
+
+    @Test
+    fun watchWithoutAmplitudeControlVibratesTheRhythmOnlyVersion() = runBlocking {
+        val vibration = FakeVibration(supportsAmplitude = false)
+        val tracking = TrackNavigation(
+            MutableSharedFlow(),
+            FakeRoutes(detour),
+            vibration,
+            FakeVibrationEvents(),
+            FakeSpeech(),
+            clock = { 0L },
+        )
+
+        tracking.start(lRoute(), this)
+        tracking.stop()
+
+        assertEquals(listOf(pattern(VibrationCue.ON_ROUTE, supportsAmplitude = false)), vibration.played)
     }
 
     @Test
@@ -185,7 +191,7 @@ class TrackNavigationTest {
                 delay(20)
             }
             assertEquals(NavigationStatus.OFF_ROUTE, tracking.state.value.status)
-            assertEquals(VibrationPatterns.OFF_ROUTE, vibration.played.last())
+            assertEquals(pattern(VibrationCue.OFF_ROUTE), vibration.played.last())
             assertEquals(OFF_ROUTE_PHRASE to SpeechPriority.HIGH, speech.spoken.last())
 
             now = 12_000
@@ -216,7 +222,7 @@ class TrackNavigationTest {
         tracking.start(lRoute().copy(id = 9), this)
         try {
             delay(20)
-            assertEquals(listOf(VibrationEvent(VibrationPatterns.ON_ROUTE.label, 9, 2)), events.recorded)
+            assertEquals(listOf(VibrationEvent(pattern(VibrationCue.ON_ROUTE).label, 9, 2)), events.recorded)
         } finally {
             tracking.stop()
         }
@@ -237,7 +243,7 @@ class TrackNavigationTest {
         tracking.start(lRoute(), this)
         try {
             delay(20)
-            assertEquals(listOf(VibrationPatterns.ON_ROUTE), vibration.played)
+            assertEquals(listOf(pattern(VibrationCue.ON_ROUTE)), vibration.played)
             assertEquals(NavigationStatus.ON_ROUTE, tracking.state.value.status)
         } finally {
             tracking.stop()
@@ -283,7 +289,7 @@ class TrackNavigationTest {
         try {
             tracking.repeat()
 
-            assertEquals(listOf(VibrationPatterns.ON_ROUTE, VibrationPatterns.ON_ROUTE), vibration.played)
+            assertEquals(listOf(pattern(VibrationCue.ON_ROUTE), pattern(VibrationCue.ON_ROUTE)), vibration.played)
             assertEquals("En doscientos metros, gire a la derecha." to SpeechPriority.HIGH, speech.spoken.last())
         } finally {
             tracking.stop()
@@ -321,7 +327,7 @@ class TrackNavigationTest {
             // Fuera de ruta desde la tercera lectura lejana (4 s): intentos a los 14, 24, 34, 44 y 54 s.
             assertEquals(listOf(14_000L, 24_000L, 34_000L, 44_000L, 54_000L), routes.calledAtMs)
             // Un aviso al salirse y uno por cada intento fallido.
-            assertEquals(6, vibration.played.count { it == VibrationPatterns.OFF_ROUTE })
+            assertEquals(6, vibration.played.count { it == pattern(VibrationCue.OFF_ROUTE) })
             val state = tracking.state.value
             assertEquals(NavigationStatus.OFF_ROUTE, state.status)
             assertEquals("Gire a la derecha.", state.nextInstruction)
@@ -488,7 +494,7 @@ class TrackNavigationTest {
                 delay(20)
             }
             assertEquals(NavigationStatus.OFF_ROUTE, tracking.state.value.status)
-            assertEquals(VibrationPatterns.OFF_ROUTE, vibration.played.last())
+            assertEquals(pattern(VibrationCue.OFF_ROUTE), vibration.played.last())
         } finally {
             tracking.stop()
         }

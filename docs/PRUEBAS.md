@@ -58,8 +58,8 @@ y el Parque Bolívar. Comprueban que:
 | # | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|
 | R1 | Iniciar ruta | Desde Confirmar tocar "Ir" | "En ruta" con el anillo, la maniobra siguiente, "En X m" y "Faltan X"; voz "Iniciando ruta. ..."; aparece la notificación "Rumbo: navegando"; Logcat `Nav: Estado - → ON_ROUTE` |
-| R2 | Giros | Cargar `ruta_parque_narino_a_parque_bolivar.gpx` y Play route | Antes de cada giro "Giro próximo" (amarillo, 2 pulsos cortos, "En treinta metros, gire...") y en el giro "Gira ahora" (izquierda: 2 pulsos largos; derecha: 1 pulso largo). Logcat `Estado ON_ROUTE → TURN_APPROACHING → MANEUVER` una vez por giro |
-| R3 | Pantalla apagada | En ruta, apagar la pantalla (`adb shell input keyevent KEYCODE_SLEEP`) y seguir el GPX | Logcat sigue mostrando vibraciones ("1 pulso suave cada 6 s") y cambios de estado; al encender la pantalla se ve el estado actual |
+| R2 | Giros | Cargar `ruta_parque_narino_a_parque_bolivar.gpx` y Play route | Antes de cada giro "Giro próximo" (amarillo, 2 pulsos muy cortos, "En treinta metros, gire...") y en el giro "Gira ahora" (izquierda: 2 pulsos medios; derecha: 1 pulso largo). Logcat `Estado ON_ROUTE → TURN_APPROACHING → MANEUVER` una vez por giro |
+| R3 | Pantalla apagada | En ruta, apagar la pantalla (`adb shell input keyevent KEYCODE_SLEEP`) y seguir el GPX | Logcat sigue mostrando vibraciones ("Recto: 1 pulso suave cada 6 s", o "1 pulso corto" si el reloj no controla la intensidad) y cambios de estado; al encender la pantalla se ve el estado actual |
 | R4 | Pantalla encendida y atenuada | En ruta, no tocar nada 15 s | La pantalla no se apaga sola; baja a ~30 % de brillo. Al tocarla o en el siguiente giro vuelve al brillo normal |
 | R5 | Volver a la app | En ruta, salir con el botón de inicio del reloj y abrir Rumbo (o tocar la notificación) | Abre directo en "En ruta", con la ruta que seguía |
 | R6 | El proceso muere | En ruta, `adb shell am force-stop com.rumbo.watchapp` y abrir Rumbo | Inicio muestra primero "Continuar ruta anterior" con el destino y la voz lo dice. Al tocarlo vuelve a "En ruta" desde donde esté el usuario, sin un falso "Fuera de ruta" |
@@ -80,7 +80,8 @@ y el Parque Bolívar. Comprueban que:
 
 | # | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|
-| B1 | Guía | Inicio → "Vibraciones" → tocar cada patrón | En ruta: 1 pulso suave cada 6 s; Giro próximo: 2 pulsos cortos; Izquierda: 2 pulsos largos; Derecha: 1 pulso largo; Fuera de ruta: 3 pulsos; Sin señal: 1 pulso cada 5 s; Llegada: 5 pulsos crecientes. Cada uno se nota distinto (en el reloj) y en el emulador se ve en Logcat y en las barras animadas |
+| B1 | Guía | Inicio → "Vibraciones" → tocar cada patrón | Recto: 1 pulso suave cada 6 s; Giro próximo: 2 pulsos muy cortos; Izquierda: 2 pulsos medios; Derecha: 1 pulso largo; Desviado: 3 pulsos largos con pausas cortas; Sin señal: 1 pulso muy largo cada 5 s; Llegada: 5 pulsos crecientes. Cada uno se nota distinto (en el reloj) y en el emulador se ve en Logcat y en las barras animadas |
+| B3 | Reloj sin control de intensidad | Abrir la app y mirar `adb logcat -s Vibracion` | Al arrancar: `Motor de vibración: ...; control de intensidad: sí/no → patrones con amplitud / solo con ritmo y duración`. Sin control, la guía muestra "Recto: 1 pulso corto cada 6 s" y "Llegada: 5 pulsos cada vez más largos", y cada patrón se distingue solo por cuántos pulsos tiene y cuánto duran |
 | B2 | Salir de la guía | Tocar un patrón largo y volver | La vibración se corta (`Vibracion: Detenida`) |
 
 ### Permisos denegados
@@ -107,10 +108,10 @@ y el Parque Bolívar. Comprueban que:
 
 | # | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|
-| D1 | Desvío con internet | Cargar `ruta_con_desvio.gpx`, Ir y Play route | A mitad de ruta: "Fuera de ruta" (naranja, ícono de advertencia, 3 pulsos), voz "Te saliste de la ruta. Recalculando." y "Recalculando ruta..."; a los 10 s Logcat `Recalculando ruta (intento 1 de 5)` y `Ruta recalculada`; la pantalla vuelve a "En ruta" con la ruta nueva |
-| D2 | Desvío sin internet | Igual que D1 con modo avión antes del desvío | Cada 10 s un intento que falla (`No se pudo recalcular (intento n de 5)`), 3 pulsos de "fuera de ruta" en cada uno, como mucho 5 intentos; se sigue con la ruta anterior y al volver a la calle pasa a "En ruta" / "Gira ahora" |
+| D1 | Desvío con internet | Cargar `ruta_con_desvio.gpx`, Ir y Play route | A mitad de ruta: "Fuera de ruta" (naranja, ícono de advertencia, 3 pulsos largos), voz "Te saliste de la ruta. Recalculando." y "Recalculando ruta..."; a los 10 s Logcat `Recalculando ruta (intento 1 de 5)` y `Ruta recalculada`; la pantalla vuelve a "En ruta" con la ruta nueva |
+| D2 | Desvío sin internet | Igual que D1 con modo avión antes del desvío | Cada 10 s un intento que falla (`No se pudo recalcular (intento n de 5)`), 3 pulsos largos de "desviado" en cada uno, como mucho 5 intentos; se sigue con la ruta anterior y al volver a la calle pasa a "En ruta" / "Gira ahora" |
 | D3 | Sin parpadeo | Durante D1/D2 mirar el badge | El estado no salta entre "En ruta" y "Fuera de ruta" con el ruido del GPS: sale tras 3 lecturas a más de 25 m y vuelve a menos de 15 m |
-| D4 | Sin señal | Cargar `ruta_sin_senal.gpx` | A mitad de ruta "Sin señal GPS" (gris, ubicación tachada, 1 pulso cada 5 s, "Perdí la señal de GPS.") y al volver los puntos "Señal recuperada." y el estado anterior, sin "Fuera de ruta" |
+| D4 | Sin señal | Cargar `ruta_sin_senal.gpx` | A mitad de ruta "Sin señal GPS" (gris, ubicación tachada, 1 pulso muy largo cada 5 s, "Perdí la señal de GPS.") y al volver los puntos "Señal recuperada." y el estado anterior, sin "Fuera de ruta" |
 
 ### Llegada
 

@@ -172,6 +172,7 @@ private fun Screen(
             onSave = viewModel::saveDestination,
         )
         PlanState.Vibrations -> VibrationsScreen(
+            patterns = viewModel.vibrationPatterns,
             onPlay = viewModel::playVibration,
             onBack = viewModel::reset,
         )

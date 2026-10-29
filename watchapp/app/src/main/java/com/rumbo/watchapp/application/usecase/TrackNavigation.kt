@@ -23,6 +23,7 @@ import com.rumbo.watchapp.domain.port.RoutesRepository
 import com.rumbo.watchapp.domain.port.SpeechOutput
 import com.rumbo.watchapp.domain.port.VibrationController
 import com.rumbo.watchapp.domain.port.VibrationEventsRepository
+import com.rumbo.watchapp.domain.vibration.VibrationCue
 import com.rumbo.watchapp.domain.vibration.VibrationPattern
 import com.rumbo.watchapp.domain.vibration.VibrationPatterns
 import kotlin.math.roundToInt
@@ -65,8 +66,10 @@ data class TrackingState(
 }
 
 /**
- * Une GPS, motor de navegación y vibraciones. Las lecturas y el ticker corren en el mismo
- * [CoroutineScope]; usar uno de un solo hilo (p. ej. viewModelScope) para no tener carreras.
+ * Une GPS, motor de navegación y vibraciones. Cada aviso vibra con la versión de su patrón que
+ * entiende el motor ([VibrationController.supportsAmplitude]). Las lecturas y el ticker corren
+ * en el mismo [CoroutineScope]; usar uno de un solo hilo (p. ej. viewModelScope) para no tener
+ * carreras.
  * Cada vibración se anota en [vibrationEvents] en segundo plano; si falla, se sigue navegando.
  * La voz ([speech]) solo acompaña: dice el inicio y los avisos importantes sin esperar a que
  * terminen, y si falla las vibraciones siguen igual.
@@ -97,6 +100,7 @@ class TrackNavigation(
     private var engine: NavigationEngine? = null
     private var lastPosition: Coordinates? = null
     private var lastVibrationMs = 0L
+    private var lastCue: VibrationCue? = null
     private var lastStatus: NavigationStatus? = null
     private var recalculating = false
     private var recalculations = 0
@@ -112,7 +116,7 @@ class TrackNavigation(
         val now = clock()
         logger.info(TAG, "Navegación iniciada hacia «${route.destinationName}»: ${describe(route)}")
         useRoute(route, now)
-        vibrate(VibrationPatterns.ON_ROUTE, now)
+        vibrate(VibrationCue.ON_ROUTE, now)
         say(Phrase(startPhrase(route)))
         job = scope.launch {
             launch {
@@ -147,6 +151,7 @@ class TrackNavigation(
         engine = null
         route = null
         lastStatus = null
+        lastCue = null
         _state.value = TrackingState()
         vibration.stop()
         speech.stop()
@@ -161,7 +166,7 @@ class TrackNavigation(
     fun repeat() {
         val snapshot = engine?.snapshot ?: return
         logger.info(TAG, "Repetir indicación")
-        vibrate(_state.value.pattern ?: VibrationPatterns.ON_ROUTE, clock())
+        vibrate(lastCue ?: VibrationCue.ON_ROUTE, clock())
         say(repeatPhrase(snapshot))
     }
 
@@ -187,17 +192,22 @@ class TrackNavigation(
 
     // Patrones que se repiten mientras dure el estado (en ruta y sin señal).
     private fun heartbeat(now: Long) {
-        val pattern = when (engine?.snapshot?.status) {
-            NavigationStatus.ON_ROUTE -> VibrationPatterns.ON_ROUTE
-            NavigationStatus.NO_SIGNAL -> VibrationPatterns.NO_SIGNAL
+        val cue = when (engine?.snapshot?.status) {
+            NavigationStatus.ON_ROUTE -> VibrationCue.ON_ROUTE
+            NavigationStatus.NO_SIGNAL -> VibrationCue.NO_SIGNAL
             else -> null
         } ?: return
-        val period = pattern.repeatEveryMs ?: return
-        if (now - lastVibrationMs >= period) vibrate(pattern, now)
+        val period = patternFor(cue).repeatEveryMs ?: return
+        if (now - lastVibrationMs >= period) vibrate(cue, now)
     }
 
-    private fun vibrate(pattern: VibrationPattern, now: Long) {
+    private fun patternFor(cue: VibrationCue): VibrationPattern =
+        VibrationPatterns.of(cue, vibration.supportsAmplitude)
+
+    private fun vibrate(cue: VibrationCue, now: Long) {
+        val pattern = patternFor(cue)
         vibration.play(pattern)
+        lastCue = cue
         lastVibrationMs = now
         _state.value = _state.value.copy(pattern = pattern)
         report(pattern)
@@ -246,7 +256,7 @@ class TrackNavigation(
             } catch (e: Exception) {
                 val next = if (attempt < max) "el motor lo vuelve a pedir en 10 s" else "no se intenta más"
                 logger.warn(TAG, "No se pudo recalcular (intento $attempt de $max): ${e.message}. Sigo con la ruta anterior; $next")
-                vibrate(VibrationPatterns.OFF_ROUTE, clock())
+                vibrate(VibrationCue.OFF_ROUTE, clock())
             } finally {
                 recalculating = false
                 publish()

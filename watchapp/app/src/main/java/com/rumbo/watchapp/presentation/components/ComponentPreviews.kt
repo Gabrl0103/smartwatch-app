@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.ui.tooling.preview.WearPreviewLargeRound
+import com.rumbo.watchapp.domain.vibration.VibrationCue
 import com.rumbo.watchapp.domain.vibration.VibrationPatterns
 import com.rumbo.watchapp.presentation.theme.Accent
 import com.rumbo.watchapp.presentation.theme.Background
@@ -72,5 +73,5 @@ private fun ButtonsPreview() = PreviewSurface {
 @Composable
 private fun RingAndVibrationPreview() = PreviewSurface {
     ProgressRing(progress = 0.6f, color = StatusTurnSoon, contentDescription = "Progreso hacia el giro")
-    VibrationIndicator(VibrationPatterns.ARRIVED, StatusArrived)
+    VibrationIndicator(VibrationPatterns.of(VibrationCue.ARRIVED, supportsAmplitude = true), StatusArrived)
 }

@@ -22,13 +22,13 @@ import com.rumbo.watchapp.domain.port.SavedPlacesRepository
 import com.rumbo.watchapp.domain.port.SpeechOutput
 import com.rumbo.watchapp.domain.port.SpeechPriority
 import com.rumbo.watchapp.domain.port.SpeechStatus
-import com.rumbo.watchapp.domain.port.VibrationController
 import com.rumbo.watchapp.domain.port.VoiceRepository
 import com.rumbo.watchapp.domain.port.VoiceSettings
-import com.rumbo.watchapp.domain.vibration.VibrationPattern
-import com.rumbo.watchapp.domain.vibration.VibrationPatterns
+import com.rumbo.watchapp.domain.vibration.VibrationCue
 import com.rumbo.watchapp.testing.BASE
+import com.rumbo.watchapp.testing.FakeVibration
 import com.rumbo.watchapp.testing.lRoute
+import com.rumbo.watchapp.testing.pattern
 import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -126,18 +126,6 @@ class RoutePlanningViewModelTest {
         }
     }
 
-    private class FakeVibration : VibrationController {
-        val played = mutableListOf<VibrationPattern>()
-        var stops = 0
-
-        override fun play(pattern: VibrationPattern) {
-            played += pattern
-        }
-
-        override fun stop() {
-            stops++
-        }
-    }
 
     private class FakeSpeech : SpeechOutput {
         val spoken = mutableListOf<String>()
@@ -315,14 +303,14 @@ class RoutePlanningViewModelTest {
 
     @Test
     fun vibrationsScreenPlaysPatternsAndStopsOnBack() {
-        viewModel.playVibration(VibrationPatterns.LEFT)
+        viewModel.playVibration(VibrationCue.LEFT)
         assertTrue(vibration.played.isEmpty())
 
         viewModel.openVibrations()
-        viewModel.playVibration(VibrationPatterns.LEFT)
+        viewModel.playVibration(VibrationCue.LEFT)
         viewModel.back()
 
-        assertEquals(listOf(VibrationPatterns.LEFT), vibration.played)
+        assertEquals(listOf(pattern(VibrationCue.LEFT)), vibration.played)
         assertEquals(1, vibration.stops)
         assertEquals(PlanState.Start, viewModel.state.value)
     }

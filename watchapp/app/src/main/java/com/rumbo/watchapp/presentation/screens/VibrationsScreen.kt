@@ -12,8 +12,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
+import com.rumbo.watchapp.domain.vibration.VibrationCue
 import com.rumbo.watchapp.domain.vibration.VibrationPattern
-import com.rumbo.watchapp.domain.vibration.VibrationPatterns
 import com.rumbo.watchapp.presentation.components.PillButton
 import com.rumbo.watchapp.presentation.components.VibrationIndicator
 import com.rumbo.watchapp.presentation.theme.StatusArrived
@@ -22,22 +22,26 @@ import com.rumbo.watchapp.presentation.theme.StatusOffRoute
 import com.rumbo.watchapp.presentation.theme.StatusOnRoute
 import com.rumbo.watchapp.presentation.theme.StatusTurnSoon
 
-private data class GuideEntry(val name: String, val pattern: VibrationPattern, val color: Color)
+/** Color del estado en que suena cada aviso, el mismo de la pantalla "En ruta". */
+fun VibrationCue.color(): Color = when (this) {
+    VibrationCue.ON_ROUTE -> StatusOnRoute
+    VibrationCue.TURN_APPROACHING, VibrationCue.LEFT, VibrationCue.RIGHT -> StatusTurnSoon
+    VibrationCue.OFF_ROUTE -> StatusOffRoute
+    VibrationCue.NO_SIGNAL -> StatusNoSignal
+    VibrationCue.ARRIVED -> StatusArrived
+}
 
-private val GUIDE = listOf(
-    GuideEntry("En ruta", VibrationPatterns.ON_ROUTE, StatusOnRoute),
-    GuideEntry("Giro próximo", VibrationPatterns.TURN_APPROACHING, StatusTurnSoon),
-    GuideEntry("Izquierda", VibrationPatterns.LEFT, StatusTurnSoon),
-    GuideEntry("Derecha", VibrationPatterns.RIGHT, StatusTurnSoon),
-    GuideEntry("Fuera de ruta", VibrationPatterns.OFF_ROUTE, StatusOffRoute),
-    GuideEntry("Sin señal GPS", VibrationPatterns.NO_SIGNAL, StatusNoSignal),
-    GuideEntry("Llegada", VibrationPatterns.ARRIVED, StatusArrived),
-)
-
-/** Guía de vibraciones: cada patrón con su nombre; al tocarlo vibra y se ve debajo cómo suena. */
+/**
+ * Guía de vibraciones: cada patrón de [patterns] (la versión que entiende este reloj) con su
+ * nombre y cómo se siente; al tocarlo vibra y se ve debajo cómo suena.
+ */
 @Composable
-fun VibrationsScreen(onPlay: (VibrationPattern) -> Unit, onBack: () -> Unit) {
-    var selected by remember { mutableStateOf<GuideEntry?>(null) }
+fun VibrationsScreen(
+    patterns: Map<VibrationCue, VibrationPattern>,
+    onPlay: (VibrationCue) -> Unit,
+    onBack: () -> Unit,
+) {
+    var selected by remember { mutableStateOf<VibrationCue?>(null) }
     RumboScreen(paneTitle = "Vibraciones") {
         Text(
             text = "Vibraciones",
@@ -51,16 +55,17 @@ fun VibrationsScreen(onPlay: (VibrationPattern) -> Unit, onBack: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         )
-        GUIDE.forEach { entry ->
+        VibrationCue.entries.forEach { cue ->
+            val pattern = patterns.getValue(cue)
             PillButton(
-                label = entry.name,
+                label = pattern.name,
                 onClick = {
-                    selected = entry
-                    onPlay(entry.pattern)
+                    selected = cue
+                    onPlay(cue)
                 },
-                secondaryLabel = entry.pattern.label,
+                secondaryLabel = pattern.description,
             )
-            if (selected == entry) VibrationIndicator(entry.pattern, entry.color, showLabel = false)
+            if (selected == cue) VibrationIndicator(pattern, cue.color(), showLabel = false)
         }
         PillButton("Volver", onClick = onBack)
     }

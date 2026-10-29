@@ -36,6 +36,7 @@ import com.rumbo.watchapp.domain.model.SavedPlace
 import com.rumbo.watchapp.domain.navigation.NavigationStatus
 import com.rumbo.watchapp.domain.port.SpeechEngine
 import com.rumbo.watchapp.domain.port.SpeechStatus
+import com.rumbo.watchapp.domain.vibration.VibrationCue
 import com.rumbo.watchapp.domain.vibration.VibrationPattern
 import com.rumbo.watchapp.domain.vibration.VibrationPatterns
 import com.rumbo.watchapp.presentation.components.PillButton
@@ -84,12 +85,15 @@ private val PLACES = listOf(
     SavedPlace(3, "Universidad", 1.2110, -77.2770),
 )
 
+// Las capturas muestran la versión con amplitud.
+private fun pattern(cue: VibrationCue): VibrationPattern = VibrationPatterns.of(cue, supportsAmplitude = true)
+
 private fun tracking(
     status: NavigationStatus,
     instruction: String = "Gira a la izquierda hacia la Calle 18",
     maneuver: Maneuver = Maneuver.LEFT,
     toNext: Double = 30.0,
-    pattern: VibrationPattern = VibrationPatterns.TURN_APPROACHING,
+    pattern: VibrationPattern = pattern(VibrationCue.TURN_APPROACHING),
     recalculating: Boolean = false,
 ) = TrackingState(
     status = status,
@@ -153,12 +157,12 @@ class ScreenshotsTest {
                     instruction = "Sigue recto por la Carrera 24",
                     maneuver = Maneuver.STRAIGHT,
                     toNext = 85.0,
-                    pattern = VibrationPatterns.ON_ROUTE,
+                    pattern = pattern(VibrationCue.ON_ROUTE),
                 ),
             )
         },
         Shot("09_en_ruta_abajo", scrolls = 3) {
-            Navigation(tracking(NavigationStatus.ON_ROUTE, toNext = 85.0, pattern = VibrationPatterns.ON_ROUTE))
+            Navigation(tracking(NavigationStatus.ON_ROUTE, toNext = 85.0, pattern = pattern(VibrationCue.ON_ROUTE)))
         },
         Shot("10_giro_proximo") { Navigation(tracking(NavigationStatus.TURN_APPROACHING)) },
         Shot("11_gira_ahora") {
@@ -168,21 +172,21 @@ class ScreenshotsTest {
                     instruction = "Gira a la derecha",
                     maneuver = Maneuver.RIGHT,
                     toNext = 8.0,
-                    pattern = VibrationPatterns.RIGHT,
+                    pattern = pattern(VibrationCue.RIGHT),
                 ),
             )
         },
         Shot("12_fuera_de_ruta") {
-            Navigation(tracking(NavigationStatus.OFF_ROUTE, pattern = VibrationPatterns.OFF_ROUTE, recalculating = true))
+            Navigation(tracking(NavigationStatus.OFF_ROUTE, pattern = pattern(VibrationCue.OFF_ROUTE), recalculating = true))
         },
-        Shot("13_sin_senal") { Navigation(tracking(NavigationStatus.NO_SIGNAL, pattern = VibrationPatterns.NO_SIGNAL)) },
-        Shot("14_llegaste") { Navigation(tracking(NavigationStatus.ARRIVED, pattern = VibrationPatterns.ARRIVED)) },
+        Shot("13_sin_senal") { Navigation(tracking(NavigationStatus.NO_SIGNAL, pattern = pattern(VibrationCue.NO_SIGNAL))) },
+        Shot("14_llegaste") { Navigation(tracking(NavigationStatus.ARRIVED, pattern = pattern(VibrationCue.ARRIVED))) },
         Shot("15_terminar_ruta") { Navigation(tracking(NavigationStatus.ON_ROUTE), confirmFinish = true) },
         Shot("16_lugares_guardados") {
             SavedPlacesScreen(PLACES, onChoose = {}, onDelete = {}, onBack = {})
         },
         Shot("17_borrar_lugar") { ConfirmDeleteScreen(PLACES[0], onConfirm = {}, onCancel = {}) },
-        Shot("18_vibraciones") { VibrationsScreen(onPlay = {}, onBack = {}) },
+        Shot("18_vibraciones") { VibrationsScreen(VibrationPatterns.WITH_AMPLITUDE, onPlay = {}, onBack = {}) },
         Shot("19_componentes") { ComponentsGallery() },
         Shot("20_permiso_ubicacion") { PermissionScreen(Permission.LOCATION, onOpenSettings = {}, onHome = {}) },
         Shot("21_buscando_gps") { ProcessingScreen(GPS_SEARCHING_MESSAGE) },
@@ -245,7 +249,7 @@ private fun ComponentsGallery() {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally)) {
                 StateIconKind.entries.forEach { StateIcon(it, Accent, size = 32.dp) }
             }
-            VibrationIndicator(VibrationPatterns.ARRIVED, StatusArrived)
+            VibrationIndicator(pattern(VibrationCue.ARRIVED), StatusArrived)
             PillButton("Ir", onClick = {}, style = PillStyle.PRIMARY)
         }
     }

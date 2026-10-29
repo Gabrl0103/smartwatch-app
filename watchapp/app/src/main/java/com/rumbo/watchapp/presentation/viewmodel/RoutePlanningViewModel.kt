@@ -19,7 +19,9 @@ import com.rumbo.watchapp.domain.port.SpeechOutput
 import com.rumbo.watchapp.domain.port.SpeechStatus
 import com.rumbo.watchapp.domain.port.VibrationController
 import com.rumbo.watchapp.domain.port.VoiceSettings
+import com.rumbo.watchapp.domain.vibration.VibrationCue
 import com.rumbo.watchapp.domain.vibration.VibrationPattern
+import com.rumbo.watchapp.domain.vibration.VibrationPatterns
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -59,6 +61,12 @@ class RoutePlanningViewModel(
 
     /** Qué voz se está usando, para mostrarlo en Inicio. */
     val speechStatus: StateFlow<SpeechStatus> = speech.status
+
+    /** Si el motor controla la intensidad; elige la versión de los patrones que se enseña y vibra. */
+    val supportsAmplitude: Boolean = vibration.supportsAmplitude
+
+    /** Los patrones tal como los siente este reloj, para la pantalla "Vibraciones". */
+    val vibrationPatterns: Map<VibrationCue, VibrationPattern> = VibrationPatterns.forDevice(supportsAmplitude)
 
     private val _previousRoute = MutableStateFlow<Route?>(null)
 
@@ -196,8 +204,8 @@ class RoutePlanningViewModel(
     }
 
     /** Hace sentir un patrón en la pantalla "Vibraciones". */
-    fun playVibration(pattern: VibrationPattern) {
-        if (_state.value == PlanState.Vibrations) vibration.play(pattern)
+    fun playVibration(cue: VibrationCue) {
+        if (_state.value == PlanState.Vibrations) vibration.play(vibrationPatterns.getValue(cue))
     }
 
     /** Interruptor "Voz: sí/no"; al apagarla se calla lo que esté sonando. Las vibraciones siguen. */
