@@ -6,10 +6,12 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.rumbo.watchapp.R
 import com.rumbo.watchapp.di.RumboApplication
 import com.rumbo.watchapp.presentation.MainActivity
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,8 +26,12 @@ private const val NOTIFICATION_ID = 1
  */
 class NavigationForegroundService : Service() {
 
-    // Un solo hilo (main) para que lecturas y ticker de TrackNavigation no compitan.
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    // Un solo hilo (main) para que lecturas y ticker de TrackNavigation no compitan. Un error
+    // inesperado queda en el log en vez de cerrar la app.
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Main.immediate +
+            CoroutineExceptionHandler { _, e -> Log.e("Nav", "Error inesperado en la navegación", e) },
+    )
 
     private val container get() = (application as RumboApplication).container
 

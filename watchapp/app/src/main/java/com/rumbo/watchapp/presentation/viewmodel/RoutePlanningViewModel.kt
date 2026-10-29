@@ -8,6 +8,7 @@ import com.rumbo.watchapp.application.usecase.ManageSavedPlaces
 import com.rumbo.watchapp.application.usecase.PlanRouteFromVoice
 import com.rumbo.watchapp.application.usecase.TrackingState
 import com.rumbo.watchapp.domain.error.AppError
+import com.rumbo.watchapp.domain.error.SERVER_WAKING_MESSAGE
 import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.domain.model.SavedPlace
 import com.rumbo.watchapp.domain.navigation.NavigationStatus
@@ -22,13 +23,17 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 private const val RECORDING_MS = 4_000L
 private const val GENERIC_ERROR = "Algo salió mal, intenta de nuevo"
+const val GPS_SEARCHING_MESSAGE = "Buscando señal GPS"
 
 class RoutePlanningViewModel(
     private val recorder: AudioRecorder,
@@ -41,6 +46,7 @@ class RoutePlanningViewModel(
     private val vibration: VibrationController,
     private val speech: SpeechOutput,
     private val voiceSettings: VoiceSettings,
+    serverWaking: StateFlow<Boolean>,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<PlanState>(PlanState.Start)
@@ -57,6 +63,28 @@ class RoutePlanningViewModel(
 
     private val busy get() = _state.value.let {
         it is PlanState.Listening || it is PlanState.Processing || it is PlanState.LoadingPlaces
+    }
+
+    /**
+     * Por qué se está esperando, para la pantalla Procesando: "Buscando señal GPS" mientras no hay
+     * un origen bueno o "El servidor está despertando..." mientras Render arranca; null si nada.
+     */
+    val waitMessage: StateFlow<String?> = combine(locationTracker.searching, serverWaking) { gps, waking ->
+        when {
+            gps -> GPS_SEARCHING_MESSAGE
+            waking -> SERVER_WAKING_MESSAGE
+            else -> null
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    init {
+        // Quien no ve la pantalla también tiene que saber por qué tarda.
+        viewModelScope.launch {
+            waitMessage.collect { message ->
+                val waiting = _state.value == PlanState.Processing || _state.value == PlanState.LoadingPlaces
+                if (message != null && waiting) speech.speak(message)
+            }
+        }
     }
 
     /** Enciende el GPS (no hace nada si ya está encendido o no hay permiso). */
@@ -165,9 +193,30 @@ class RoutePlanningViewModel(
     /** Arranca la navegación en el servicio en primer plano para que siga con la pantalla apagada. */
     fun go() {
         val current = _state.value
-        if (current !is PlanState.Confirming) return
-        navigationRunner.start(current.route)
-        _state.value = PlanState.OnRoute(current.route)
+        if (current is PlanState.Confirming) startNavigation(current.route)
+    }
+
+    /**
+     * El usuario negó [permission]: muestra y dice para qué hace falta. Si estaba confirmando,
+     * la ruta queda guardada para arrancar cuando lo dé o elija "Ir sin notificación".
+     */
+    fun permissionDenied(permission: Permission) {
+        val route = (_state.value as? PlanState.Confirming)?.route
+        _state.value = PlanState.PermissionNeeded(permission, route)
+        speech.speak(permission.explanation)
+    }
+
+    /** Volvió de Ajustes con el permiso dado: si una ruta lo esperaba, arranca; si no, a Inicio. */
+    fun permissionGranted() {
+        val current = _state.value as? PlanState.PermissionNeeded ?: return
+        val route = current.route
+        if (route != null) startNavigation(route) else reset()
+    }
+
+    /** Sin permiso de notificaciones se navega igual: solo falta el aviso en la lista. */
+    fun goWithoutNotification() {
+        val current = _state.value as? PlanState.PermissionNeeded ?: return
+        current.route?.let(::startNavigation)
     }
 
     /** "Repetir" en ruta: vuelve a vibrar y a decir la indicación actual. */
@@ -216,6 +265,11 @@ class RoutePlanningViewModel(
     fun showError(message: String, retry: RetryAction = RetryAction.LISTEN) {
         _state.value = PlanState.Error(message, retry)
         speech.speak(message)
+    }
+
+    private fun startNavigation(route: Route) {
+        navigationRunner.start(route)
+        _state.value = PlanState.OnRoute(route)
     }
 
     private fun confirm(route: Route, save: SaveStatus = SaveStatus.IDLE) {

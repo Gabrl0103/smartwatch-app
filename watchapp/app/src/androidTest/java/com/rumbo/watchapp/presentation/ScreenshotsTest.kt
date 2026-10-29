@@ -50,6 +50,7 @@ import com.rumbo.watchapp.presentation.screens.ConfirmScreen
 import com.rumbo.watchapp.presentation.screens.ErrorScreen
 import com.rumbo.watchapp.presentation.screens.ListeningScreen
 import com.rumbo.watchapp.presentation.screens.NavigationScreen
+import com.rumbo.watchapp.presentation.screens.PermissionScreen
 import com.rumbo.watchapp.presentation.screens.ProcessingScreen
 import com.rumbo.watchapp.presentation.screens.SavedPlacesScreen
 import com.rumbo.watchapp.presentation.screens.StartScreen
@@ -58,6 +59,8 @@ import com.rumbo.watchapp.presentation.theme.Accent
 import com.rumbo.watchapp.presentation.theme.StatusArrived
 import com.rumbo.watchapp.presentation.theme.StatusTurnSoon
 import com.rumbo.watchapp.presentation.theme.WatchappTheme
+import com.rumbo.watchapp.presentation.viewmodel.GPS_SEARCHING_MESSAGE
+import com.rumbo.watchapp.presentation.viewmodel.Permission
 import com.rumbo.watchapp.presentation.viewmodel.SaveStatus
 import java.io.File
 import kotlin.math.min
@@ -180,6 +183,8 @@ class ScreenshotsTest {
         Shot("17_borrar_lugar") { ConfirmDeleteScreen(PLACES[0], onConfirm = {}, onCancel = {}) },
         Shot("18_vibraciones") { VibrationsScreen(onPlay = {}, onBack = {}) },
         Shot("19_componentes") { ComponentsGallery() },
+        Shot("20_permiso_ubicacion") { PermissionScreen(Permission.LOCATION, onOpenSettings = {}, onHome = {}) },
+        Shot("21_buscando_gps") { ProcessingScreen(GPS_SEARCHING_MESSAGE) },
     )
 
     @Test

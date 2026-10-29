@@ -26,6 +26,7 @@ class MainActivity : ComponentActivity() {
                     container.vibration,
                     container.speech,
                     container.voiceSettings,
+                    container.serverStatus.waking,
                 )
             }
         }

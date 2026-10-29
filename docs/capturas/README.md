@@ -22,6 +22,8 @@ misma pantalla desplazada hasta el final.
 | `16_lugares_guardados.png`, `17_borrar_lugar.png` | Lugares guardados y borrar |
 | `18_vibraciones.png` | Guía de vibraciones |
 | `19_componentes.png` | StateBadge, ProgressRing, StateIcon (todos), VibrationIndicator y botón |
+| `20_permiso_ubicacion.png` | Permiso necesario (ubicación negada): Abrir ajustes / Inicio |
+| `21_buscando_gps.png` | Procesando mientras espera una lectura GPS buena |
 
 ## Regenerarlas
 

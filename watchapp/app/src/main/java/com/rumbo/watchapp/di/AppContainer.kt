@@ -8,13 +8,16 @@ import com.rumbo.watchapp.application.usecase.PlanRouteFromVoice
 import com.rumbo.watchapp.application.usecase.RegisterDevice
 import com.rumbo.watchapp.application.usecase.TrackNavigation
 import com.rumbo.watchapp.domain.port.AudioRecorder
+import com.rumbo.watchapp.domain.port.ServerStatus
 import com.rumbo.watchapp.domain.port.SpeechOutput
 import com.rumbo.watchapp.domain.port.VibrationController
 import com.rumbo.watchapp.domain.port.VoiceSettings
 import com.rumbo.watchapp.infrastructure.audio.MediaAudioRecorder
 import com.rumbo.watchapp.infrastructure.location.AndroidLocationProvider
 import com.rumbo.watchapp.infrastructure.navigation.ForegroundNavigationRunner
+import com.rumbo.watchapp.infrastructure.network.BackendServerStatus
 import com.rumbo.watchapp.infrastructure.network.DevicesApiClient
+import com.rumbo.watchapp.infrastructure.network.HealthApiClient
 import com.rumbo.watchapp.infrastructure.network.PlacesApiClient
 import com.rumbo.watchapp.infrastructure.network.RoutesApiClient
 import com.rumbo.watchapp.infrastructure.network.SavedPlacesApiClient
@@ -27,6 +30,7 @@ import com.rumbo.watchapp.infrastructure.tts.GeminiSpeechPlayer
 import com.rumbo.watchapp.infrastructure.tts.SpeechOutputImpl
 import com.rumbo.watchapp.infrastructure.vibration.AndroidVibrationController
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -36,7 +40,11 @@ import kotlinx.coroutines.launch
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
     private val clock: () -> Long = System::currentTimeMillis
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    // Un error inesperado en segundo plano queda en el log; nunca cierra la app.
+    private val appScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.Main.immediate +
+            CoroutineExceptionHandler { _, e -> Log.e("Rumbo", "Error inesperado en segundo plano", e) },
+    )
     private val registerDevice = RegisterDevice(DevicesApiClient, PreferencesDeviceStore(appContext))
 
     val audioRecorder: AudioRecorder = MediaAudioRecorder(appContext)
@@ -53,16 +61,17 @@ class AppContainer(context: Context) {
     // Uno solo para la navegación y para probar los patrones en "Vibraciones".
     val vibration: VibrationController = AndroidVibrationController(appContext)
     val locationTracker = LocationTracker(AndroidLocationProvider(appContext), clock, appScope)
+    val serverStatus: ServerStatus = BackendServerStatus
     val planRouteFromVoice = PlanRouteFromVoice(
         VoiceApiClient,
         PlacesApiClient,
         RoutesApiClient,
-        origin = locationTracker::origin,
+        origin = locationTracker::awaitOrigin,
     )
     val manageSavedPlaces = ManageSavedPlaces(
         SavedPlacesApiClient,
         RoutesApiClient,
-        origin = locationTracker::origin,
+        origin = locationTracker::awaitOrigin,
     )
     val trackNavigation = TrackNavigation(
         fixes = locationTracker.fixes,
@@ -73,6 +82,22 @@ class AppContainer(context: Context) {
         clock = clock,
     )
     val navigationRunner = ForegroundNavigationRunner(appContext)
+
+    /**
+     * Despierta el servidor de Render apenas se abre la app, para que al pedir la ruta ya esté
+     * listo. Si falla no pasa nada: la petición real avisa y reintenta.
+     */
+    fun wakeUpServerInBackground() {
+        appScope.launch {
+            try {
+                HealthApiClient.ping()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("Red", "No se pudo despertar el servidor: ${e.message}")
+            }
+        }
+    }
 
     /** Registra el reloj en el backend sin bloquear el arranque; si falla, se reintenta al próximo. */
     fun registerDeviceInBackground() {

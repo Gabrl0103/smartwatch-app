@@ -14,7 +14,8 @@ object SpeechApiClient {
 
     suspend fun synthesize(text: String): ByteArray {
         val timeout = if (backendAwake) AWAKE_TIMEOUT_MS else TIMEOUT_MS
-        val response = backendPostJson("/speech", JSONObject().put("text", text), timeout)
+        // Sin reintento: una frase que llega tarde ya no sirve; la navegación sigue sin ella.
+        val response = backendPostJson("/speech", JSONObject().put("text", text), timeout, retry = false)
         if (response.code == HTTP_TOO_MANY_REQUESTS || response.errorField("code") == QUOTA_EXHAUSTED) {
             throw QuotaExhaustedError(response.errorField("message") ?: "Se agotó la cuota de voz de Gemini")
         }

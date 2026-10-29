@@ -70,3 +70,11 @@ def test_out_of_range_origin_returns_422(monkeypatch):
     body = {**BODY, "origin": {"lat": 120, "lng": 0}}
     response = TestClient(app).post("/routes", json=body)
     assert response.status_code == 422
+
+
+def test_destination_too_far_returns_422_with_message(monkeypatch):
+    use_routing(monkeypatch)
+    body = {**BODY, "destination": {"lat": 4.7110, "lng": -74.0721}}
+    response = TestClient(app).post("/routes", json=body)
+    assert response.status_code == 422
+    assert response.json()["error"]["message"] == "Estás muy lejos del destino"

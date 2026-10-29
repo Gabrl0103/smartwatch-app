@@ -58,3 +58,18 @@ def test_invalid_coordinates_do_not_call_provider():
 def test_provider_errors_propagate():
     with pytest.raises(NotFoundError):
         create_route(FakeRouting(NotFoundError("sin ruta")), ORIGIN, DESTINATION)
+
+
+def test_destination_more_than_50_km_away_is_rejected_without_calling_provider():
+    routing = FakeRouting()
+    bogota = Coordinates(4.7110, -74.0721)
+    with pytest.raises(ValidationError, match="Estás muy lejos del destino"):
+        create_route(routing, ORIGIN, bogota)
+    assert routing.calls == []
+
+
+def test_destination_just_under_50_km_is_allowed():
+    # 0,44° de latitud son unos 48,9 km.
+    near_limit = Coordinates(ORIGIN.lat + 0.44, ORIGIN.lng)
+    route = create_route(FakeRouting(), ORIGIN, near_limit)
+    assert route.distance_m == 150

@@ -4,6 +4,7 @@ import com.rumbo.watchapp.application.location.LocationTracker
 import com.rumbo.watchapp.application.usecase.ManageSavedPlaces
 import com.rumbo.watchapp.application.usecase.PlanRouteFromVoice
 import com.rumbo.watchapp.application.usecase.TrackingState
+import com.rumbo.watchapp.domain.error.SERVER_WAKING_MESSAGE
 import com.rumbo.watchapp.domain.model.Coordinates
 import com.rumbo.watchapp.domain.model.LocationFix
 import com.rumbo.watchapp.domain.model.Place
@@ -25,24 +26,28 @@ import com.rumbo.watchapp.domain.port.VoiceRepository
 import com.rumbo.watchapp.domain.port.VoiceSettings
 import com.rumbo.watchapp.domain.vibration.VibrationPattern
 import com.rumbo.watchapp.domain.vibration.VibrationPatterns
+import com.rumbo.watchapp.testing.BASE
 import com.rumbo.watchapp.testing.lRoute
 import java.io.File
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
-/** Gesto de volver, "Repetir" y "Vibraciones": qué pantalla queda y qué se detiene. */
+/** Gesto de volver, "Repetir", "Vibraciones", permisos y esperas: qué pantalla queda y qué se dice. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RoutePlanningViewModelTest {
 
@@ -82,8 +87,11 @@ class RoutePlanningViewModelTest {
         override suspend fun create(origin: Coordinates, destination: Place) = route
     }
 
-    private class FakeSavedPlaces(private val places: List<SavedPlace>) : SavedPlacesRepository {
-        override suspend fun list() = places
+    private class FakeSavedPlaces(
+        private val places: List<SavedPlace>,
+        private val loaded: CompletableDeferred<Unit> = CompletableDeferred(Unit),
+    ) : SavedPlacesRepository {
+        override suspend fun list() = places.also { loaded.await() }
 
         override suspend fun add(name: String, lat: Double, lng: Double) = places.first()
 
@@ -115,16 +123,27 @@ class RoutePlanningViewModelTest {
         }
     }
 
-    private class SilentSpeech : SpeechOutput {
+    private class FakeSpeech : SpeechOutput {
+        val spoken = mutableListOf<String>()
         override val status = MutableStateFlow(SpeechStatus())
 
-        override fun speak(text: String, priority: SpeechPriority) = Unit
+        override fun speak(text: String, priority: SpeechPriority) {
+            spoken += text
+        }
 
         override fun stop() = Unit
     }
 
-    private object NoGps : LocationProvider {
-        override fun locations() = emptyFlow<LocationFix>()
+    /** GPS que da una lectura buena en cuanto se enciende. */
+    private object GoodGps : LocationProvider {
+        override fun locations() = flowOf(LocationFix(BASE.lat, BASE.lng, accuracyM = 5.0, timeMs = 0))
+    }
+
+    /** GPS que no da nada hasta que el test emite. */
+    private class SlowGps : LocationProvider {
+        val fixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 4)
+
+        override fun locations() = fixes
     }
 
     private object VoiceOn : VoiceSettings {
@@ -137,26 +156,37 @@ class RoutePlanningViewModelTest {
     private val voice = FakeVoice()
     private val runner = FakeRunner()
     private val vibration = FakeVibration()
+    private val speech = FakeSpeech()
     private val navigation = MutableStateFlow(TrackingState())
+    private val serverWaking = MutableStateFlow(false)
     private var repeats = 0
     private lateinit var viewModel: RoutePlanningViewModel
 
-    @Before
-    fun setUp() {
-        Dispatchers.setMain(dispatcher)
+    private fun build(
+        gps: LocationProvider = GoodGps,
+        savedPlaces: SavedPlacesRepository = FakeSavedPlaces(listOf(place)),
+    ): RoutePlanningViewModel {
         val routes = FakeRoutes(route)
-        viewModel = RoutePlanningViewModel(
+        val tracker = LocationTracker(gps, { 0L }, CoroutineScope(dispatcher))
+        return RoutePlanningViewModel(
             recorder,
-            PlanRouteFromVoice(voice, NoPlaces, routes),
-            ManageSavedPlaces(FakeSavedPlaces(listOf(place)), routes),
-            LocationTracker(NoGps, { 0L }, CoroutineScope(dispatcher)),
+            PlanRouteFromVoice(voice, NoPlaces, routes, tracker::awaitOrigin),
+            ManageSavedPlaces(savedPlaces, routes, tracker::awaitOrigin),
+            tracker,
             runner,
             navigation,
             { repeats++ },
             vibration,
-            SilentSpeech(),
+            speech,
             VoiceOn,
+            serverWaking,
         )
+    }
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(dispatcher)
+        viewModel = build()
     }
 
     @After
@@ -277,5 +307,102 @@ class RoutePlanningViewModelTest {
         assertEquals(listOf(VibrationPatterns.LEFT), vibration.played)
         assertEquals(1, vibration.stops)
         assertEquals(PlanState.Start, viewModel.state.value)
+    }
+
+    @Test
+    fun deniedMicrophoneExplainsWhyAndBackReturnsToStart() {
+        viewModel.permissionDenied(Permission.MICROPHONE)
+
+        assertEquals(PlanState.PermissionNeeded(Permission.MICROPHONE), viewModel.state.value)
+        assertEquals("Necesito el micrófono para escucharte", speech.spoken.last())
+
+        viewModel.back()
+        assertEquals(PlanState.Start, viewModel.state.value)
+    }
+
+    @Test
+    fun deniedLocationSaysItNeedsTheLocationToGuide() {
+        viewModel.openSavedPlaces()
+
+        viewModel.permissionDenied(Permission.LOCATION)
+
+        assertEquals(PlanState.PermissionNeeded(Permission.LOCATION), viewModel.state.value)
+        assertEquals("Necesito tu ubicación para guiarte", speech.spoken.last())
+    }
+
+    @Test
+    fun grantedInSettingsWithoutRouteGoesBackToStart() {
+        viewModel.permissionDenied(Permission.MICROPHONE)
+
+        viewModel.permissionGranted()
+
+        assertEquals(PlanState.Start, viewModel.state.value)
+        assertFalse(runner.running)
+    }
+
+    @Test
+    fun deniedNotificationsKeepsTheRouteAndCanGoWithoutThem() {
+        confirmSavedPlace()
+
+        viewModel.permissionDenied(Permission.NOTIFICATIONS)
+        assertEquals(PlanState.PermissionNeeded(Permission.NOTIFICATIONS, route), viewModel.state.value)
+        assertFalse(runner.running)
+
+        viewModel.goWithoutNotification()
+        assertEquals(PlanState.OnRoute(route), viewModel.state.value)
+        assertTrue(runner.running)
+    }
+
+    @Test
+    fun notificationsGrantedInSettingsStartTheWaitingRoute() {
+        confirmSavedPlace()
+        viewModel.permissionDenied(Permission.NOTIFICATIONS)
+
+        viewModel.permissionGranted()
+
+        assertEquals(PlanState.OnRoute(route), viewModel.state.value)
+        assertTrue(runner.running)
+    }
+
+    @Test
+    fun withoutGpsFixWaitsShowingAndSayingSearchingSignal() {
+        val gps = SlowGps()
+        viewModel = build(gps = gps)
+        viewModel.openSavedPlaces()
+
+        viewModel.chooseSavedPlace(place)
+
+        assertEquals(PlanState.Processing, viewModel.state.value)
+        assertEquals(GPS_SEARCHING_MESSAGE, viewModel.waitMessage.value)
+        assertEquals(GPS_SEARCHING_MESSAGE, speech.spoken.last())
+
+        gps.fixes.tryEmit(LocationFix(BASE.lat, BASE.lng, accuracyM = 5.0, timeMs = 0))
+
+        assertTrue(viewModel.state.value is PlanState.Confirming)
+        assertNull(viewModel.waitMessage.value)
+    }
+
+    @Test
+    fun wakingServerShowsAndSaysWhyItTakesLong() {
+        val loaded = CompletableDeferred<Unit>()
+        viewModel = build(savedPlaces = FakeSavedPlaces(listOf(place), loaded))
+        viewModel.openSavedPlaces()
+        assertEquals(PlanState.LoadingPlaces, viewModel.state.value)
+
+        serverWaking.value = true
+        assertEquals(SERVER_WAKING_MESSAGE, viewModel.waitMessage.value)
+        assertEquals(SERVER_WAKING_MESSAGE, speech.spoken.last())
+
+        serverWaking.value = false
+        loaded.complete(Unit)
+        assertEquals(PlanState.SavedPlaces(listOf(place)), viewModel.state.value)
+    }
+
+    @Test
+    fun wakingServerIsNotSpokenOutsideAWait() {
+        serverWaking.value = true
+
+        assertEquals(PlanState.Start, viewModel.state.value)
+        assertTrue(speech.spoken.isEmpty())
     }
 }

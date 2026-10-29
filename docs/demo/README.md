@@ -14,13 +14,16 @@ Parque Bolívar (1.2056, -77.2703): unos 1 970 m, un punto cada ~5 m a 1,4 m/s (
 
 1. En la barra lateral del emulador abre **⋯ (Extended controls) → Location → Routes**.
 2. Pulsa **Import GPX/KML** y elige uno de los archivos de esta carpeta.
-3. En la app, toca el micrófono y di "llévame al Parque Bolívar" (acepta micrófono, ubicación
+3. Pon el reloj en el inicio del recorrido **antes de pedir la ruta**: la app ya no inventa el
+   origen y, sin posición, se queda en "Buscando señal GPS" (40 s y luego avisa). En
+   **Location → Single points** escribe `1.2135070, -77.2813010` y pulsa **Set location**, o
+   desde la terminal: `adb emu geo fix -77.2813010 1.2135070` (primero la longitud).
+4. En la app, toca el micrófono y di "llévame al Parque Bolívar" (acepta micrófono, ubicación
    y notificaciones). Confirma con **Ir**.
-4. Vuelve a Extended controls y pulsa **Play route**. Puedes subir la velocidad de reproducción
+5. Vuelve a Extended controls y pulsa **Play route**. Puedes subir la velocidad de reproducción
    para no esperar 23 min; a velocidades altas los avisos llegan más seguidos.
 
-El GPX empieza en el mismo punto que el origen por defecto de la app (centro de Pasto), así que
-la ruta calculada coincide aunque el emulador aún no tenga ubicación.
+El GPX empieza junto al centro de Pasto, así que la ruta calculada coincide con el recorrido.
 
 ## Ver las vibraciones en Logcat
 
@@ -36,6 +39,9 @@ O desde la terminal:
 ```
 adb logcat -s Vibracion
 ```
+
+Las peticiones al backend (y si el servidor está despertando o no hay internet) salen con la
+etiqueta `Red`: `adb logcat -s Red`.
 
 La pantalla "En ruta" también muestra el último patrón (barras y texto, p. ej. "2 pulsos cortos").
 

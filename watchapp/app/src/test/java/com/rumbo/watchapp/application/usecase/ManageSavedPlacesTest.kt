@@ -1,15 +1,16 @@
 package com.rumbo.watchapp.application.usecase
 
 import com.rumbo.watchapp.domain.error.AppError
+import com.rumbo.watchapp.domain.error.TooFarError
 import com.rumbo.watchapp.domain.model.Coordinates
 import com.rumbo.watchapp.domain.model.Maneuver
 import com.rumbo.watchapp.domain.model.Place
 import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.domain.model.RouteStep
 import com.rumbo.watchapp.domain.model.SavedPlace
-import com.rumbo.watchapp.domain.navigation.ORIGIN
 import com.rumbo.watchapp.domain.port.RoutesRepository
 import com.rumbo.watchapp.domain.port.SavedPlacesRepository
+import com.rumbo.watchapp.testing.BASE
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -59,7 +60,7 @@ class ManageSavedPlacesTest {
 
     @Test
     fun listsSavedPlaces() = runBlocking {
-        val useCase = ManageSavedPlaces(FakeSavedPlaces(listOf(home, park)), FakeRoutes(route))
+        val useCase = ManageSavedPlaces(FakeSavedPlaces(listOf(home, park)), FakeRoutes(route)) { BASE }
 
         assertEquals(listOf(home, park), useCase.list())
     }
@@ -78,18 +79,20 @@ class ManageSavedPlacesTest {
     }
 
     @Test
-    fun plansRouteFromPastoCenterByDefault() = runBlocking {
+    fun savedPlaceMoreThanFiftyKilometersAwayFailsWithoutAskingForRoute() {
         val routes = FakeRoutes(route)
+        val bogota = SavedPlace(3, "Casa en Bogotá", 4.7110, -74.0721)
+        val useCase = ManageSavedPlaces(FakeSavedPlaces(), routes) { BASE }
 
-        ManageSavedPlaces(FakeSavedPlaces(), routes).planRoute(home)
+        assertThrows(TooFarError::class.java) { runBlocking { useCase.planRoute(bogota) } }
 
-        assertEquals(ORIGIN, routes.origin)
+        assertNull(routes.origin)
     }
 
     @Test
     fun savesDestinationWithItsNameAtTheEndOfTheRoute() = runBlocking {
         val repository = FakeSavedPlaces()
-        val useCase = ManageSavedPlaces(repository, FakeRoutes(route))
+        val useCase = ManageSavedPlaces(repository, FakeRoutes(route)) { BASE }
 
         val saved = useCase.saveDestination(route)
 
@@ -100,7 +103,7 @@ class ManageSavedPlacesTest {
     @Test
     fun savingWithoutPolylineUsesLastStep() = runBlocking {
         val repository = FakeSavedPlaces()
-        val useCase = ManageSavedPlaces(repository, FakeRoutes(route))
+        val useCase = ManageSavedPlaces(repository, FakeRoutes(route)) { BASE }
 
         val saved = useCase.saveDestination(route.copy(polyline = emptyList()))
 
@@ -111,7 +114,7 @@ class ManageSavedPlacesTest {
     @Test
     fun saveErrorsPropagateWithTheirMessage() {
         val repository = FakeSavedPlaces().apply { error = AppError("No pude conectar con el servidor") }
-        val useCase = ManageSavedPlaces(repository, FakeRoutes(route))
+        val useCase = ManageSavedPlaces(repository, FakeRoutes(route)) { BASE }
 
         val error = assertThrows(AppError::class.java) { runBlocking { useCase.saveDestination(route) } }
 
@@ -122,7 +125,7 @@ class ManageSavedPlacesTest {
     @Test
     fun deletesPlaceById() = runBlocking {
         val repository = FakeSavedPlaces(listOf(home, park))
-        val useCase = ManageSavedPlaces(repository, FakeRoutes(route))
+        val useCase = ManageSavedPlaces(repository, FakeRoutes(route)) { BASE }
 
         useCase.delete(home)
 

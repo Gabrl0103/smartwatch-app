@@ -29,7 +29,7 @@ fun StartScreen(
 ) {
     RumboScreen(paneTitle = "Inicio") {
         StateBadge("Listo para navegar", Primary)
-        // Sin permiso de ubicación la ruta sale del centro de Pasto.
+        // Sin permiso de ubicación: se pide al tocar el micrófono o un lugar guardado.
         if (!gpsAvailable) StateBadge("Sin GPS", StatusNoSignal)
         Text(
             text = "¿A dónde vamos?",

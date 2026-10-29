@@ -8,6 +8,7 @@ class RumboApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        container.wakeUpServerInBackground()
         container.registerDeviceInBackground()
     }
 }
