@@ -176,6 +176,7 @@ private fun Screen(
             onCancel = viewModel::cancelDelete,
         )
         is PlanState.Confirming -> ConfirmScreen(
+            speaking = viewModel.speaking.collectAsState().value,
             route = state.route,
             save = state.save,
             gpsAvailable = gpsAvailable,

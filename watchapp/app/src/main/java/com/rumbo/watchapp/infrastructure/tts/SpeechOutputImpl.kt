@@ -13,12 +13,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** Dice una frase y vuelve cuando terminó; si se cancela la corrutina, debe callarse. */
+/**
+ * Dice una frase y vuelve cuando terminó; si se cancela la corrutina, debe callarse. Llama a
+ * [onStart] cuando el audio empieza a sonar de verdad (no al pedirlo ni al descargarlo).
+ */
 interface SpeechPlayer {
-    suspend fun play(text: String)
+    suspend fun play(text: String, onStart: () -> Unit)
 }
 
 enum class LocalVoiceState { STARTING, READY, MISSING_DATA, UNAVAILABLE }
@@ -51,7 +55,13 @@ class SpeechOutputImpl(
     private val _status = MutableStateFlow(SpeechStatus())
     override val status: StateFlow<SpeechStatus> = _status.asStateFlow()
 
+    private val _speaking = MutableStateFlow(false)
+    override val speaking: StateFlow<Boolean> = _speaking.asStateFlow()
+
     private var current: Job? = null
+
+    // La frase cuyo audio está sonando: solo ella apaga [speaking] al terminar o cancelarse.
+    private var speakingJob: Job? = null
     private var currentPriority = SpeechPriority.NORMAL
 
     @Volatile
@@ -69,12 +79,15 @@ class SpeechOutputImpl(
         current?.cancel()
         currentPriority = priority
         current = scope.launch {
+            val job = coroutineContext.job
             try {
-                say(text)
+                say(text) { markSpeaking(job) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 onError(e)
+            } finally {
+                stopSpeaking(job)
             }
         }
     }
@@ -85,11 +98,24 @@ class SpeechOutputImpl(
         current = null
     }
 
-    private suspend fun say(text: String) {
+    @Synchronized
+    private fun markSpeaking(job: Job) {
+        speakingJob = job
+        _speaking.value = true
+    }
+
+    @Synchronized
+    private fun stopSpeaking(job: Job) {
+        if (speakingJob !== job) return
+        speakingJob = null
+        _speaking.value = false
+    }
+
+    private suspend fun say(text: String, onStart: () -> Unit) {
         refreshStatus()
         if (localReady()) {
             try {
-                local.play(text)
+                local.play(text, onStart)
                 return
             } catch (e: CancellationException) {
                 throw e
@@ -100,7 +126,7 @@ class SpeechOutputImpl(
         }
         if (remotePaused()) return
         try {
-            remote.play(text)
+            remote.play(text, onStart)
         } catch (e: QuotaExhaustedError) {
             remotePausedUntilMs = clock() + QUOTA_PAUSE_MS
             refreshStatus()

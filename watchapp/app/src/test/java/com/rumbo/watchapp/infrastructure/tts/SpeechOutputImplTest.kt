@@ -13,22 +13,29 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SpeechOutputImplTest {
 
-    /** Reproductor falso: cada frase "suena" hasta que el test la termina con [finish]. */
+    /**
+     * Reproductor falso: cada frase "suena" hasta que el test la termina con [finish]. Con
+     * [holdAudio] el audio no empieza hasta [startAudio] (como Gemini mientras descarga).
+     */
     private open class FakePlayer : SpeechPlayer {
         val started = mutableListOf<String>()
         val cancelled = mutableListOf<String>()
         val finished = mutableListOf<String>()
         var error: Exception? = null
+        var holdAudio = false
         private val playing = mutableMapOf<String, CompletableDeferred<Unit>>()
+        private val audioStarts = mutableMapOf<String, () -> Unit>()
 
-        override suspend fun play(text: String) {
+        override suspend fun play(text: String, onStart: () -> Unit) {
             started += text
             error?.let { throw it }
+            if (holdAudio) audioStarts[text] = onStart else onStart()
             val done = CompletableDeferred<Unit>().also { playing[text] = it }
             try {
                 done.await()
@@ -41,6 +48,10 @@ class SpeechOutputImplTest {
 
         fun finish(text: String) {
             playing.getValue(text).complete(Unit)
+        }
+
+        fun startAudio(text: String) {
+            audioStarts.getValue(text)()
         }
     }
 
@@ -87,6 +98,60 @@ class SpeechOutputImplTest {
     }
 
     private suspend fun settle() = repeat(5) { yield() }
+
+    @Test
+    fun speakingWhileTheAudioPlays() = speechTest {
+        assertFalse(speech.speaking.value)
+        speech.speak("Parque Bolívar, a un kilómetro y medio. ¿Vamos?", SpeechPriority.NORMAL)
+        settle()
+        assertTrue(speech.speaking.value)
+
+        remote.finish("Parque Bolívar, a un kilómetro y medio. ¿Vamos?")
+        settle()
+        assertFalse(speech.speaking.value)
+    }
+
+    @Test
+    fun notSpeakingWhileGeminiIsStillDownloadingTheAudio() = speechTest {
+        remote.holdAudio = true
+        speech.speak("Uno", SpeechPriority.NORMAL)
+        settle()
+        assertFalse(speech.speaking.value)
+
+        remote.startAudio("Uno")
+        assertTrue(speech.speaking.value)
+    }
+
+    @Test
+    fun stopOrANewPhraseEndsTheSpeakingOfTheOldOne() = speechTest {
+        speech.speak("Uno", SpeechPriority.NORMAL)
+        settle()
+        speech.stop()
+        settle()
+        assertFalse(speech.speaking.value)
+
+        speech.speak("Dos", SpeechPriority.NORMAL)
+        settle()
+        assertTrue(speech.speaking.value)
+        // "Tres" corta a "Dos" pero su audio aún no empieza: mientras tanto no se habla.
+        remote.holdAudio = true
+        speech.speak("Tres", SpeechPriority.NORMAL)
+        settle()
+        assertFalse(speech.speaking.value)
+        remote.startAudio("Tres")
+        assertTrue(speech.speaking.value)
+    }
+
+    @Test
+    fun deviceVoiceAlsoMarksSpeaking() = speechTest(local = LocalVoiceState.READY) {
+        speech.speak("Iniciando ruta.", SpeechPriority.NORMAL)
+        settle()
+        assertEquals(listOf("Iniciando ruta."), local.started)
+        assertTrue(speech.speaking.value)
+        local.finish("Iniciando ruta.")
+        settle()
+        assertFalse(speech.speaking.value)
+    }
 
     @Test
     fun newPhraseCancelsThePreviousOne() = speechTest {

@@ -53,6 +53,7 @@ class TrackNavigationTest {
         val spoken = mutableListOf<Pair<String, SpeechPriority>>()
         var stops = 0
         override val status = MutableStateFlow(SpeechStatus())
+        override val speaking = MutableStateFlow(false)
 
         override fun speak(text: String, priority: SpeechPriority) {
             error?.let { throw it }

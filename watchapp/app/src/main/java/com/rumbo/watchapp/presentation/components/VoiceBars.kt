@@ -1,6 +1,7 @@
 package com.rumbo.watchapp.presentation.components
 
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -100,4 +101,22 @@ fun VoiceBars(
             )
         }
     }
+}
+
+// Movimiento de las barras mientras la app habla: sube y baja sin depender de un nivel real.
+private const val SPEAKING_PERIOD_MS = 700
+
+/**
+ * Las mismas barras con un movimiento suave que no necesita el nivel real: muestran que la app
+ * está hablando (voz del reloj o Gemini). Decorativas, como [VoiceBars].
+ */
+@Composable
+fun SpeakingBars(color: Color, modifier: Modifier = Modifier, maxHeight: Dp = 24.dp) {
+    val breath = rememberInfiniteTransition(label = "habla").animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.9f,
+        animationSpec = infiniteRepeatable(tween(SPEAKING_PERIOD_MS), RepeatMode.Reverse),
+        label = "nivel",
+    )
+    VoiceBars(level = breath.value, color = color, modifier = modifier, minHeight = 6.dp, maxHeight = maxHeight)
 }

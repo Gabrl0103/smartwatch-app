@@ -78,6 +78,9 @@ class RoutePlanningViewModel(
     /** Qué voz se está usando, para mostrarlo en Inicio. */
     val speechStatus: StateFlow<SpeechStatus> = speech.status
 
+    /** Si la app está hablando ahora, para animar las barras en Confirmar. */
+    val speaking: StateFlow<Boolean> = speech.speaking
+
     /** Si el motor controla la intensidad; elige la versión de los patrones que se enseña y vibra. */
     val supportsAmplitude: Boolean = vibration.supportsAmplitude
 

@@ -1,10 +1,14 @@
 package com.rumbo.watchapp.presentation.screens
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -19,6 +23,7 @@ import androidx.wear.compose.material3.Text
 import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.presentation.components.PillButton
 import com.rumbo.watchapp.presentation.components.PillStyle
+import com.rumbo.watchapp.presentation.components.SpeakingBars
 import com.rumbo.watchapp.presentation.components.StateBadge
 import com.rumbo.watchapp.presentation.format.describeDistance
 import com.rumbo.watchapp.presentation.format.formatDistance
@@ -37,9 +42,17 @@ fun ConfirmScreen(
     onGo: () -> Unit,
     onChange: () -> Unit,
     onSave: () -> Unit,
+    speaking: Boolean = false,
 ) {
     RumboScreen(paneTitle = "Confirmar destino") {
-        StateBadge("Confirmar destino", Primary)
+        // Mientras dice el destino en voz alta, las barras ocupan el lugar del badge (con un
+        // fundido): así nada se mueve justo cuando la persona va a tocar "Ir". TalkBack sigue
+        // leyendo el badge.
+        val talking by animateFloatAsState(if (speaking) 1f else 0f, label = "habla")
+        Box(contentAlignment = Alignment.Center) {
+            StateBadge("Confirmar destino", Primary, modifier = Modifier.graphicsLayer { alpha = 1f - talking })
+            if (talking > 0f) SpeakingBars(Primary, modifier = Modifier.graphicsLayer { alpha = talking })
+        }
         if (!gpsAvailable) StateBadge("Sin GPS", StatusNoSignal)
         Text(
             text = route.destinationName,

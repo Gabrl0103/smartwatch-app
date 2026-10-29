@@ -38,13 +38,15 @@ class AndroidTextToSpeech(context: Context) : LocalSpeechPlayer {
         engine = TextToSpeech(context.applicationContext, ::onInit)
     }
 
-    override suspend fun play(text: String) {
+    override suspend fun play(text: String, onStart: () -> Unit) {
         val tts = engine?.takeIf { _state.value == LocalVoiceState.READY }
             ?: throw IllegalStateException("La voz del reloj no está lista")
         suspendCancellableCoroutine { continuation ->
             val utteranceId = UUID.randomUUID().toString()
             tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(id: String?) = Unit
+                override fun onStart(id: String?) {
+                    if (id == utteranceId) onStart()
+                }
 
                 override fun onDone(id: String?) {
                     if (id == utteranceId && continuation.isActive) continuation.resume(Unit)

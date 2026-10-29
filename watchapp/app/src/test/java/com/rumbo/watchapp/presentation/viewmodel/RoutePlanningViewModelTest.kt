@@ -154,6 +154,7 @@ class RoutePlanningViewModelTest {
     private class FakeSpeech : SpeechOutput {
         val spoken = mutableListOf<String>()
         override val status = MutableStateFlow(SpeechStatus())
+        override val speaking = MutableStateFlow(false)
 
         override fun speak(text: String, priority: SpeechPriority) {
             spoken += text

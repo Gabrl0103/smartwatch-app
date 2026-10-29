@@ -212,6 +212,9 @@ class ScreenshotsTest {
             Navigation(tracking(NavigationStatus.TURN_APPROACHING, instruction = "Gire a la izquierda para permanecer en Carrera 14."))
         },
         Shot("26_escuchando_abajo", scrolls = 3) { ListeningScreen(level = 0.75f, onCancel = {}) },
+        Shot("27_confirmar_hablando") {
+            ConfirmScreen(ROUTE, SaveStatus.IDLE, gpsAvailable = true, onGo = {}, onChange = {}, onSave = {}, speaking = true)
+        },
         Shot("24_demostracion_vibraciones") {
             Vibrations(demo = DemoStep(VibrationCue.LEFT, 3, VibrationCue.entries.size))
         },

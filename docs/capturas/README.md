@@ -11,6 +11,7 @@ misma pantalla desplazada hasta el final.
 | `03_escuchando.png`, `26_escuchando_abajo.png` | Escuchando (diseño A2): anillo, badge relleno, barras con el nivel de la voz, "Te escucho"; abajo "Di a dónde quieres ir" y Cancelar |
 | `04_procesando.png` | Procesando (el indicador gira en la app; en la captura queda quieto) |
 | `05_confirmar.png`, `06_confirmar_abajo.png` | Confirmar destino: Ir / Cambiar / Guardar |
+| `27_confirmar_hablando.png` | Confirmar mientras la app dice el destino: el badge se funde en barras que se mueven |
 | `07_error.png` | Error: Reintentar / Inicio |
 | `08_en_ruta.png`, `09_en_ruta_abajo.png` | En ruta, con distancias, vibración, Repetir y Terminar |
 | `10_giro_proximo.png` | Giro próximo |

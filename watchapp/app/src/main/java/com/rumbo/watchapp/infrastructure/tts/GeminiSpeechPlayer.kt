@@ -21,10 +21,10 @@ class GeminiSpeechPlayer(context: Context) : SpeechPlayer {
     private val cacheDir = File(context.applicationContext.cacheDir, "speech")
     private var staleFilesRemoved = false
 
-    override suspend fun play(text: String) {
+    override suspend fun play(text: String, onStart: () -> Unit) {
         val file = audioFile(text)
         try {
-            playFile(file)
+            playFile(file, onStart)
         } catch (e: IOException) {
             // Un WAV dañado no debe quedarse en el cache.
             file.delete()
@@ -53,7 +53,7 @@ class GeminiSpeechPlayer(context: Context) : SpeechPlayer {
         cacheDir.listFiles()?.filter { isStaleSpeechFile(it.name) }?.forEach { it.delete() }
     }
 
-    private suspend fun playFile(file: File) = suspendCancellableCoroutine { continuation ->
+    private suspend fun playFile(file: File, onStart: () -> Unit) = suspendCancellableCoroutine { continuation ->
         val player = MediaPlayer()
         player.setAudioAttributes(
             AudioAttributes.Builder()
@@ -78,6 +78,7 @@ class GeminiSpeechPlayer(context: Context) : SpeechPlayer {
             player.setDataSource(file.path)
             player.prepare()
             player.start()
+            onStart()
         } catch (e: Exception) {
             player.release()
             if (continuation.isActive) continuation.resumeWithException(e)

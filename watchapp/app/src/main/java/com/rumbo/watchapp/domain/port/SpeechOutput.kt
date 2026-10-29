@@ -21,6 +21,9 @@ data class SpeechStatus(
 interface SpeechOutput {
     val status: StateFlow<SpeechStatus>
 
+    /** true mientras suena una frase (desde que empieza el audio, no mientras se descarga). */
+    val speaking: StateFlow<Boolean>
+
     fun speak(text: String, priority: SpeechPriority = SpeechPriority.NORMAL)
 
     fun stop()
