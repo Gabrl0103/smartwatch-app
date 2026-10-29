@@ -11,6 +11,10 @@ private val RumboColors = ColorScheme(
     primaryContainer = Surface,
     onPrimary = OnColor,
     onPrimaryContainer = TextPrimary,
+    // Secundario: el asistente; lo que lleva texto usa el tono del chip para el contraste.
+    secondary = AssistantChip,
+    secondaryDim = Assistant,
+    onSecondary = OnColor,
     tertiary = Accent,
     tertiaryDim = Accent,
     onTertiary = OnColor,

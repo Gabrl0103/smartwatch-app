@@ -11,9 +11,14 @@ val Primary = Color(0xFF4F8EFF)
 val Accent = Color(0xFFFFC857)
 val Border = Color(0xFF2A2F3A)
 
-// Texto sobre botones y fondos de color claro (primario, acento y estados): oscuro, porque el
-// blanco sobre #4F8EFF da 3.2:1 y este da 6.1:1. Sobre los demás colores pasa de 6:1.
+// Texto sobre botones y fondos de color claro (primario, acento, estados y chip del asistente):
+// oscuro, porque el blanco sobre #4F8EFF da 2.9:1 y este da 6.1:1. Sobre los demás pasa de 6:1.
 val OnColor = Background
+
+// Asistente de voz. #7C5CFC da 4.4:1 con texto oscuro y 4.0:1 sobre la superficie, menos de
+// 4.5:1: se usa solo en rellenos y bordes; el texto y los chips van en #9B82FF (6.5:1).
+val Assistant = Color(0xFF7C5CFC)
+val AssistantChip = Color(0xFF9B82FF)
 
 // Estados de la navegación
 val StatusOnRoute = Primary
