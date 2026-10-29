@@ -6,6 +6,8 @@ data class NavigationThresholds(
     val maxAccuracyM: Double = 25.0,
     val maxFixAgeMs: Long = 5_000,
     val medianWindow: Int = 3,
+    // Más rápido que esto no camina nadie: una velocidad así es un salto del GPS y se descarta.
+    val maxSpeedMps: Double = 4.0,
     // Giros
     val turnApproachMinM: Double = 30.0,
     val turnApproachLookaheadS: Double = 10.0,

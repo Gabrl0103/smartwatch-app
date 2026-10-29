@@ -15,7 +15,7 @@ Unos 23–24 minutos cada uno.
 |---|---|---|
 | `ruta_parque_narino_a_parque_bolivar.gpx` | 11 | Recorrido normal: "En ruta", "Giro próximo", "Gira ahora" y "Llegaste", sin falsos desvíos ni giros pese al ruido. |
 | `ruta_con_desvio.gpx` | 12 | A mitad de ruta se aleja 35 m durante ~40 m y vuelve: "Fuera de ruta" y recálculo. |
-| `ruta_sin_senal.gpx` | 13 | A mitad de ruta hay un hueco de 15 s sin puntos: "Sin señal GPS" y recuperación. |
+| `ruta_sin_senal.gpx` | 13 | A mitad de ruta hay un hueco de 15 s sin puntos: "Sin señal GPS" y recuperación en los tests. En el emulador no basta (ver abajo). |
 | `ruta_parque_narino_a_parque_bolivar.json` | — | La ruta del backend (pasos, calles y polilínea) con la que los tests recorren los GPX. |
 
 ## Cargar una ruta en el emulador
@@ -25,7 +25,9 @@ Unos 23–24 minutos cada uno.
 3. Pon el reloj en el inicio del recorrido **antes de pedir la ruta**: la app no inventa el
    origen y, sin posición, se queda en "Buscando señal GPS" (40 s y luego avisa). En
    **Location → Single points** escribe `1.214997, -77.278419` y pulsa **Set location**, o
-   desde la terminal: `adb emu geo fix -77.278419 1.214997` (primero la longitud).
+   desde la terminal: `adb emu geo fix -77.278419 1.214997` (primero la longitud). Para repetir
+   la demo, cierra y vuelve a abrir la app antes de poner la posición: con la app en Inicio el
+   GPS del emulador no se actualiza y la ruta sale desde donde terminó la anterior ("A 2 metros").
 4. En la app, toca el micrófono y di "llévame al Parque Bolívar" (acepta micrófono, ubicación
    y notificaciones). Confirma con **Ir**.
 5. Vuelve a Extended controls y pulsa **Play route**. Puedes subir la velocidad de reproducción
@@ -36,6 +38,20 @@ así que la ruta que pide la app coincide con el recorrido. El emulador ignora l
 cada punto (`<hdop>`); la usan los tests, que pasan cada lectura por el mismo filtro del reloj.
 Si el backend en Render aún no tiene la preferencia `less_maneuvers`, la ruta que pide la app es
 otra y el recorrido se ve "fuera de ruta": despliega el backend antes de la demo.
+
+## Probar "Sin señal" en el emulador
+
+El emulador sigue informando la última posición cuando el GPX no trae puntos, así que el hueco de
+`ruta_sin_senal.gpx` no corta la señal (en los tests sí). Para verlo, durante cualquier ruta
+apaga la ubicación unos 15 s y vuelve a encenderla:
+
+```
+adb shell cmd location set-location-enabled false
+adb shell cmd location set-location-enabled true
+```
+
+A los 10 s pasa a "Sin señal GPS" (gris, "Buscando señal GPS", 1 pulso muy largo cada 5 s) y, al
+encenderla, en unos 3 s vuelve a "En ruta" con "Señal recuperada.".
 
 ## Ver las vibraciones en Logcat
 

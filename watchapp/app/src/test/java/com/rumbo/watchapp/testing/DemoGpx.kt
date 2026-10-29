@@ -46,8 +46,15 @@ data class StatusRun(val status: NavigationStatus, val fromMs: Long, val toMs: L
     val durationMs: Long get() = toMs - fromMs + 1_000
 }
 
-/** Lo que pasó al recorrer un GPX: estados segundo a segundo y todos los eventos. */
-class Replay(val runs: List<StatusRun>, val events: List<NavigationEvent>) {
+/**
+ * Lo que pasó al recorrer un GPX: estados segundo a segundo, todos los eventos y a cuántos metros
+ * del giro se avisó cada "Giro próximo" (sin contar los que llegan junto con "Gira ahora").
+ */
+class Replay(
+    val runs: List<StatusRun>,
+    val events: List<NavigationEvent>,
+    val approachDistancesM: List<Double> = emptyList(),
+) {
     val statuses: List<NavigationStatus> get() = runs.map { it.status }
 
     fun count(event: NavigationEvent) = events.count { it == event }
@@ -69,11 +76,18 @@ fun replay(route: Route, track: List<GpxPoint>): Replay {
     val engine = NavigationEngine(route, startMs)
     val filter = LocationFilter()
     val events = mutableListOf<NavigationEvent>()
+    val approaches = mutableListOf<Double>()
     val runs = mutableListOf<StatusRun>()
     for (now in startMs..endMs step 1_000) {
         byTime[now]?.let { point ->
             val raw = LocationFix(point.lat, point.lng, point.accuracyM, now)
-            filter.accept(raw, now)?.let { events += engine.onLocation(it, now) }
+            filter.accept(raw, now)?.let { fix ->
+                val new = engine.onLocation(fix, now)
+                if (new.any { it is NavigationEvent.TurnApproaching } && new.none { it is NavigationEvent.TurnNow }) {
+                    engine.snapshot.distanceToNextStepM?.let { approaches += it }
+                }
+                events += new
+            }
         }
         events += engine.onTick(now)
         val status = engine.snapshot.status
@@ -84,5 +98,5 @@ fun replay(route: Route, track: List<GpxPoint>): Replay {
             runs += StatusRun(status, now, now)
         }
     }
-    return Replay(runs, events)
+    return Replay(runs, events, approaches)
 }

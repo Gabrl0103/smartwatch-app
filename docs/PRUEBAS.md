@@ -64,7 +64,7 @@ recorridos realistas (una lectura por segundo con ruido de GPS de σ ≈ 3 m, ve
 | # | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|
 | R1 | Iniciar ruta | Desde Confirmar tocar "Ir" | "En ruta" con el anillo, la maniobra siguiente, "En X m" y "Faltan X"; voz "Iniciando ruta. ..."; aparece la notificación "Rumbo: navegando"; Logcat `Nav: Estado - → ON_ROUTE` |
-| R2 | Giros | Cargar `ruta_parque_narino_a_parque_bolivar.gpx` y Play route | Antes de cada giro "Giro próximo" (amarillo, 2 pulsos muy cortos, "En treinta metros, gire...") y en el giro "Gira ahora" (izquierda: 2 pulsos medios; derecha: 1 pulso largo): cada giro vibra en esas dos etapas. Logcat `Estado ON_ROUTE → TURN_APPROACHING → MANEUVER` una vez por giro |
+| R2 | Giros | Cargar `ruta_parque_narino_a_parque_bolivar.gpx` y Play route | Antes de cada giro "Giro próximo" (amarillo, 2 pulsos muy cortos, "En treinta metros, gire...") y en el giro "Gira ahora" (izquierda: 2 pulsos medios; derecha: 1 pulso largo): cada giro vibra en esas dos etapas. "Giro próximo" llega a unos 30 m del giro, nunca a más de 40 m aunque el GPS dé un salto. Logcat `Estado ON_ROUTE → TURN_APPROACHING (paso n a ~30 m) → MANEUVER` una vez por giro |
 | R3 | Pantalla apagada | En ruta, apagar la pantalla (`adb shell input keyevent KEYCODE_SLEEP`) y seguir el GPX | Logcat sigue mostrando vibraciones ("Recto: 1 pulso suave cada 6 s", o "1 pulso corto" si el reloj no controla la intensidad) y cambios de estado; al encender la pantalla se ve el estado actual |
 | R4 | Pantalla encendida y atenuada | En ruta, no tocar nada 15 s | La pantalla no se apaga sola; baja a ~30 % de brillo. Al tocarla o en el siguiente giro vuelve al brillo normal |
 | R5 | Volver a la app | En ruta, salir con el botón de inicio del reloj y abrir Rumbo (o tocar la notificación) | Abre directo en "En ruta", con la ruta que seguía |
@@ -123,7 +123,7 @@ recorridos realistas (una lectura por segundo con ruido de GPS de σ ≈ 3 m, ve
 | D1 | Desvío con internet | Cargar `ruta_con_desvio.gpx`, Ir y Play route | A mitad de ruta: "Fuera de ruta" (naranja, ícono de advertencia, 3 pulsos largos), voz "Te saliste de la ruta. Recalculando." y "Recalculando ruta..."; a los 10 s Logcat `Recalculando ruta (intento 1 de 5)` y `Ruta recalculada`; la pantalla vuelve a "En ruta" con la ruta nueva |
 | D2 | Desvío sin internet | Igual que D1 con modo avión antes del desvío | Cada 10 s un intento que falla (`No se pudo recalcular (intento n de 5)`), 3 pulsos largos de "desviado" en cada uno, como mucho 5 intentos; se sigue con la ruta anterior y al volver a la calle pasa a "En ruta" / "Gira ahora" |
 | D3 | Sin parpadeo | Durante D1/D2 mirar el badge | El estado no salta entre "En ruta" y "Fuera de ruta" con el ruido del GPS: sale tras 3 lecturas a más de 25 m y vuelve a menos de 15 m |
-| D4 | Sin señal | Cargar `ruta_sin_senal.gpx` | A mitad de ruta "Sin señal GPS" (gris, ubicación tachada, 1 pulso muy largo cada 5 s, "Perdí la señal de GPS.") y al volver los puntos "Señal recuperada." y el estado anterior, sin "Fuera de ruta" |
+| D4 | Sin señal | En ruta con cualquier GPX, apagar la ubicación 15 s (`adb shell cmd location set-location-enabled false` y luego `true`). En el emulador el hueco de `ruta_sin_senal.gpx` no basta: el emulador repite la última posición | A los 10 s "Sin señal GPS" (gris, ubicación tachada, 1 pulso muy largo cada 5 s, "Perdí la señal de GPS.") y al volver los puntos "Señal recuperada." y el estado anterior, sin "Fuera de ruta" |
 
 ### Llegada
 

@@ -10,12 +10,15 @@ private const val MIN_MOVE_FOR_BEARING_M = 1.0
 
 /**
  * Descarta lecturas imprecisas o viejas y suaviza la posición con la mediana de las últimas
- * lecturas buenas. Si el proveedor no da velocidad o rumbo, los calcula entre lecturas seguidas.
+ * lecturas buenas. Si el proveedor no da velocidad o rumbo, los calcula entre las posiciones ya
+ * suavizadas, así un salto suelto del GPS no los altera. Una velocidad imposible a pie (más de
+ * [NavigationThresholds.maxSpeedMps]) se descarta: adelantaría cientos de metros el aviso de giro.
  */
 class LocationFilter(private val thresholds: NavigationThresholds = NavigationThresholds()) {
 
     private val recent = ArrayDeque<LocationFix>()
     private var previous: LocationFix? = null
+    private var previousSmoothed: LocationFix? = null
 
     /** Devuelve la lectura suavizada, o null si se descarta. */
     fun accept(fix: LocationFix, nowMs: Long): LocationFix? {
@@ -28,12 +31,13 @@ class LocationFilter(private val thresholds: NavigationThresholds = NavigationTh
         recent.addLast(fix)
         if (recent.size > thresholds.medianWindow) recent.removeFirst()
 
-        return fix.copy(
-            lat = median(recent.map { it.lat }),
-            lng = median(recent.map { it.lng }),
-            speedMps = fix.speedMps ?: prev?.let { speedBetween(it, fix) },
-            bearingDeg = fix.bearingDeg ?: prev?.let { bearingBetween(it, fix) },
-        )
+        val smoothed = fix.copy(lat = median(recent.map { it.lat }), lng = median(recent.map { it.lng }))
+        val last = previousSmoothed
+        val speed = fix.speedMps ?: last?.let { speedBetween(it, smoothed) }
+        return smoothed.copy(
+            speedMps = speed?.takeIf { it <= thresholds.maxSpeedMps },
+            bearingDeg = fix.bearingDeg ?: last?.let { bearingBetween(it, smoothed) },
+        ).also { previousSmoothed = it }
     }
 
     private fun speedBetween(a: LocationFix, b: LocationFix): Double? {
