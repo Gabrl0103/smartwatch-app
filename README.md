@@ -26,5 +26,13 @@ cd backend
 pytest
 ```
 
+## Tests del reloj
+```
+cd watchapp
+gradlew testDebugUnitTest
+```
+Incluyen la máquina de estados recorriendo los GPX de `docs/demo`. Pruebas manuales para la demo:
+[docs/PRUEBAS.md](docs/PRUEBAS.md).
+
 ## Variables de entorno
 Copiar `backend/.env.example` a `backend/.env` y rellenar (nunca versionar `.env`).

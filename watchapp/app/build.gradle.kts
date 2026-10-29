@@ -33,6 +33,14 @@ android {
     buildFeatures {
         compose = true
     }
+    // Los tests de la máquina de estados recorren los GPX de demostración de docs/demo.
+    val demoDir = rootProject.file("../docs/demo")
+    testOptions {
+        unitTests.all {
+            it.systemProperty("rumbo.demoDir", demoDir.absolutePath)
+            it.inputs.dir(demoDir)
+        }
+    }
 }
 
 dependencies {
