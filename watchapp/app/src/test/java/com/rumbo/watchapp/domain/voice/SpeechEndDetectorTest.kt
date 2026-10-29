@@ -2,6 +2,7 @@ package com.rumbo.watchapp.domain.voice
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Cuántos milisegundos se graba con una secuencia de niveles (uno cada 80 ms) que se repite al final. */
@@ -37,10 +38,10 @@ class SpeechEndDetectorTest {
 
     @Test
     fun aVeryShortWordStillRecordsAtLeastOneSecond() {
-        // "Sí" de 80 ms con un silencio de corte de 400 ms: a los 480 ms ya cortaría, pero el mínimo
-        // de 1 s manda (la primera lectura que pasa de 1 s es la de 1 040 ms).
+        // "Sí" de 240 ms con un silencio de corte de 400 ms: a los 640 ms ya cortaría, pero el
+        // mínimo de 1 s manda (la primera lectura que pasa de 1 s es la de 1 040 ms).
         val detector = SpeechEndDetector(silenceToStopMs = 400)
-        assertEquals(1_040L, recordedMs(listOf(0.9f, 0.1f), detector))
+        assertEquals(1_040L, recordedMs(listOf(0.9f, 0.9f, 0.9f, 0.1f), detector))
     }
 
     @Test
@@ -51,6 +52,27 @@ class SpeechEndDetectorTest {
     @Test
     fun neverRecordsMoreThanEightSeconds() {
         assertEquals(MAX_RECORDING_MS, recordedMs(listOf(0.9f)))
+    }
+
+    @Test
+    fun aSingleSpikeIsNotVoice() {
+        // Un clic de 80 ms al empezar, suavizado como lo da el micrófono (1 → 0,6, 0,45, 0,34...),
+        // no corta la grabación al segundo: se espera a que la persona hable.
+        val smoother = LevelSmoother()
+        val click = (listOf(1f) + List(40) { 0f }).map(smoother::next)
+        assertEquals(MAX_RECORDING_MS, recordedMs(click))
+        // Tampoco varios clics sueltos.
+        val clicks = List(5) { listOf(1f) + List(10) { 0f } }.flatten().map(LevelSmoother()::next)
+        assertEquals(MAX_RECORDING_MS, recordedMs(clicks + listOf(0f)))
+    }
+
+    @Test
+    fun aRealWordIsVoiceEvenWhenSmoothed() {
+        // Una palabra de 400 ms y silencio: corta 1,2 s después de que el nivel suavizado baja.
+        val smoother = LevelSmoother()
+        val levels = (ms(400, 0.9f) + ms(3_000, 0f)).map(smoother::next)
+        val stoppedAt = recordedMs(levels)
+        assertTrue("$stoppedAt", stoppedAt in 1_600L..2_000L)
     }
 
     @Test

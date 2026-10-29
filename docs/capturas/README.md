@@ -8,7 +8,7 @@ misma pantalla desplazada hasta el final.
 | Archivo | Pantalla |
 |---|---|
 | `01_inicio.png`, `02_inicio_abajo.png` | Inicio: "Listo para navegar", micrófono, Lugares guardados, Vibraciones, Voz: sí/no |
-| `03_escuchando.png` | Escuchando |
+| `03_escuchando.png`, `26_escuchando_abajo.png` | Escuchando (diseño A2): anillo, badge relleno, barras con el nivel de la voz, "Te escucho"; abajo "Di a dónde quieres ir" y Cancelar |
 | `04_procesando.png` | Procesando (el indicador gira en la app; en la captura queda quieto) |
 | `05_confirmar.png`, `06_confirmar_abajo.png` | Confirmar destino: Ir / Cambiar / Guardar |
 | `07_error.png` | Error: Reintentar / Inicio |

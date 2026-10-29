@@ -156,7 +156,7 @@ class ScreenshotsTest {
     private val shots = listOf(
         Shot("01_inicio") { Start() },
         Shot("02_inicio_abajo", scrolls = 3) { Start() },
-        Shot("03_escuchando") { ListeningScreen() },
+        Shot("03_escuchando") { ListeningScreen(level = 0.75f, onCancel = {}) },
         Shot("04_procesando") { ProcessingScreen() },
         Shot("05_confirmar") {
             ConfirmScreen(ROUTE, SaveStatus.IDLE, gpsAvailable = true, onGo = {}, onChange = {}, onSave = {})
@@ -211,6 +211,7 @@ class ScreenshotsTest {
         Shot("25_indicacion_larga") {
             Navigation(tracking(NavigationStatus.TURN_APPROACHING, instruction = "Gire a la izquierda para permanecer en Carrera 14."))
         },
+        Shot("26_escuchando_abajo", scrolls = 3) { ListeningScreen(level = 0.75f, onCancel = {}) },
         Shot("24_demostracion_vibraciones") {
             Vibrations(demo = DemoStep(VibrationCue.LEFT, 3, VibrationCue.entries.size))
         },

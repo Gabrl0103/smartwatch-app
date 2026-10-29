@@ -158,7 +158,10 @@ private fun Screen(
             previousDestination = previousDestination,
             onContinue = onContinue,
         )
-        PlanState.Listening -> ListeningScreen()
+        PlanState.Listening -> {
+            val level by viewModel.voiceLevel.collectAsState()
+            ListeningScreen(level = level, onCancel = viewModel::cancelListening)
+        }
         PlanState.Processing -> ProcessingScreen(waitMessage ?: "Buscando ruta...")
         PlanState.LoadingPlaces -> ProcessingScreen(waitMessage ?: "Cargando lugares...")
         is PlanState.SavedPlaces -> SavedPlacesScreen(

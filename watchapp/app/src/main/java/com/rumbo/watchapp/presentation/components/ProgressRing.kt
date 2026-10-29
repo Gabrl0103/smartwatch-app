@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.unit.dp
@@ -30,26 +31,32 @@ private const val SWEEP_DEGREES = 360f - TOP_GAP_DEGREES
 
 /**
  * Anillo pegado al borde de la pantalla redonda: se llena en sentido horario a medida que uno se
- * acerca al siguiente giro ([progress] de 0 a 1). TalkBack lo lee después del contenido.
+ * acerca al siguiente giro ([progress] de 0 a 1). TalkBack lo lee después del contenido. Sin
+ * [contentDescription] es solo decorativo (como el anillo de "Escuchando") y TalkBack no lo lee.
  */
 @Composable
 fun ProgressRing(
     progress: Float,
     color: Color,
-    contentDescription: String,
+    contentDescription: String?,
     modifier: Modifier = Modifier,
 ) {
     val clamped = progress.coerceIn(0f, 1f)
     val animated by animateFloatAsState(clamped, label = "progreso")
+    val semantics = if (contentDescription == null) {
+        Modifier.clearAndSetSemantics {}
+    } else {
+        Modifier.semantics {
+            this.contentDescription = contentDescription
+            progressBarRangeInfo = ProgressBarRangeInfo(clamped, 0f..1f)
+            traversalIndex = 1f
+        }
+    }
     Canvas(
         modifier = modifier
             .fillMaxSize()
             .padding(2.dp)
-            .semantics {
-                this.contentDescription = contentDescription
-                progressBarRangeInfo = ProgressBarRangeInfo(clamped, 0f..1f)
-                traversalIndex = 1f
-            },
+            .then(semantics),
     ) {
         val stroke = RingStrokeWidth.toPx()
         val diameter = size.minDimension - stroke
