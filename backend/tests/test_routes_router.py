@@ -45,8 +45,18 @@ def test_create_route_returns_route(monkeypatch):
     assert data["destination_name"] == "Parque Bolívar"
     assert data["distance_m"] == 150
     assert data["steps"] == [
-        {"order": 1, "maneuver": "arrive", "instruction": "Ha llegado.", "distance_m": 0, "lat": 1.2006, "lng": -77.2786}
+        {
+            "order": 1,
+            "maneuver": "arrive",
+            "instruction": "Ha llegado.",
+            "distance_m": 0,
+            "lat": 1.2006,
+            "lng": -77.2786,
+            "street": "",
+        }
     ]
+    # 150 m en 140 s (1,07 m/s) se aleja más de un 10 % de 1,25 m/s: se recalcula.
+    assert data["duration_s"] == 120
     assert data["polyline"] == [[1.2142, -77.2785], [1.2006, -77.2786]]
 
 

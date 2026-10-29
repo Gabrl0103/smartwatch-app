@@ -28,3 +28,10 @@ def test_tts_model_has_free_tier_default(monkeypatch):
     assert load_settings().gemini_tts_model == "gemini-3.8-flash-tts"
     monkeypatch.setenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-lite-tts")
     assert load_settings().gemini_tts_model == "gemini-3.8-flash-lite-tts"
+
+
+def test_geoapify_route_type_defaults_to_less_maneuvers(monkeypatch):
+    monkeypatch.delenv("GEOAPIFY_ROUTE_TYPE", raising=False)
+    assert load_settings().geoapify_route_type == "less_maneuvers"
+    monkeypatch.setenv("GEOAPIFY_ROUTE_TYPE", "short")
+    assert load_settings().geoapify_route_type == "short"

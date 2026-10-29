@@ -3,6 +3,8 @@ from dataclasses import dataclass
 
 from dotenv import load_dotenv
 
+from infrastructure.routing.geoapify_routing import DEFAULT_ROUTE_TYPE
+
 load_dotenv()
 
 DEFAULT_GEMINI_TTS_MODEL = "gemini-3.8-flash-tts"
@@ -15,6 +17,7 @@ class Settings:
     gemini_api_key: str
     gemini_model: str
     gemini_tts_model: str = DEFAULT_GEMINI_TTS_MODEL
+    geoapify_route_type: str = DEFAULT_ROUTE_TYPE
 
 
 def load_settings() -> Settings:
@@ -24,4 +27,5 @@ def load_settings() -> Settings:
         gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
         gemini_model=os.getenv("GEMINI_MODEL", ""),
         gemini_tts_model=os.getenv("GEMINI_TTS_MODEL") or DEFAULT_GEMINI_TTS_MODEL,
+        geoapify_route_type=os.getenv("GEOAPIFY_ROUTE_TYPE") or DEFAULT_ROUTE_TYPE,
     )

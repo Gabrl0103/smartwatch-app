@@ -25,6 +25,7 @@ class RouteStepResponse(BaseModel):
     distance_m: float
     lat: float
     lng: float
+    street: str = ""
 
 
 class RouteResponse(BaseModel):
@@ -51,6 +52,7 @@ class RouteResponse(BaseModel):
                     distance_m=step.distance_to_next_m,
                     lat=step.point.lat,
                     lng=step.point.lng,
+                    street=step.street,
                 )
                 for step in route.steps
             ],

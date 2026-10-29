@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ruta a Plaza del Carnaval</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<style>
+  body { margin: 0; font: 15px/1.4 system-ui, sans-serif; color: #1b1f27; background: #f6f7f9;
+         display: grid; grid-template-columns: 360px 1fr; height: 100vh; }
+  aside { overflow-y: auto; padding: 16px; background: #fff; border-right: 1px solid #dde1e7; }
+  h1 { font-size: 20px; margin: 0 0 8px; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0 0 12px; }
+  dt { color: #5b6372; } dd { margin: 0; font-weight: 600; }
+  ol { padding-left: 24px; } li { margin-bottom: 8px; }
+  li span { display: block; color: #5b6372; font-size: 13px; }
+  .warning { background: #fff1e6; border: 1px solid #ff8a3d; padding: 8px; border-radius: 6px; }
+  #map { height: 100vh; }
+  .step-number { background: #4f8eff; color: #fff; border: 2px solid #fff; border-radius: 50%;
+                  width: 24px; height: 24px; display: grid; place-items: center; font-weight: 700;
+                  box-shadow: 0 1px 3px rgba(0, 0, 0, .4); font-size: 12px; }
+  @media (max-width: 700px) { body { grid-template-columns: 1fr; height: auto; } #map { height: 70vh; } }
+</style>
+</head>
+<body>
+<aside>
+  <h1>Ruta a Plaza del Carnaval</h1>
+  <dl>
+    <dt>Distancia</dt><dd>611 m</dd>
+    <dt>Duración</dt><dd>8.1 min</dd>
+    <dt>Pasos</dt><dd>4</dd>
+    <dt>Velocidad media</dt><dd>1.25 m/s (4.5 km/h)</dd>
+    <dt>Línea recta</dt><dd>492 m</dd>
+    <dt>Ruta / recta</dt><dd>1.24</dd>
+  </dl>
+  
+  <p><a href="https://www.google.com/maps/dir/?api=1&travelmode=walking&origin=1.214628,-77.278301&destination=1.210561,-77.276554" target="_blank" rel="noopener">Abrir la misma ruta a pie en Google Maps</a></p>
+  <ol>
+<li><strong>Gire a la derecha hacia Carrera 25.</strong><span>Carrera 25 · 45 m</span></li>
+<li><strong>Gire a la derecha hacia Calle 19.</strong><span>Calle 19 · 460 m</span></li>
+<li><strong>Siga por la derecha en dirección a Senda del carnaval.</strong><span>Senda del carnaval · 102 m</span></li>
+<li><strong>Ha llegado a su destino.</strong><span>sin nombre de calle · 0 m</span></li>
+  </ol>
+</aside>
+<div id="map"></div>
+<script>
+  const data = {"polyline": [[1.214997, -77.278419], [1.215033, -77.278435], [1.21519, -77.278065], [1.214382, -77.277689], [1.213547, -77.277321], [1.212692, -77.276976], [1.212146, -77.276718], [1.211843, -77.276598], [1.211404, -77.276423], [1.211388, -77.276437], [1.211277, -77.276535], [1.211181, -77.276602], [1.211012, -77.276637], [1.210773, -77.276604], [1.210563, -77.276548]], "steps": [{"order": 1, "maneuver": "right", "instruction": "Gire a la derecha hacia Carrera 25.", "distance_m": 45.0, "lat": 1.215033, "lng": -77.278435, "street": "Carrera 25"}, {"order": 2, "maneuver": "right", "instruction": "Gire a la derecha hacia Calle 19.", "distance_m": 460.0, "lat": 1.21519, "lng": -77.278065, "street": "Calle 19"}, {"order": 3, "maneuver": "right", "instruction": "Siga por la derecha en dirección a Senda del carnaval.", "distance_m": 102.0, "lat": 1.211404, "lng": -77.276423, "street": "Senda del carnaval"}, {"order": 4, "maneuver": "arrive", "instruction": "Ha llegado a su destino.", "distance_m": 0.0, "lat": 1.210563, "lng": -77.276548, "street": ""}], "origin": [1.214628, -77.278301], "destination": [1.210561, -77.276554]};
+  const map = L.map("map");
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  }).addTo(map);
+  const line = L.polyline(data.polyline, { color: "#4f8eff", weight: 5 }).addTo(map);
+  L.circleMarker(data.origin, { radius: 7, color: "#1b1f27", fillColor: "#fff", fillOpacity: 1 })
+    .bindTooltip("Origen").addTo(map);
+  L.circleMarker(data.destination, { radius: 7, color: "#1b1f27", fillColor: "#3ddc84", fillOpacity: 1 })
+    .bindTooltip("Destino").addTo(map);
+  data.steps.forEach((step) => {
+    const icon = L.divIcon({ className: "", html: `<div class="step-number">${step.order}</div>`, iconSize: [24, 24] });
+    const popup = document.createElement("div");
+    const text = document.createElement("strong");
+    text.textContent = `${step.order}. ${step.instruction}`;
+    const street = document.createElement("div");
+    street.textContent = `${step.street || "sin nombre de calle"} · ${Math.round(step.distance_m)} m`;
+    popup.append(text, street);
+    L.marker([step.lat, step.lng], { icon }).bindPopup(popup).addTo(map);
+  });
+  map.fitBounds(line.getBounds(), { padding: [24, 24] });
+</script>
+</body>
+</html>

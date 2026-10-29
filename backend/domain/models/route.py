@@ -34,6 +34,8 @@ class RouteStep:
     instruction: str
     distance_to_next_m: float
     point: Coordinates
+    # Calle por la que se sigue después del paso; vacía si el proveedor no la da.
+    street: str = ""
 
 
 @dataclass(frozen=True)

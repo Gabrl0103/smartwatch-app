@@ -50,6 +50,18 @@ adb logcat -s Nav Vibracion Red
 
 La pantalla "En ruta" también muestra el último patrón (barras y texto, p. ej. "2 pulsos cortos").
 
+## Ver las rutas en un mapa
+
+`previews/` tiene 5 rutas de prueba desde la Plaza de Nariño (Parque Bolívar, Plaza del Carnaval,
+Terminal de Transportes, Universidad de Nariño y Hospital Departamental) dibujadas sobre
+OpenStreetMap con cada paso numerado: abre `previews/index.html` y compáralas con Google Maps (cada
+una tiene el enlace). Para regenerarlas o ver otra ruta:
+
+```
+backend\venv\Scripts\python tools\preview_route.py --demo [--backend URL]
+backend\venv\Scripts\python tools\preview_route.py 1.214628,-77.278301 1.205584,-77.270279 --nombre "Parque Bolívar"
+```
+
 ## Generar otras rutas
 
 ```

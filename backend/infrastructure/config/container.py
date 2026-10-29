@@ -99,4 +99,4 @@ def get_geocoder() -> GeocodingPort:
 
 @lru_cache
 def get_routing_provider() -> RoutingProviderPort:
-    return GeoapifyRouting(_geoapify_api_key())
+    return GeoapifyRouting(_geoapify_api_key(), route_type=load_settings().geoapify_route_type)

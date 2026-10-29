@@ -4,6 +4,10 @@ from domain.errors import ExternalServiceError, NotFoundError
 from domain.models.route import Coordinates, Maneuver, Route, RouteStep
 
 ROUTING_URL = "https://api.geoapify.com/v1/routing"
+# Preferencia de ruta de Geoapify: "balanced", "short" o "less_maneuvers". Con las rutas de
+# prueba en Pasto, less_maneuvers tiene la mitad de giros por calles más tranquilas a cambio de
+# hasta un 9 % más de distancia (ver docs/REQUIREMENTS.md, "Rutas reales").
+DEFAULT_ROUTE_TYPE = "less_maneuvers"
 
 
 def to_maneuver(instruction_type: str) -> Maneuver:
@@ -20,14 +24,21 @@ def to_maneuver(instruction_type: str) -> Maneuver:
 
 
 class GeoapifyRouting:
-    def __init__(self, api_key: str, client: httpx.Client | None = None):
+    def __init__(
+        self,
+        api_key: str,
+        client: httpx.Client | None = None,
+        route_type: str = DEFAULT_ROUTE_TYPE,
+    ):
         self._api_key = api_key
         self._client = client or httpx.Client(timeout=15)
+        self._route_type = route_type
 
     def get_walking_route(self, origin: Coordinates, destination: Coordinates) -> Route:
         params = {
             "waypoints": f"{origin.lat},{origin.lng}|{destination.lat},{destination.lng}",
             "mode": "walk",
+            "type": self._route_type,
             "lang": "es",
             "details": "instruction_details",
             "apiKey": self._api_key,
@@ -65,6 +76,7 @@ class GeoapifyRouting:
         for leg, line in zip(properties["legs"], lines):
             for step in leg["steps"]:
                 instruction = step["instruction"]
+                streets = instruction.get("streets") or [""]
                 steps.append(
                     RouteStep(
                         order=len(steps) + 1,
@@ -72,6 +84,7 @@ class GeoapifyRouting:
                         instruction=instruction["text"],
                         distance_to_next_m=float(step["distance"]),
                         point=line[step["from_index"]],
+                        street=streets[0],
                     )
                 )
 
