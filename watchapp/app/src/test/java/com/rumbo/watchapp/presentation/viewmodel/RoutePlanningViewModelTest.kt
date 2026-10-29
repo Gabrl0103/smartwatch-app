@@ -12,6 +12,7 @@ import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.domain.model.SavedPlace
 import com.rumbo.watchapp.domain.model.VoiceResult
 import com.rumbo.watchapp.domain.navigation.NavigationStatus
+import com.rumbo.watchapp.domain.port.ActiveRouteStore
 import com.rumbo.watchapp.domain.port.AudioRecorder
 import com.rumbo.watchapp.domain.port.LocationProvider
 import com.rumbo.watchapp.domain.port.NavigationRunner
@@ -99,14 +100,29 @@ class RoutePlanningViewModelTest {
     }
 
     private class FakeRunner : NavigationRunner {
-        var running = false
+        override var activeRoute: Route? = null
+        val running get() = activeRoute != null
 
         override fun start(route: Route) {
-            running = true
+            activeRoute = route
         }
 
         override fun stop() {
-            running = false
+            activeRoute = null
+        }
+    }
+
+    private class FakeStore : ActiveRouteStore {
+        var saved: Route? = null
+
+        override fun save(route: Route) {
+            saved = route
+        }
+
+        override fun load() = saved
+
+        override fun clear() {
+            saved = null
         }
     }
 
@@ -159,6 +175,7 @@ class RoutePlanningViewModelTest {
     private val speech = FakeSpeech()
     private val navigation = MutableStateFlow(TrackingState())
     private val serverWaking = MutableStateFlow(false)
+    private val store = FakeStore()
     private var repeats = 0
     private lateinit var viewModel: RoutePlanningViewModel
 
@@ -180,6 +197,7 @@ class RoutePlanningViewModelTest {
             speech,
             VoiceOn,
             serverWaking,
+            store,
         )
     }
 
@@ -396,6 +414,69 @@ class RoutePlanningViewModelTest {
         serverWaking.value = false
         loaded.complete(Unit)
         assertEquals(PlanState.SavedPlaces(listOf(place)), viewModel.state.value)
+    }
+
+    @Test
+    fun reopeningWhileTheServiceNavigatesGoesStraightBackToTheRoute() {
+        runner.start(route)
+
+        viewModel = build()
+
+        assertEquals(PlanState.OnRoute(route), viewModel.state.value)
+        assertNull(viewModel.previousRoute.value)
+    }
+
+    @Test
+    fun routeLeftAfterTheProcessDiedIsOfferedAndCanContinue() {
+        store.saved = route
+
+        viewModel = build()
+
+        assertEquals(PlanState.Start, viewModel.state.value)
+        assertEquals(route, viewModel.previousRoute.value)
+        assertTrue(speech.spoken.last().startsWith("Tienes una ruta sin terminar a Parque de prueba"))
+
+        viewModel.resumePreviousRoute()
+
+        assertEquals(PlanState.OnRoute(route), viewModel.state.value)
+        assertTrue(runner.running)
+        assertNull(viewModel.previousRoute.value)
+    }
+
+    @Test
+    fun previousRouteIsStillOfferedAfterGoingBackToStart() {
+        store.saved = route
+        viewModel = build()
+
+        viewModel.openVibrations()
+        viewModel.back()
+
+        assertEquals(route, viewModel.previousRoute.value)
+    }
+
+    @Test
+    fun deniedNotificationsWhenContinuingKeepThePreviousRoute() {
+        store.saved = route
+        viewModel = build()
+
+        viewModel.permissionDenied(Permission.NOTIFICATIONS)
+        assertEquals(PlanState.PermissionNeeded(Permission.NOTIFICATIONS, route), viewModel.state.value)
+
+        viewModel.goWithoutNotification()
+        assertEquals(PlanState.OnRoute(route), viewModel.state.value)
+    }
+
+    @Test
+    fun finishStopsEverythingAndForgetsTheRoute() {
+        startRoute()
+        store.saved = route
+
+        viewModel.finish()
+
+        assertEquals(PlanState.Start, viewModel.state.value)
+        assertFalse(runner.running)
+        assertNull(store.saved)
+        assertNull(viewModel.previousRoute.value)
     }
 
     @Test

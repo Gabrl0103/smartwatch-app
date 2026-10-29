@@ -13,14 +13,19 @@ import com.rumbo.watchapp.domain.model.VibrationEvent
 import com.rumbo.watchapp.domain.navigation.LocationFilter
 import com.rumbo.watchapp.domain.navigation.NavigationEngine
 import com.rumbo.watchapp.domain.navigation.NavigationEvent
+import com.rumbo.watchapp.domain.navigation.NavigationSnapshot
 import com.rumbo.watchapp.domain.navigation.NavigationStatus
 import com.rumbo.watchapp.domain.navigation.NavigationThresholds
+import com.rumbo.watchapp.domain.port.ActiveRouteStore
+import com.rumbo.watchapp.domain.port.Logger
+import com.rumbo.watchapp.domain.port.NoLogger
 import com.rumbo.watchapp.domain.port.RoutesRepository
 import com.rumbo.watchapp.domain.port.SpeechOutput
 import com.rumbo.watchapp.domain.port.VibrationController
 import com.rumbo.watchapp.domain.port.VibrationEventsRepository
 import com.rumbo.watchapp.domain.vibration.VibrationPattern
 import com.rumbo.watchapp.domain.vibration.VibrationPatterns
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -31,6 +36,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+
+private const val TAG = "Nav"
 
 /** Lo que muestra la pantalla "En ruta". */
 data class TrackingState(
@@ -63,6 +70,11 @@ data class TrackingState(
  * Cada vibración se anota en [vibrationEvents] en segundo plano; si falla, se sigue navegando.
  * La voz ([speech]) solo acompaña: dice el inicio y los avisos importantes sin esperar a que
  * terminen, y si falla las vibraciones siguen igual.
+ *
+ * Fuera de ruta pide una ruta nueva como mucho cada [NavigationThresholds.recalculateAfterMs] y
+ * hasta [NavigationThresholds.maxRecalculations] veces seguidas; si falla, sigue con la anterior
+ * y vibra "fuera de ruta". La ruta en curso queda en [activeRoutes] para poder continuarla si el
+ * proceso muere, y cada cambio de estado queda en [logger] con la etiqueta "Nav".
  */
 class TrackNavigation(
     private val fixes: Flow<LocationFix>,
@@ -73,6 +85,8 @@ class TrackNavigation(
     private val clock: () -> Long,
     private val thresholds: NavigationThresholds = NavigationThresholds(),
     private val tickMs: Long = 1_000,
+    private val activeRoutes: ActiveRouteStore? = null,
+    private val logger: Logger = NoLogger,
 ) {
     private val _state = MutableStateFlow(TrackingState())
     val state: StateFlow<TrackingState> = _state.asStateFlow()
@@ -83,13 +97,20 @@ class TrackNavigation(
     private var engine: NavigationEngine? = null
     private var lastPosition: Coordinates? = null
     private var lastVibrationMs = 0L
+    private var lastStatus: NavigationStatus? = null
     private var recalculating = false
+    private var recalculations = 0
+    private var lastRecalculationMs: Long? = null
 
     fun start(route: Route, scope: CoroutineScope) {
         job?.cancel()
         this.scope = scope
         recalculating = false
+        recalculations = 0
+        lastRecalculationMs = null
+        lastStatus = null
         val now = clock()
+        logger.info(TAG, "Navegación iniciada hacia «${route.destinationName}»: ${describe(route)}")
         useRoute(route, now)
         vibrate(VibrationPatterns.ON_ROUTE, now)
         say(Phrase(startPhrase(route)))
@@ -100,7 +121,9 @@ class TrackNavigation(
                     val now = clock()
                     val fix = filter.accept(raw, now) ?: return@collect
                     lastPosition = Coordinates(fix.lat, fix.lng)
-                    engine?.let { handle(it.onLocation(fix, now), now) }
+                    val current = engine ?: return@collect
+                    handle(current.onLocation(fix, now), now)
+                    if (current.snapshot.isBackOnRoute()) recalculations = 0
                 }
             }
             launch {
@@ -114,16 +137,21 @@ class TrackNavigation(
         }
     }
 
+    /** Detiene GPS, vibración y voz y olvida la ruta guardada. Llamarlo dos veces no hace nada. */
     fun stop() {
+        if (job == null && engine == null) return
         job?.cancel()
         job = null
         scope = null
         recalculating = false
         engine = null
         route = null
+        lastStatus = null
         _state.value = TrackingState()
         vibration.stop()
         speech.stop()
+        activeRoutes?.clear()
+        logger.info(TAG, "Navegación terminada: GPS, vibraciones y voz detenidos")
     }
 
     /**
@@ -132,6 +160,7 @@ class TrackNavigation(
      */
     fun repeat() {
         val snapshot = engine?.snapshot ?: return
+        logger.info(TAG, "Repetir indicación")
         vibrate(_state.value.pattern ?: VibrationPatterns.ON_ROUTE, clock())
         say(repeatPhrase(snapshot))
     }
@@ -139,7 +168,12 @@ class TrackNavigation(
     private fun CoroutineScope.handle(events: List<NavigationEvent>, now: Long) {
         VibrationPatterns.mostImportant(events)?.let { vibrate(it, now) }
         engine?.let { navigationPhrase(events, it.snapshot) }?.let(::say)
-        if (NavigationEvent.RecalculateRequested in events) recalculate()
+        events.filterIsInstance<NavigationEvent.NextStepChanged>().forEach {
+            logger.info(TAG, "Siguiente paso ${it.step.order}: ${it.step.instruction}")
+        }
+        // Ya llegó: si el proceso muere ahora no tiene sentido ofrecer continuar.
+        if (NavigationEvent.Arrived in events) activeRoutes?.clear()
+        if (NavigationEvent.RecalculateRequested in events) recalculate(now)
         publish()
     }
 
@@ -182,20 +216,37 @@ class TrackNavigation(
         }
     }
 
-    private fun CoroutineScope.recalculate() {
+    // De nuevo pegado a la ruta: el próximo desvío vuelve a tener todos sus intentos.
+    private fun NavigationSnapshot.isBackOnRoute(): Boolean {
+        val distance = distanceToRouteM ?: return false
+        return status != NavigationStatus.OFF_ROUTE && distance < thresholds.backOnRouteM
+    }
+
+    private fun CoroutineScope.recalculate(now: Long) {
         val from = lastPosition ?: return
         val current = route ?: return
-        if (recalculating) return
+        if (recalculating || recalculations >= thresholds.maxRecalculations) return
+        val last = lastRecalculationMs
+        if (last != null && now - last < thresholds.recalculateAfterMs) return
         recalculating = true
+        recalculations++
+        lastRecalculationMs = now
+        val attempt = recalculations
+        val max = thresholds.maxRecalculations
+        logger.info(TAG, "Recalculando ruta (intento $attempt de $max)")
         launch {
             try {
                 val end = current.end
                 val destination = Place(current.destinationName, end.lat, end.lng)
-                useRoute(routes.create(from, destination), clock())
+                val newRoute = routes.create(from, destination)
+                useRoute(newRoute, clock())
+                logger.info(TAG, "Ruta recalculada: ${describe(newRoute)}")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // Se sigue con la ruta anterior; el motor vuelve a pedir el recálculo en 10 s.
+                val next = if (attempt < max) "el motor lo vuelve a pedir en 10 s" else "no se intenta más"
+                logger.warn(TAG, "No se pudo recalcular (intento $attempt de $max): ${e.message}. Sigo con la ruta anterior; $next")
+                vibrate(VibrationPatterns.OFF_ROUTE, clock())
             } finally {
                 recalculating = false
                 publish()
@@ -206,11 +257,16 @@ class TrackNavigation(
     private fun useRoute(newRoute: Route, now: Long) {
         route = newRoute
         engine = NavigationEngine(newRoute, now, thresholds)
+        activeRoutes?.save(newRoute)
         publish()
     }
 
     private fun publish() {
         val snapshot = engine?.snapshot ?: return
+        if (snapshot.status != lastStatus) {
+            logger.info(TAG, "Estado ${lastStatus ?: "-"} → ${snapshot.status} (${describe(snapshot)})")
+            lastStatus = snapshot.status
+        }
         _state.value = _state.value.copy(
             status = snapshot.status,
             destinationName = route?.destinationName.orEmpty(),
@@ -222,4 +278,14 @@ class TrackNavigation(
             recalculating = recalculating,
         )
     }
+
+    private fun describe(route: Route) = "${route.steps.size} pasos, ${route.distanceM.roundToInt()} m"
+
+    private fun describe(snapshot: NavigationSnapshot): String = listOfNotNull(
+        snapshot.nextStep?.let { step ->
+            "paso ${step.order}" + (snapshot.distanceToNextStepM?.let { " a ${it.roundToInt()} m" } ?: "")
+        },
+        "faltan ${snapshot.remainingM.roundToInt()} m",
+        snapshot.distanceToRouteM?.let { "a ${it.roundToInt()} m de la ruta" },
+    ).joinToString(", ")
 }

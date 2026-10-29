@@ -15,6 +15,8 @@ data class NavigationThresholds(
     val offRouteReadings: Int = 3,
     val backOnRouteM: Double = 15.0,
     val recalculateAfterMs: Long = 10_000,
+    // Recálculos seguidos sin volver a la ruta; después se sigue con la anterior.
+    val maxRecalculations: Int = 5,
     // Señal y llegada
     val signalLostAfterMs: Long = 10_000,
     val arrivalM: Double = 15.0,

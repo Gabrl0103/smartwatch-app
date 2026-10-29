@@ -12,6 +12,7 @@ import com.rumbo.watchapp.domain.error.SERVER_WAKING_MESSAGE
 import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.domain.model.SavedPlace
 import com.rumbo.watchapp.domain.navigation.NavigationStatus
+import com.rumbo.watchapp.domain.port.ActiveRouteStore
 import com.rumbo.watchapp.domain.port.AudioRecorder
 import com.rumbo.watchapp.domain.port.NavigationRunner
 import com.rumbo.watchapp.domain.port.SpeechOutput
@@ -47,6 +48,7 @@ class RoutePlanningViewModel(
     private val speech: SpeechOutput,
     private val voiceSettings: VoiceSettings,
     serverWaking: StateFlow<Boolean>,
+    private val activeRoutes: ActiveRouteStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<PlanState>(PlanState.Start)
@@ -57,6 +59,11 @@ class RoutePlanningViewModel(
 
     /** Qué voz se está usando, para mostrarlo en Inicio. */
     val speechStatus: StateFlow<SpeechStatus> = speech.status
+
+    private val _previousRoute = MutableStateFlow<Route?>(null)
+
+    /** Ruta que quedó a medias (el proceso murió navegando): Inicio ofrece "Continuar ruta anterior". */
+    val previousRoute: StateFlow<Route?> = _previousRoute.asStateFlow()
 
     // Grabación o carga en curso; volver al inicio la cancela.
     private var job: Job? = null
@@ -78,6 +85,16 @@ class RoutePlanningViewModel(
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     init {
+        // Si el servicio sigue navegando (la pantalla se cerró y se volvió a abrir), se retoma ahí.
+        val running = navigationRunner.activeRoute
+        if (running != null) {
+            _state.value = PlanState.OnRoute(running)
+        } else {
+            activeRoutes.load()?.let { route ->
+                _previousRoute.value = route
+                speech.speak("Tienes una ruta sin terminar a ${route.destinationName}. Toca Continuar ruta anterior.")
+            }
+        }
         // Quien no ve la pantalla también tiene que saber por qué tarda.
         viewModelScope.launch {
             waitMessage.collect { message ->
@@ -196,12 +213,24 @@ class RoutePlanningViewModel(
         if (current is PlanState.Confirming) startNavigation(current.route)
     }
 
+    /** "Continuar ruta anterior" en Inicio: retoma la ruta guardada desde donde esté el usuario. */
+    fun resumePreviousRoute() {
+        val route = _previousRoute.value ?: return
+        if (_state.value == PlanState.Start) startNavigation(route)
+    }
+
     /**
-     * El usuario negó [permission]: muestra y dice para qué hace falta. Si estaba confirmando,
-     * la ruta queda guardada para arrancar cuando lo dé o elija "Ir sin notificación".
+     * El usuario negó [permission]: muestra y dice para qué hace falta. Las notificaciones solo se
+     * piden para arrancar una ruta (la que se confirma o la anterior): queda guardada para
+     * arrancar cuando lo dé o elija "Ir sin notificación".
      */
     fun permissionDenied(permission: Permission) {
-        val route = (_state.value as? PlanState.Confirming)?.route
+        val current = _state.value
+        val route = when {
+            permission != Permission.NOTIFICATIONS -> null
+            current is PlanState.Confirming -> current.route
+            else -> _previousRoute.value
+        }
         _state.value = PlanState.PermissionNeeded(permission, route)
         speech.speak(permission.explanation)
     }
@@ -224,9 +253,10 @@ class RoutePlanningViewModel(
         if (_state.value is PlanState.OnRoute) repeatNavigation()
     }
 
-    /** Termina la navegación: el servicio apaga GPS y vibraciones; vuelve al inicio. */
+    /** "Terminar": apaga GPS, vibraciones, voz, servicio y notificación, olvida la ruta y vuelve a Inicio. */
     fun finish() {
         navigationRunner.stop()
+        activeRoutes.clear()
         reset()
     }
 
@@ -258,6 +288,7 @@ class RoutePlanningViewModel(
         job = null
         if (_state.value == PlanState.Vibrations) vibration.stop()
         speech.stop()
+        _previousRoute.value = if (navigationRunner.activeRoute == null) activeRoutes.load() else null
         _state.value = PlanState.Start
     }
 
@@ -269,6 +300,7 @@ class RoutePlanningViewModel(
 
     private fun startNavigation(route: Route) {
         navigationRunner.start(route)
+        _previousRoute.value = null
         _state.value = PlanState.OnRoute(route)
     }
 

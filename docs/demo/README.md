@@ -41,7 +41,12 @@ adb logcat -s Vibracion
 ```
 
 Las peticiones al backend (y si el servidor está despertando o no hay internet) salen con la
-etiqueta `Red`: `adb logcat -s Red`.
+etiqueta `Red`, y cada cambio de estado de la navegación (En ruta → Giro próximo → ..., recálculos,
+inicio y fin) con `Nav`. Todo junto:
+
+```
+adb logcat -s Nav Vibracion Red
+```
 
 La pantalla "En ruta" también muestra el último patrón (barras y texto, p. ej. "2 pulsos cortos").
 

@@ -11,6 +11,8 @@ import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.domain.model.RouteStep
 import com.rumbo.watchapp.domain.model.VibrationEvent
 import com.rumbo.watchapp.domain.navigation.NavigationStatus
+import com.rumbo.watchapp.domain.port.ActiveRouteStore
+import com.rumbo.watchapp.domain.port.Logger
 import com.rumbo.watchapp.domain.port.RoutesRepository
 import com.rumbo.watchapp.domain.port.SpeechOutput
 import com.rumbo.watchapp.domain.port.SpeechPriority
@@ -27,6 +29,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -77,6 +80,42 @@ class TrackNavigationTest {
             this.origin = origin
             this.destination = destination
             return route
+        }
+    }
+
+    /** Ruta nueva que nunca llega: sin internet o con el servidor caído. */
+    private class FailingRoutes(private val clock: () -> Long) : RoutesRepository {
+        val calledAtMs = mutableListOf<Long>()
+
+        override suspend fun create(origin: Coordinates, destination: Place): Route {
+            calledAtMs += clock()
+            throw AppError("Sin conexión. Revisa el internet del reloj")
+        }
+    }
+
+    private class FakeStore : ActiveRouteStore {
+        var saved: Route? = null
+
+        override fun save(route: Route) {
+            saved = route
+        }
+
+        override fun load() = saved
+
+        override fun clear() {
+            saved = null
+        }
+    }
+
+    private class FakeLogger : Logger {
+        val lines = mutableListOf<String>()
+
+        override fun info(tag: String, message: String) {
+            lines += "I/$tag: $message"
+        }
+
+        override fun warn(tag: String, message: String) {
+            lines += "W/$tag: $message"
         }
     }
 
@@ -249,6 +288,180 @@ class TrackNavigationTest {
         } finally {
             tracking.stop()
         }
+    }
+
+    @Test
+    fun failedRecalculationsAreSpacedTenSecondsCappedAtFiveAndKeepTheOldRoute() = runBlocking {
+        val fixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 16)
+        val vibration = FakeVibration()
+        val logger = FakeLogger()
+        var now = 0L
+        val routes = FailingRoutes { now }
+        val tracking = TrackNavigation(
+            fixes,
+            routes,
+            vibration,
+            FakeVibrationEvents(),
+            FakeSpeech(),
+            clock = { now },
+            tickMs = 600_000,
+            logger = logger,
+        )
+
+        tracking.start(lRoute(), this)
+        try {
+            delay(20)
+            // Parado a 40 m de la ruta durante 80 s, una lectura cada 2 s.
+            (0L..80_000L step 2_000L).forEach { t ->
+                now = t
+                fixes.emit(fixAt(40.0, 100.0, t))
+                delay(20)
+            }
+
+            // Fuera de ruta desde la tercera lectura lejana (4 s): intentos a los 14, 24, 34, 44 y 54 s.
+            assertEquals(listOf(14_000L, 24_000L, 34_000L, 44_000L, 54_000L), routes.calledAtMs)
+            // Un aviso al salirse y uno por cada intento fallido.
+            assertEquals(6, vibration.played.count { it == VibrationPatterns.OFF_ROUTE })
+            val state = tracking.state.value
+            assertEquals(NavigationStatus.OFF_ROUTE, state.status)
+            assertEquals("Gire a la derecha.", state.nextInstruction)
+            assertTrue(!state.recalculating)
+            assertTrue(logger.lines.any { it.startsWith("W/Nav: No se pudo recalcular (intento 5 de 5)") })
+        } finally {
+            tracking.stop()
+        }
+    }
+
+    @Test
+    fun backOnRouteGivesTheNextDeviationAllItsAttemptsAgain() = runBlocking {
+        val fixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 16)
+        var now = 0L
+        val routes = FailingRoutes { now }
+        val tracking = TrackNavigation(
+            fixes,
+            routes,
+            FakeVibration(),
+            FakeVibrationEvents(),
+            FakeSpeech(),
+            clock = { now },
+            tickMs = 600_000,
+        )
+
+        suspend fun at(t: Long, east: Double, north: Double) {
+            now = t
+            fixes.emit(fixAt(east, north, t))
+            delay(20)
+        }
+
+        tracking.start(lRoute(), this)
+        try {
+            delay(20)
+            (0L..60_000L step 2_000L).forEach { at(it, 40.0, 100.0) }
+            assertEquals(5, routes.calledAtMs.size)
+
+            (62_000L..66_000L step 2_000L).forEach { at(it, 0.0, 100.0) }
+            assertEquals(NavigationStatus.ON_ROUTE, tracking.state.value.status)
+
+            (68_000L..86_000L step 2_000L).forEach { at(it, 40.0, 110.0) }
+            assertEquals(6, routes.calledAtMs.size)
+        } finally {
+            tracking.stop()
+        }
+    }
+
+    @Test
+    fun routeIsSavedWhileNavigatingAndForgottenOnStop() = runBlocking {
+        val fixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 16)
+        val store = FakeStore()
+        var now = 0L
+        val tracking = TrackNavigation(
+            fixes,
+            FakeRoutes(detour),
+            FakeVibration(),
+            FakeVibrationEvents(),
+            FakeSpeech(),
+            clock = { now },
+            tickMs = 600_000,
+            activeRoutes = store,
+        )
+
+        tracking.start(lRoute(), this)
+        try {
+            assertEquals(lRoute(), store.saved)
+
+            delay(20)
+            listOf(0L, 1_000L, 2_000L, 12_000L).forEach { t ->
+                now = t
+                fixes.emit(fixAt(40.0, 100.0, t))
+                delay(20)
+            }
+            assertEquals("la ruta recalculada reemplaza a la guardada", detour, store.saved)
+        } finally {
+            tracking.stop()
+        }
+        assertNull(store.saved)
+    }
+
+    @Test
+    fun arrivingForgetsTheSavedRoute() = runBlocking {
+        val fixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 16)
+        val store = FakeStore()
+        val tracking = TrackNavigation(
+            fixes,
+            FakeRoutes(detour),
+            FakeVibration(),
+            FakeVibrationEvents(),
+            FakeSpeech(),
+            clock = { 1_000L },
+            tickMs = 600_000,
+            activeRoutes = store,
+        )
+
+        tracking.start(lRoute(), this)
+        try {
+            delay(20)
+            fixes.emit(fixAt(200.0, 200.0, 1_000L))
+            delay(20)
+
+            assertEquals(NavigationStatus.ARRIVED, tracking.state.value.status)
+            assertNull(store.saved)
+        } finally {
+            tracking.stop()
+        }
+    }
+
+    @Test
+    fun eachStatusChangeIsLoggedWithTheNavTagAndStopIsIdempotent() = runBlocking {
+        val fixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 16)
+        val vibration = FakeVibration()
+        val logger = FakeLogger()
+        var now = 0L
+        val tracking = TrackNavigation(
+            fixes,
+            FakeRoutes(detour),
+            vibration,
+            FakeVibrationEvents(),
+            FakeSpeech(),
+            clock = { now },
+            tickMs = 600_000,
+            logger = logger,
+        )
+
+        tracking.start(lRoute(), this)
+        delay(20)
+        listOf(0L, 1_000L, 2_000L).forEach { t ->
+            now = t
+            fixes.emit(fixAt(40.0, 100.0, t))
+            delay(20)
+        }
+        tracking.stop()
+        tracking.stop()
+
+        assertTrue(logger.lines.any { it.startsWith("I/Nav: Navegación iniciada hacia «Parque de prueba»") })
+        assertTrue(logger.lines.any { it.startsWith("I/Nav: Estado - → ON_ROUTE") })
+        assertTrue(logger.lines.any { it.startsWith("I/Nav: Estado ON_ROUTE → OFF_ROUTE") })
+        assertEquals(1, logger.lines.count { it.startsWith("I/Nav: Navegación terminada") })
+        assertEquals(1, vibration.stops)
     }
 
     @Test

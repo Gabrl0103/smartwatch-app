@@ -38,6 +38,7 @@ class NavigationEngine(
     private var distanceToRouteM: Double? = null
     private var speedMps = 0.0
     private var lastFixMs = startMs
+    private var located = false
 
     private var farReadings = 0
     private var offRoute = false
@@ -74,13 +75,21 @@ class NavigationEngine(
         speedMps = fix.speedMps ?: 0.0
 
         val here = Coordinates(fix.lat, fix.lng)
-        val snap = snapToPolyline(
+        val near = snapToPolyline(
             here,
             polyline,
             cumulative,
             fromAlongM = progressM - thresholds.snapBehindM,
             toAlongM = progressM + thresholds.snapAheadM,
         )
+        // Si la primera lectura no está cerca del inicio (p. ej. al continuar una ruta anterior
+        // a mitad de camino), se busca en toda la ruta antes de darla por desviada.
+        val snap = if (!located && near.distanceToRouteM > thresholds.offRouteM) {
+            snapToPolyline(here, polyline, cumulative)
+        } else {
+            near
+        }
+        located = true
         distanceToRouteM = snap.distanceToRouteM
         updateOffRoute(snap.distanceToRouteM, nowMs, events)
         // El progreso solo avanza, y solo con lecturas sobre la ruta.

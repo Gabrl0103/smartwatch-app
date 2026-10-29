@@ -48,6 +48,7 @@ fun RumboApp(viewModel: RoutePlanningViewModel) {
     val voiceEnabled by viewModel.voiceEnabled.collectAsState()
     val speechStatus by viewModel.speechStatus.collectAsState()
     val waitMessage by viewModel.waitMessage.collectAsState()
+    val previousRoute by viewModel.previousRoute.collectAsState()
     var gpsAvailable by remember { mutableStateOf(context.isGranted(Permission.LOCATION)) }
     val refreshGps = {
         gpsAvailable = context.isGranted(Permission.LOCATION)
@@ -77,6 +78,9 @@ fun RumboApp(viewModel: RoutePlanningViewModel) {
     }
     // Android 13+ pide permiso para mostrar la notificación "Rumbo: navegando".
     val onGo = { requestPermissions(listOf(Permission.NOTIFICATIONS)) { viewModel.go() } }
+    val onContinue = {
+        requestPermissions(listOf(Permission.LOCATION, Permission.NOTIFICATIONS)) { viewModel.resumePreviousRoute() }
+    }
     val onOpenSettings = {
         if (!context.openAppSettings()) viewModel.showError("No pude abrir los ajustes del reloj")
     }
@@ -102,7 +106,9 @@ fun RumboApp(viewModel: RoutePlanningViewModel) {
                     speechStatus = speechStatus,
                     gpsAvailable = gpsAvailable,
                     waitMessage = waitMessage,
+                    previousDestination = previousRoute?.destinationName,
                     onSpeak = onSpeak,
+                    onContinue = onContinue,
                     onChooseSavedPlace = onChooseSavedPlace,
                     onGo = onGo,
                     onInstallVoice = onInstallVoice,
@@ -122,7 +128,9 @@ private fun Screen(
     speechStatus: SpeechStatus,
     gpsAvailable: Boolean,
     waitMessage: String?,
+    previousDestination: String?,
     onSpeak: () -> Unit,
+    onContinue: () -> Unit,
     onChooseSavedPlace: (SavedPlace) -> Unit,
     onGo: () -> Unit,
     onInstallVoice: () -> Unit,
@@ -138,6 +146,8 @@ private fun Screen(
             speechStatus = speechStatus,
             onInstallVoice = onInstallVoice,
             gpsAvailable = gpsAvailable,
+            previousDestination = previousDestination,
+            onContinue = onContinue,
         )
         PlanState.Listening -> ListeningScreen()
         PlanState.Processing -> ProcessingScreen(waitMessage ?: "Buscando ruta...")

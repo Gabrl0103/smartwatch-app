@@ -18,6 +18,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 
 private const val CHANNEL_ID = "navegacion"
+private const val TAG = "Nav"
 private const val NOTIFICATION_ID = 1
 
 /**
@@ -30,7 +31,7 @@ class NavigationForegroundService : Service() {
     // inesperado queda en el log en vez de cerrar la app.
     private val scope = CoroutineScope(
         SupervisorJob() + Dispatchers.Main.immediate +
-            CoroutineExceptionHandler { _, e -> Log.e("Nav", "Error inesperado en la navegación", e) },
+            CoroutineExceptionHandler { _, e -> Log.e(TAG, "Error inesperado en la navegación", e) },
     )
 
     private val container get() = (application as RumboApplication).container
@@ -39,20 +40,26 @@ class NavigationForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         promoteToForeground()
-        val route = container.navigationRunner.currentRoute
+        val route = container.navigationRunner.activeRoute
         if (route == null) {
+            Log.w(TAG, "Servicio iniciado sin ruta: se detiene")
             stopSelf()
             return START_NOT_STICKY
         }
+        Log.i(TAG, "Servicio en primer plano: GPS y vibraciones siguen con la pantalla apagada")
         container.locationTracker.start()
         container.trackNavigation.start(route, scope)
+        // Si el proceso muere no se reinicia solo: al reabrir, la app ofrece continuar la ruta.
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
+        // Normalmente "Terminar" ya detuvo todo; esto cubre que Android cierre el servicio.
         container.trackNavigation.stop()
         container.locationTracker.stop()
         scope.cancel()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        Log.i(TAG, "Servicio detenido y notificación quitada")
         super.onDestroy()
     }
 
@@ -70,7 +77,7 @@ class NavigationForegroundService : Service() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_navigation)
             .setContentTitle("Rumbo: navegando")
-            .setContentText(container.navigationRunner.currentRoute?.destinationName.orEmpty())
+            .setContentText(container.navigationRunner.activeRoute?.destinationName.orEmpty())
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_NAVIGATION)
             .setContentIntent(openApp)
@@ -84,6 +91,10 @@ class NavigationForegroundService : Service() {
         } catch (e: SecurityException) {
             // Sin permiso de ubicación Android no deja usar el tipo "location": la navegación
             // sigue como servicio normal y mostrará "Sin señal GPS".
+            Log.w(TAG, "Sin servicio en primer plano de ubicación: ${e.message}")
+        } catch (e: IllegalStateException) {
+            // Android 12+ no deja pasar a primer plano desde segundo plano: se navega igual.
+            Log.w(TAG, "No se pudo pasar a primer plano: ${e.message}")
         }
     }
 }

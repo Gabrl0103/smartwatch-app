@@ -11,6 +11,7 @@ import com.rumbo.watchapp.domain.port.SpeechEngine
 import com.rumbo.watchapp.domain.port.SpeechStatus
 import com.rumbo.watchapp.presentation.components.MicButton
 import com.rumbo.watchapp.presentation.components.PillButton
+import com.rumbo.watchapp.presentation.components.PillStyle
 import com.rumbo.watchapp.presentation.components.PillSwitch
 import com.rumbo.watchapp.presentation.components.StateBadge
 import com.rumbo.watchapp.presentation.theme.Primary
@@ -26,11 +27,22 @@ fun StartScreen(
     speechStatus: SpeechStatus,
     onInstallVoice: () -> Unit,
     gpsAvailable: Boolean,
+    previousDestination: String? = null,
+    onContinue: () -> Unit = {},
 ) {
     RumboScreen(paneTitle = "Inicio") {
         StateBadge("Listo para navegar", Primary)
         // Sin permiso de ubicación: se pide al tocar el micrófono o un lugar guardado.
         if (!gpsAvailable) StateBadge("Sin GPS", StatusNoSignal)
+        // Lo primero si la app se cerró a mitad de una ruta: es lo más probable que quiera hacer.
+        if (previousDestination != null) {
+            PillButton(
+                "Continuar ruta anterior",
+                onClick = onContinue,
+                style = PillStyle.PRIMARY,
+                secondaryLabel = previousDestination,
+            )
+        }
         Text(
             text = "¿A dónde vamos?",
             modifier = Modifier.semantics { heading() },

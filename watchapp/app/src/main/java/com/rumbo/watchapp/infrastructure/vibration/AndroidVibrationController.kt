@@ -24,7 +24,7 @@ class AndroidVibrationController(context: Context) : VibrationController {
         }
 
     override fun play(pattern: VibrationPattern) {
-        Log.d(TAG, "${pattern.label} tiempos=${pattern.timingsMs} amplitudes=${pattern.amplitudes}")
+        Log.i(TAG, "${pattern.label} tiempos=${pattern.timingsMs} amplitudes=${pattern.amplitudes}")
         if (!vibrator.hasVibrator()) return
         val timings = pattern.timingsMs.toLongArray()
         val effect = if (vibrator.hasAmplitudeControl()) {
@@ -36,7 +36,7 @@ class AndroidVibrationController(context: Context) : VibrationController {
     }
 
     override fun stop() {
-        Log.d(TAG, "Detenida")
+        Log.i(TAG, "Detenida")
         vibrator.cancel()
     }
 }

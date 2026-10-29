@@ -27,6 +27,7 @@ class MainActivity : ComponentActivity() {
                     container.speech,
                     container.voiceSettings,
                     container.serverStatus.waking,
+                    container.activeRoutes,
                 )
             }
         }

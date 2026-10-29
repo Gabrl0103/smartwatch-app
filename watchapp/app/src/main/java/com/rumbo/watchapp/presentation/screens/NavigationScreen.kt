@@ -80,11 +80,17 @@ fun NavigationScreen(
     onFinish: () -> Unit,
     onKeepNavigating: () -> Unit,
 ) {
-    KeepScreenOn()
-    if (confirmFinish) {
-        FinishRouteScreen(onFinish = onFinish, onKeepNavigating = onKeepNavigating)
-        return
+    ScreenOnWhileNavigating(wakeKey = state.status to confirmFinish) {
+        if (confirmFinish) {
+            FinishRouteScreen(onFinish = onFinish, onKeepNavigating = onKeepNavigating)
+        } else {
+            RouteScreen(state, onRepeat = onRepeat, onFinish = onFinish)
+        }
     }
+}
+
+@Composable
+private fun RouteScreen(state: TrackingState, onRepeat: () -> Unit, onFinish: () -> Unit) {
     val look = lookOf(state)
     val arrived = state.status == NavigationStatus.ARRIVED
     RumboScreen(

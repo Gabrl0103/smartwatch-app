@@ -24,6 +24,7 @@ misma pantalla desplazada hasta el final.
 | `19_componentes.png` | StateBadge, ProgressRing, StateIcon (todos), VibrationIndicator y botón |
 | `20_permiso_ubicacion.png` | Permiso necesario (ubicación negada): Abrir ajustes / Inicio |
 | `21_buscando_gps.png` | Procesando mientras espera una lectura GPS buena |
+| `22_continuar_ruta.png` | Inicio con "Continuar ruta anterior" tras cerrarse la app a mitad de ruta |
 
 ## Regenerarlas
 

@@ -7,6 +7,7 @@ import com.rumbo.watchapp.application.usecase.ManageSavedPlaces
 import com.rumbo.watchapp.application.usecase.PlanRouteFromVoice
 import com.rumbo.watchapp.application.usecase.RegisterDevice
 import com.rumbo.watchapp.application.usecase.TrackNavigation
+import com.rumbo.watchapp.domain.port.ActiveRouteStore
 import com.rumbo.watchapp.domain.port.AudioRecorder
 import com.rumbo.watchapp.domain.port.ServerStatus
 import com.rumbo.watchapp.domain.port.SpeechOutput
@@ -14,6 +15,7 @@ import com.rumbo.watchapp.domain.port.VibrationController
 import com.rumbo.watchapp.domain.port.VoiceSettings
 import com.rumbo.watchapp.infrastructure.audio.MediaAudioRecorder
 import com.rumbo.watchapp.infrastructure.location.AndroidLocationProvider
+import com.rumbo.watchapp.infrastructure.logging.AndroidLogger
 import com.rumbo.watchapp.infrastructure.navigation.ForegroundNavigationRunner
 import com.rumbo.watchapp.infrastructure.network.BackendServerStatus
 import com.rumbo.watchapp.infrastructure.network.DevicesApiClient
@@ -23,6 +25,7 @@ import com.rumbo.watchapp.infrastructure.network.RoutesApiClient
 import com.rumbo.watchapp.infrastructure.network.SavedPlacesApiClient
 import com.rumbo.watchapp.infrastructure.network.VibrationEventsApiClient
 import com.rumbo.watchapp.infrastructure.network.VoiceApiClient
+import com.rumbo.watchapp.infrastructure.storage.PreferencesActiveRouteStore
 import com.rumbo.watchapp.infrastructure.storage.PreferencesDeviceStore
 import com.rumbo.watchapp.infrastructure.storage.PreferencesVoiceSettings
 import com.rumbo.watchapp.infrastructure.tts.AndroidTextToSpeech
@@ -73,6 +76,7 @@ class AppContainer(context: Context) {
         RoutesApiClient,
         origin = locationTracker::awaitOrigin,
     )
+    val activeRoutes: ActiveRouteStore = PreferencesActiveRouteStore(appContext, clock)
     val trackNavigation = TrackNavigation(
         fixes = locationTracker.fixes,
         routes = RoutesApiClient,
@@ -80,8 +84,10 @@ class AppContainer(context: Context) {
         vibrationEvents = VibrationEventsApiClient,
         speech = speech,
         clock = clock,
+        activeRoutes = activeRoutes,
+        logger = AndroidLogger,
     )
-    val navigationRunner = ForegroundNavigationRunner(appContext)
+    val navigationRunner = ForegroundNavigationRunner(appContext, trackNavigation, locationTracker, appScope)
 
     /**
      * Despierta el servidor de Render apenas se abre la app, para que al pedir la ruta ya esté

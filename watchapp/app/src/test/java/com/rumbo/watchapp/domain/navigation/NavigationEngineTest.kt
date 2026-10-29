@@ -172,4 +172,26 @@ class NavigationEngineTest {
         }
         assertEquals(35.0, lastProgress, 0.5)
     }
+
+    @Test
+    fun firstFixHalfwayAlongTheRouteResumesThereWithoutGoingOffRoute() {
+        // "Continuar ruta anterior" a mitad de camino: ya dobló y va por el tramo este.
+        val events = walk(100.0 to 200.0, 105.0 to 200.0, 110.0 to 200.0)
+
+        assertEquals(listOf(NavigationEvent.NextStepChanged(route.steps[2])), events)
+        assertEquals(NavigationStatus.ON_ROUTE, engine.snapshot.status)
+        assertEquals(310.0, engine.snapshot.progressM, 0.5)
+        assertEquals(90.0, engine.snapshot.remainingM, 0.5)
+    }
+
+    @Test
+    fun laterFixesStillOnlyLookNearTheCurrentProgress() {
+        walk(*north(0, 50))
+
+        // Ya ubicado, una lectura sobre el tramo este (lejos del progreso) no lo hace saltar.
+        val events = walk(100.0 to 200.0)
+
+        assertEquals(emptyList<NavigationEvent>(), events)
+        assertEquals(50.0, engine.snapshot.progressM, 0.5)
+    }
 }

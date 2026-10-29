@@ -108,7 +108,7 @@ private fun Navigation(state: TrackingState, confirmFinish: Boolean = false) =
     NavigationScreen(state, confirmFinish, onRepeat = {}, onFinish = {}, onKeepNavigating = {})
 
 @Composable
-private fun Start() = StartScreen(
+private fun Start(previousDestination: String? = null) = StartScreen(
     onSpeak = {},
     onSavedPlaces = {},
     onVibrations = {},
@@ -117,6 +117,7 @@ private fun Start() = StartScreen(
     speechStatus = SpeechStatus(SpeechEngine.DEVICE),
     onInstallVoice = {},
     gpsAvailable = true,
+    previousDestination = previousDestination,
 )
 
 /**
@@ -185,6 +186,7 @@ class ScreenshotsTest {
         Shot("19_componentes") { ComponentsGallery() },
         Shot("20_permiso_ubicacion") { PermissionScreen(Permission.LOCATION, onOpenSettings = {}, onHome = {}) },
         Shot("21_buscando_gps") { ProcessingScreen(GPS_SEARCHING_MESSAGE) },
+        Shot("22_continuar_ruta") { Start(previousDestination = "Parque Bolívar") },
     )
 
     @Test
