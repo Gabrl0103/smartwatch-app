@@ -73,17 +73,18 @@ import org.junit.Test
 /** Una captura: [scrolls] desplaza la pantalla hacia abajo antes de tomarla. */
 private class Shot(val name: String, val scrolls: Int = 0, val content: @Composable () -> Unit)
 
+// La ruta real de la demo (docs/demo): Plaza de Nariño → Parque Bolívar, 1 791 m a 1,25 m/s.
 private val ROUTE = Route(
     destinationName = "Parque Bolívar",
-    distanceM = 1970.0,
-    durationS = 1500.0,
-    steps = listOf(RouteStep(1, Maneuver.ARRIVE, "Ha llegado.", 0.0, 1.2056, -77.2703)),
-    polyline = listOf(Coordinates(1.2136, -77.2811), Coordinates(1.2056, -77.2703)),
+    distanceM = 1791.0,
+    durationS = 1433.0,
+    steps = listOf(RouteStep(1, Maneuver.ARRIVE, "Su destino está a la derecha.", 0.0, 1.206129, -77.27007)),
+    polyline = listOf(Coordinates(1.214997, -77.278419), Coordinates(1.206129, -77.27007)),
 )
 
 private val PLACES = listOf(
     SavedPlace(1, "Casa", 1.2146, -77.2783),
-    SavedPlace(2, "Parque Bolívar", 1.2056, -77.2703),
+    SavedPlace(2, "Parque Bolívar", 1.205584, -77.270279),
     SavedPlace(3, "Universidad", 1.2110, -77.2770),
 )
 
@@ -92,7 +93,7 @@ private fun pattern(cue: VibrationCue): VibrationPattern = VibrationPatterns.of(
 
 private fun tracking(
     status: NavigationStatus,
-    instruction: String = "Gira a la izquierda hacia la Calle 18",
+    instruction: String = "Gire a la izquierda hacia Carrera 14.",
     maneuver: Maneuver = Maneuver.LEFT,
     toNext: Double = 30.0,
     pattern: VibrationPattern = pattern(VibrationCue.TURN_APPROACHING),
@@ -103,8 +104,8 @@ private fun tracking(
     nextInstruction = instruction,
     nextManeuver = maneuver,
     distanceToNextStepM = toNext,
-    stepLengthM = 120.0,
-    remainingM = 1240.0,
+    stepLengthM = 1304.0,
+    remainingM = 466.0,
     pattern = pattern,
     recalculating = recalculating,
 )
@@ -170,8 +171,6 @@ class ScreenshotsTest {
             Navigation(
                 tracking(
                     NavigationStatus.ON_ROUTE,
-                    instruction = "Sigue recto por la Carrera 24",
-                    maneuver = Maneuver.STRAIGHT,
                     toNext = 85.0,
                     pattern = pattern(VibrationCue.ON_ROUTE),
                 ),
@@ -185,7 +184,7 @@ class ScreenshotsTest {
             Navigation(
                 tracking(
                     NavigationStatus.MANEUVER,
-                    instruction = "Gira a la derecha",
+                    instruction = "Gire a la derecha hacia Avenida Bolívar.",
                     maneuver = Maneuver.RIGHT,
                     toNext = 8.0,
                     pattern = pattern(VibrationCue.RIGHT),
@@ -208,6 +207,10 @@ class ScreenshotsTest {
         Shot("21_buscando_gps") { ProcessingScreen(GPS_SEARCHING_MESSAGE) },
         Shot("22_continuar_ruta") { Start(previousDestination = "Parque Bolívar") },
         Shot("23_vibraciones_sin_intensidad") { Vibrations(supportsAmplitude = false) },
+        // La indicación real más larga de la demo: baja a 16 sp para leerse entera en el círculo.
+        Shot("25_indicacion_larga") {
+            Navigation(tracking(NavigationStatus.TURN_APPROACHING, instruction = "Gire a la izquierda para permanecer en Carrera 14."))
+        },
         Shot("24_demostracion_vibraciones") {
             Vibrations(demo = DemoStep(VibrationCue.LEFT, 3, VibrationCue.entries.size))
         },

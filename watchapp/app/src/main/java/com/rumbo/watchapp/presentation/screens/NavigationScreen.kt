@@ -3,6 +3,10 @@ package com.rumbo.watchapp.presentation.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,6 +44,10 @@ private const val LONG_INSTRUCTION = 16
 
 // Desde este largo ocupa tres líneas: el ícono baja a 60 dp para que se lea entera sin desplazar.
 private const val VERY_LONG_INSTRUCTION = 30
+
+// Más líneas que esto a 20 sp no caben en el círculo debajo del ícono: la última queda cortada
+// por el borde. Entonces la indicación baja a 16 sp y el ícono a 48 dp.
+private const val MAX_INSTRUCTION_LINES = 3
 
 /** Cómo se ve cada estado: nombre, color, ícono y la frase principal. Nunca solo el color. */
 private data class StatusLook(val label: String, val color: Color, val icon: StateIconKind, val headline: String)
@@ -106,18 +114,27 @@ private fun RouteScreen(state: TrackingState, onRepeat: () -> Unit, onFinish: ()
         // TalkBack anuncia el estado y la indicación cuando cambian; las distancias no, para no
         // hablar en cada lectura del GPS.
         StateBadge(look.label, look.color, announce = true)
-        StateIcon(look.icon, look.color, size = if (look.headline.length > VERY_LONG_INSTRUCTION) 60.dp else 72.dp)
+        // Se decide midiendo el texto, no contando letras: el corte de línea depende de las palabras
+        // ("Gire a la derecha hacia Avenida Bolívar." ya ocupa cuatro).
+        var compact by remember(look.headline) { mutableStateOf(false) }
+        val iconSize = when {
+            compact -> 48.dp
+            look.headline.length > VERY_LONG_INSTRUCTION -> 60.dp
+            else -> 72.dp
+        }
+        StateIcon(look.icon, look.color, size = iconSize)
         Text(
             text = look.headline,
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            style = if (look.headline.length > LONG_INSTRUCTION) {
-                MaterialTheme.typography.titleMedium
-            } else {
-                MaterialTheme.typography.titleLarge
+            style = when {
+                compact -> MaterialTheme.typography.titleSmall
+                look.headline.length > LONG_INSTRUCTION -> MaterialTheme.typography.titleMedium
+                else -> MaterialTheme.typography.titleLarge
             },
             textAlign = TextAlign.Center,
             maxLines = 4,
             overflow = TextOverflow.Ellipsis,
+            onTextLayout = { layout -> if (!compact && layout.lineCount > MAX_INSTRUCTION_LINES) compact = true },
         )
         if (state.recalculating) {
             Text(

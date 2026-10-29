@@ -34,8 +34,8 @@ Proyecto: **Rumbo**, app Wear OS de navegación por vibraciones para personas ci
 - Logcat: `adb logcat -s Nav Vibracion Red` (estados de navegación, patrones de vibración y peticiones al backend).
 - Demo con GPX (`docs/demo`): poner la posición antes de pedir la ruta (`adb emu geo fix -77.278419 1.214997`, primero la longitud; para repetirla, reabrir la app antes); la app ya no inventa el origen. "Sin señal" en el emulador: apagar la ubicación 15 s (`adb shell cmd location set-location-enabled false` y luego `true`); el hueco del GPX no basta.
 
-## Estado (2026-10-29, REQUIREMENTS v0.28)
+## Estado (2026-10-29, REQUIREMENTS v0.30)
 Fases 1–3 completas; fase 4 (asistente y cierre) en curso.
 - Hecho: voz → destino → confirmar (con lugares guardados), ruta a pie, navegación con GPS y vibraciones (giro próximo y maniobra en dos etapas, desvío con recálculo, sin señal, llegada) que se distinguen solo por ritmo en relojes sin control de intensidad, pantalla "Vibraciones" para probarlas (secuencia de demostración y ajustes de intensidad y duración), voz hablada, UI redonda con TalkBack, servicio en primer plano (sigue con la pantalla apagada), permisos pedidos al necesitarlos con pantalla de explicación, errores de red/GPS en español con un reintento, "Continuar ruta anterior" si el proceso muere, base de datos con historial, rutas verificadas en mapa (`tools/preview_route.py`) con pasos limpios y simulación realista del GPS (`tools/route_to_gpx.py`).
-- Pruebas: 146 pytest y 177 JUnit (incluye la máquina de estados con la ruta real y los tres GPX realistas de `docs/demo`, y 30 recorridos con ruido); pruebas manuales en `docs/PRUEBAS.md`.
+- Pruebas: 146 pytest y 181 JUnit (incluye la máquina de estados con la ruta real y los tres GPX realistas de `docs/demo`, y 30 recorridos con ruido); pruebas manuales en `docs/PRUEBAS.md`.
 - Pendiente: asistente conversacional en el reloj (RF9; el backend ya devuelve `intent: ask` y `question`, el reloj aún solo maneja `navigate`), pruebas de accesibilidad en reloj real, video de sustentación y confirmar los requisitos del profesor.
