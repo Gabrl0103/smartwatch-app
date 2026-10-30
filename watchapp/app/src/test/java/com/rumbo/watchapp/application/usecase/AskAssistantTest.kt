@@ -39,9 +39,25 @@ class AskAssistantTest {
     fun onRouteTellsDestinationNextInstructionAndDistances() {
         assertEquals(
             "Navegando a pie hacia Parque Bolívar. Siguiente indicación: Gire a la izquierda hacia " +
-                "Carrera 14, en 28 m. Faltan 466 m para llegar.",
+                "Carrera 14, en treinta metros. Faltan cuatrocientos cincuenta metros para llegar.",
             routeContext(onRoute),
         )
+    }
+
+    @Test
+    fun distancesAreRoundedLikeTheRouteAnnouncements() {
+        // Las mismas reglas que spokenDistance: de 10 en 10 bajo 100 m, de 50 en 50 bajo 1 km y
+        // en décimas de kilómetro después.
+        val cases = mapOf(
+            47.0 to "cincuenta metros",
+            130.0 to "ciento cincuenta metros",
+            999.0 to "un kilómetro",
+            1402.0 to "uno coma cuatro kilómetros",
+        )
+        cases.forEach { (meters, spoken) ->
+            assertTrue(routeContext(onRoute.copy(remainingM = meters)).endsWith("Faltan $spoken para llegar."))
+            assertTrue(routeContext(onRoute.copy(distanceToNextStepM = meters)).contains("Carrera 14, en $spoken."))
+        }
     }
 
     @Test

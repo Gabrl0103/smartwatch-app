@@ -1,8 +1,8 @@
 package com.rumbo.watchapp.application.usecase
 
+import com.rumbo.watchapp.application.speech.spokenDistance
 import com.rumbo.watchapp.domain.navigation.NavigationStatus
 import com.rumbo.watchapp.domain.port.AssistantRepository
-import kotlin.math.roundToInt
 
 /**
  * Responde una pregunta hecha por voz. Si se está navegando, le pasa al asistente el estado de la
@@ -17,13 +17,18 @@ class AskAssistant(
         assistant.ask(question, routeContext(currentRoute()))
 }
 
-/** El estado de la ruta en frases cortas para el asistente; vacío si no se está navegando. */
+/**
+ * El estado de la ruta en frases cortas para el asistente; vacío si no se está navegando. Las
+ * distancias van redondeadas y en palabras ([spokenDistance]), como en los avisos de la ruta, para
+ * que la respuesta no diga "mil cuatrocientos dos metros" donde el aviso dice "uno coma cuatro
+ * kilómetros".
+ */
 fun routeContext(state: TrackingState?): String {
     if (state == null || state.destinationName.isBlank()) return ""
     val destination = state.destinationName
-    val remaining = "Faltan ${state.remainingM.roundToInt()} m para llegar."
+    val remaining = "Faltan ${spokenDistance(state.remainingM)} para llegar."
     val next = state.nextInstruction?.let { instruction ->
-        val distance = state.distanceToNextStepM?.let { ", en ${it.roundToInt()} m" }.orEmpty()
+        val distance = state.distanceToNextStepM?.let { ", en ${spokenDistance(it)}" }.orEmpty()
         "Siguiente indicación: ${instruction.trim().trimEnd('.')}$distance."
     }
     return when (state.status) {
