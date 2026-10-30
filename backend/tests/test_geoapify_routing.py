@@ -3,7 +3,7 @@ import pytest
 
 from domain.errors import ExternalServiceError, NotFoundError
 from domain.models.route import Coordinates, Maneuver
-from infrastructure.routing.geoapify_routing import GeoapifyRouting, to_maneuver
+from infrastructure.routing.geoapify_routing import GeoapifyRouting, destination_side, to_maneuver
 
 ORIGIN = Coordinates(1.2142, -77.2785)
 DESTINATION = Coordinates(1.2006, -77.2786)
@@ -72,6 +72,25 @@ def test_to_maneuver_maps_geoapify_types():
     assert to_maneuver("DestinationReachedLeft") == Maneuver.ARRIVE
     assert to_maneuver("DestinationReached") == Maneuver.ARRIVE
     assert to_maneuver("Unknown") == Maneuver.STRAIGHT
+
+
+def test_destination_side_comes_from_the_arrival_type():
+    assert destination_side("DestinationReachedRight") == "right"
+    assert destination_side("DestinationReachedLeft") == "left"
+    assert destination_side("DestinationReached") == ""
+    assert destination_side("Right") == ""
+
+
+def test_the_arrival_step_carries_the_side_of_the_destination():
+    steps = [
+        step("StartAt", "Camine hacia el sur.", 100, 0),
+        step("DestinationReachedRight", "Su destino está a la derecha.", 0, 2),
+    ]
+    routing = make_routing(lambda r: httpx.Response(200, json=route_reply(steps)))
+
+    route = routing.get_walking_route(ORIGIN, DESTINATION)
+
+    assert [s.destination_side for s in route.steps] == ["", "right"]
 
 
 def test_to_maneuver_keeps_how_sharp_the_turn_is():

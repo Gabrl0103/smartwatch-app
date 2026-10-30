@@ -3,9 +3,11 @@ package com.rumbo.watchapp.application.speech
 import com.rumbo.watchapp.domain.model.Maneuver
 import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.domain.model.RouteStep
+import com.rumbo.watchapp.domain.model.Side
 import com.rumbo.watchapp.domain.navigation.NavigationEvent
 import com.rumbo.watchapp.domain.navigation.NavigationSnapshot
 import com.rumbo.watchapp.domain.navigation.NavigationStatus
+import com.rumbo.watchapp.domain.navigation.NavigationThresholds
 import com.rumbo.watchapp.domain.port.SpeechPriority
 import kotlin.math.ceil
 import kotlin.math.roundToInt
@@ -45,16 +47,32 @@ fun confirmPhrase(route: Route): String =
         "${spokenMinutes(route.durationS)} a pie. ¿Vamos?"
 
 /**
- * La frase de inicio orienta con la primera instrucción ("Camine hacia el norte") y, si el primer
- * giro queda a más de [aheadMinM], ya hace de su aviso lejano.
+ * La frase de inicio orienta con la primera instrucción ("Camine hacia el norte") y hace de aviso
+ * lejano del primer giro o de aviso del destino si ya está cerca, porque el motor no los repite.
  */
-fun startPhrase(route: Route, snapshot: NavigationSnapshot, aheadMinM: Double): String {
+fun startPhrase(route: Route, snapshot: NavigationSnapshot, thresholds: NavigationThresholds): String {
     val first = route.steps.firstOrNull() ?: return "Iniciando ruta."
-    val next = snapshot.nextStep
+    val next = snapshot.nextStep?.takeIf { it != first }
     val distance = snapshot.distanceToNextStepM
-    val ahead = next != null && next != first && next.maneuver.isTurn && distance != null && distance > aheadMinM
-    val turn = if (ahead) " En ${spokenDistance(distance!!)}, ${turnAction(next!!)}." else ""
-    return "Iniciando ruta. ${sentence(first.instruction)}$turn"
+    val upcoming = when {
+        next == null || distance == null -> ""
+        next.maneuver == Maneuver.ARRIVE && distance <= thresholds.destinationNearM ->
+            " ${destinationNearPhrase(distance, next.destinationSide)}"
+        next.maneuver.isTurn && distance > thresholds.turnAheadMinM ->
+            " En ${spokenDistance(distance)}, ${turnAction(next)}."
+        else -> ""
+    }
+    return "Iniciando ruta. ${sentence(first.instruction)}$upcoming"
+}
+
+/** "Tu destino está en cien metros, a la derecha." Sin lado si el proveedor no lo da. */
+fun destinationNearPhrase(distanceM: Double, side: Side?): String {
+    val where = when (side) {
+        Side.LEFT -> ", a la izquierda"
+        Side.RIGHT -> ", a la derecha"
+        null -> ""
+    }
+    return "Tu destino está en ${spokenDistance(distanceM)}$where."
 }
 
 /** Lo que hay que hacer en la maniobra, sin distancia ni calle: "gira ligeramente a la derecha". */
@@ -128,6 +146,9 @@ fun navigationPhrase(events: List<NavigationEvent>, snapshot: NavigationSnapshot
         if (events.any { it is NavigationEvent.TurnApproaching }) {
             return Phrase(turnApproachingPhrase(distance, step), SpeechPriority.HIGH)
         }
+        if (NavigationEvent.DestinationNear in events) {
+            return Phrase(destinationNearPhrase(distance, step.destinationSide), SpeechPriority.HIGH)
+        }
         // Prioridad normal: no urge, y si aún suena "Gira ahora" no debe cortarlo.
         if (events.any { it is NavigationEvent.TurnAhead }) {
             return Phrase(turnAheadPhrase(distance, step, snapshot.currentStreet))
@@ -147,7 +168,7 @@ fun repeatPhrase(snapshot: NavigationSnapshot): Phrase {
         snapshot.status == NavigationStatus.OFF_ROUTE -> OFF_ROUTE_PHRASE
         snapshot.status == NavigationStatus.NO_SIGNAL -> SIGNAL_LOST_PHRASE
         step == null || distance == null -> KEEP_GOING_PHRASE
-        step.maneuver == Maneuver.ARRIVE -> "Tu destino está a ${spokenDistance(distance)}."
+        step.maneuver == Maneuver.ARRIVE -> destinationNearPhrase(distance, step.destinationSide)
         else -> turnApproachingPhrase(distance, step)
     }
     return Phrase(text, SpeechPriority.HIGH)

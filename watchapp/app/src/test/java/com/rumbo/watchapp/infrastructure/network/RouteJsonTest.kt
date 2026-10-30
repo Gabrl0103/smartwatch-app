@@ -4,6 +4,7 @@ import com.rumbo.watchapp.domain.model.Coordinates
 import com.rumbo.watchapp.domain.model.Maneuver
 import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.domain.model.RouteStep
+import com.rumbo.watchapp.domain.model.Side
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -54,12 +55,20 @@ class RouteJsonTest {
     }
 
     @Test
+    fun readsTheSideOfTheDestination() {
+        assertEquals(Side.LEFT, routeFromJson(stepJson(""""maneuver": "arrive", "destination_side": "left"""")).steps.single().destinationSide)
+        assertEquals(Side.RIGHT, routeFromJson(stepJson(""""maneuver": "arrive", "destination_side": "right"""")).steps.single().destinationSide)
+        assertNull(routeFromJson(stepJson(""""maneuver": "arrive", "destination_side": """"")).steps.single().destinationSide)
+    }
+
+    @Test
     fun aRouteFromAnOlderBackendStillLoads() {
         val step = routeFromJson(stepJson(""""maneuver": "left"""")).steps.single()
 
         assertEquals("", step.street)
         assertNull(step.roundaboutExit)
         assertNull(step.thenManeuver)
+        assertNull(step.destinationSide)
     }
 
     @Test
@@ -76,7 +85,7 @@ class RouteJsonTest {
             steps = listOf(
                 RouteStep(1, Maneuver.ROUNDABOUT, "Tome la salida.", 50.0, 1.2, -77.2, "Glorieta", roundaboutExit = 3),
                 RouteStep(2, Maneuver.U_TURN_RIGHT, "Dé la vuelta.", 50.0, 1.3, -77.3, "Calle 18", thenManeuver = Maneuver.LEFT),
-                RouteStep(3, Maneuver.ARRIVE, "Ha llegado.", 0.0, 1.4, -77.4),
+                RouteStep(3, Maneuver.ARRIVE, "Ha llegado.", 0.0, 1.4, -77.4, destinationSide = Side.RIGHT),
             ),
             polyline = listOf(Coordinates(1.2, -77.2), Coordinates(1.4, -77.4)),
             id = 7,

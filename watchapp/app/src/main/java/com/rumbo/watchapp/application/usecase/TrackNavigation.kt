@@ -122,7 +122,7 @@ class TrackNavigation(
         logger.info(TAG, "Navegación iniciada hacia «${route.destinationName}»: ${describe(route)}")
         useRoute(route, now)
         vibrate(VibrationCue.ON_ROUTE, now)
-        engine?.let { say(Phrase(startPhrase(route, it.snapshot, thresholds.turnAheadMinM))) }
+        engine?.let { say(Phrase(startPhrase(route, it.snapshot, thresholds))) }
         job = scope.launch {
             launch {
                 val filter = LocationFilter(thresholds)

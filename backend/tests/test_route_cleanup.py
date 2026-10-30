@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 
 from application.route_cleanup import (
@@ -53,6 +55,16 @@ def test_two_turns_closer_than_ten_meters_are_announced_together():
     assert steps[1].maneuver == Maneuver.RIGHT
     assert steps[1].street == "Carrera 17B"
     assert steps[1].then_maneuver == Maneuver.LEFT
+
+
+def test_the_arrival_keeps_its_side_when_a_short_step_joins_it():
+    arrive = replace(ARRIVE, destination_side="left")
+    steps = merge_short_steps([
+        step(Maneuver.STRAIGHT, "Camine hacia el sur.", 100),
+        step(Maneuver.RIGHT, "Gire a la derecha.", 6),
+        arrive,
+    ])
+    assert steps[-1].destination_side == "left"
 
 
 def test_turn_followed_by_a_short_continue_has_no_second_turn():

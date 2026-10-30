@@ -15,8 +15,8 @@ import kotlin.math.max
  * llamada, así se prueba con rutas y tiempos sintéticos. Espera lecturas ya filtradas
  * ([LocationFilter]) y [onTick] cada segundo aunque no lleguen lecturas.
  *
- * Con [announceFirstLeg] el primer tramo también da su aviso lejano: en una ruta recalculada hace
- * falta y al iniciar no, porque ya lo dice la frase de inicio.
+ * Con [announceFirstLeg] el primer tramo también da su aviso lejano o el del destino cercano: en
+ * una ruta recalculada hace falta y al iniciar no, porque ya los dice la frase de inicio.
  */
 class NavigationEngine(
     route: Route,
@@ -53,10 +53,13 @@ class NavigationEngine(
     private var aheadAnnounced = false
     private var approachAnnounced = false
     private var maneuverAnnounced = false
+    private var destinationAnnounced = false
 
     init {
         advanceNextStep(mutableListOf())
         aheadAnnounced = !announceFirstLeg
+        destinationAnnounced = !announceFirstLeg && isDestinationNext() &&
+            distanceToNextStep() <= thresholds.destinationNearM
     }
 
     val snapshot: NavigationSnapshot
@@ -133,6 +136,8 @@ class NavigationEngine(
 
     private fun stepLength() = stepAlong[nextIndex] - (stepAlong.getOrNull(nextIndex - 1) ?: 0.0)
 
+    private fun isDestinationNext() = steps.getOrNull(nextIndex)?.maneuver == Maneuver.ARRIVE
+
     private fun advanceNextStep(events: MutableList<NavigationEvent>) {
         var index = nextIndex
         while (index < steps.size && stepAlong[index] <= progressM) index++
@@ -186,8 +191,13 @@ class NavigationEngine(
 
     private fun turnStatus(events: MutableList<NavigationEvent>): NavigationStatus {
         val step = steps.getOrNull(nextIndex) ?: return NavigationStatus.ON_ROUTE
-        if (!step.maneuver.isTurn) return NavigationStatus.ON_ROUTE
         val distance = distanceToNextStep()
+        val turnJustSaid = events.any { it is NavigationEvent.TurnNow }
+        if (isDestinationNext() && !destinationAnnounced && distance <= thresholds.destinationNearM && !turnJustSaid) {
+            destinationAnnounced = true
+            events += NavigationEvent.DestinationNear
+        }
+        if (!step.maneuver.isTurn) return NavigationStatus.ON_ROUTE
         if (maneuverAnnounced || distance <= thresholds.maneuverM) {
             if (!maneuverAnnounced) {
                 // Cada giro avisa en dos etapas: si se llega a la maniobra sin haber avisado del
@@ -207,9 +217,9 @@ class NavigationEngine(
             }
             return NavigationStatus.TURN_APPROACHING
         }
-        // Si en esta lectura se avisó un giro pasado por sorpresa, el lejano espera a la siguiente:
-        // solo suena una frase por lectura y la de la maniobra es la que importa.
-        if (!aheadAnnounced && distance > thresholds.turnAheadMinM && events.none { it is NavigationEvent.TurnNow }) {
+        // Si en esta lectura se avisó un giro pasado por sorpresa, este aviso y el del destino esperan a
+        // la siguiente: solo suena una frase por lectura y la de la maniobra es la que importa.
+        if (!aheadAnnounced && distance > thresholds.turnAheadMinM && !turnJustSaid) {
             aheadAnnounced = true
             events += NavigationEvent.TurnAhead(step.maneuver)
         }

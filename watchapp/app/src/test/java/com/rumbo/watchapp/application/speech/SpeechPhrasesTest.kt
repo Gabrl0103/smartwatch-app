@@ -3,9 +3,11 @@ package com.rumbo.watchapp.application.speech
 import com.rumbo.watchapp.domain.model.Maneuver
 import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.domain.model.RouteStep
+import com.rumbo.watchapp.domain.model.Side
 import com.rumbo.watchapp.domain.navigation.NavigationEvent
 import com.rumbo.watchapp.domain.navigation.NavigationSnapshot
 import com.rumbo.watchapp.domain.navigation.NavigationStatus
+import com.rumbo.watchapp.domain.navigation.NavigationThresholds
 import com.rumbo.watchapp.domain.port.SpeechPriority
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -13,7 +15,9 @@ import org.junit.Test
 
 class SpeechPhrasesTest {
 
+    private val thresholds = NavigationThresholds()
     private val turn = RouteStep(2, Maneuver.LEFT, "Gire a la izquierda hacia the crosswalk", 120.0, 1.21, -77.28, "Calle 18")
+    private val arrive = RouteStep(3, Maneuver.ARRIVE, "Ha llegado.", 0.0, 1.2, -77.2)
     private val route = Route(
         destinationName = "Parque Bolívar",
         distanceM = 1649.0,
@@ -100,8 +104,8 @@ class SpeechPhrasesTest {
     fun startPhraseReadsTheFirstInstruction() {
         val turnClose = snapshot(status = NavigationStatus.ON_ROUTE, distance = 60.0)
 
-        assertEquals("Iniciando ruta. Camine hacia el norte por la Carrera 24.", startPhrase(route, turnClose, 80.0))
-        assertEquals("Iniciando ruta.", startPhrase(route.copy(steps = emptyList()), turnClose, 80.0))
+        assertEquals("Iniciando ruta. Camine hacia el norte por la Carrera 24.", startPhrase(route, turnClose, thresholds))
+        assertEquals("Iniciando ruta.", startPhrase(route.copy(steps = emptyList()), turnClose, thresholds))
     }
 
     @Test
@@ -110,8 +114,54 @@ class SpeechPhrasesTest {
 
         assertEquals(
             "Iniciando ruta. Camine hacia el norte por la Carrera 24. En trescientos metros, gira a la izquierda.",
-            startPhrase(route, turnFar, 80.0),
+            startPhrase(route, turnFar, thresholds),
         )
+    }
+
+    @Test
+    fun startPhraseSaysTheDestinationIfTheWholeRouteIsShort() {
+        val close = snapshot(arrive.copy(destinationSide = Side.LEFT), 60.0, NavigationStatus.ON_ROUTE)
+
+        assertEquals(
+            "Iniciando ruta. Camine hacia el norte por la Carrera 24. Tu destino está en sesenta metros, a la izquierda.",
+            startPhrase(route, close, thresholds),
+        )
+    }
+
+    @Test
+    fun startPhraseLeavesAFarDestinationForLater() {
+        assertEquals(
+            "Iniciando ruta. Camine hacia el norte por la Carrera 24.",
+            startPhrase(route, snapshot(arrive, 300.0, NavigationStatus.ON_ROUTE), thresholds),
+        )
+    }
+
+    @Test
+    fun destinationNearSaysTheDistanceAndTheSide() {
+        assertEquals("Tu destino está en cien metros, a la derecha.", destinationNearPhrase(98.0, Side.RIGHT))
+        assertEquals("Tu destino está en ochenta metros, a la izquierda.", destinationNearPhrase(83.0, Side.LEFT))
+    }
+
+    @Test
+    fun destinationNearWithoutKnownSideOnlySaysTheDistance() {
+        assertEquals("Tu destino está en cien metros.", destinationNearPhrase(100.0, null))
+    }
+
+    @Test
+    fun destinationNearIsHighPriority() {
+        val step = arrive.copy(destinationSide = Side.RIGHT)
+
+        assertEquals(
+            Phrase("Tu destino está en cien metros, a la derecha.", SpeechPriority.HIGH),
+            navigationPhrase(listOf(NavigationEvent.DestinationNear), snapshot(step, 99.0)),
+        )
+    }
+
+    @Test
+    fun arrivingBeatsTheDestinationNotice() {
+        val events = listOf(NavigationEvent.DestinationNear, NavigationEvent.Arrived)
+
+        assertEquals(ARRIVED_PHRASE, navigationPhrase(events, snapshot(arrive, 10.0))?.text)
     }
 
     @Test
@@ -120,7 +170,7 @@ class SpeechPhrasesTest {
 
         assertEquals(
             "Iniciando ruta. Gire a la izquierda hacia the crosswalk.",
-            startPhrase(onlyTurn, snapshot(distance = 300.0), 80.0),
+            startPhrase(onlyTurn, snapshot(distance = 300.0), thresholds),
         )
     }
 
@@ -316,8 +366,7 @@ class SpeechPhrasesTest {
             Phrase("En treinta metros, gira a la izquierda en Calle 18.", SpeechPriority.HIGH),
             repeatPhrase(snapshot(status = NavigationStatus.ON_ROUTE)),
         )
-        val arrive = RouteStep(3, Maneuver.ARRIVE, "Ha llegado.", 0.0, 1.2, -77.2)
-        assertEquals("Tu destino está a cincuenta metros.", repeatPhrase(snapshot(arrive, 48.0)).text)
+        assertEquals("Tu destino está en cincuenta metros.", repeatPhrase(snapshot(arrive, 48.0)).text)
         assertEquals(KEEP_GOING_PHRASE, repeatPhrase(snapshot(nextStep = null, distance = null)).text)
     }
 

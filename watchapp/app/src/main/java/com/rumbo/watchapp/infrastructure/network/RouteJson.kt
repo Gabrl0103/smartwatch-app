@@ -4,6 +4,7 @@ import com.rumbo.watchapp.domain.model.Coordinates
 import com.rumbo.watchapp.domain.model.Maneuver
 import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.domain.model.RouteStep
+import com.rumbo.watchapp.domain.model.Side
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -30,6 +31,7 @@ internal fun routeFromJson(json: JSONObject): Route {
                 street = step.optString("street"),
                 roundaboutExit = if (step.isNull("roundabout_exit")) null else step.getInt("roundabout_exit"),
                 thenManeuver = if (step.isNull("then_maneuver")) null else toManeuver(step.getString("then_maneuver")),
+                destinationSide = toSide(step.optString("destination_side")),
             )
         },
         polyline = List(polyline.length()) { i ->
@@ -60,6 +62,7 @@ internal fun routeToJson(route: Route): JSONObject = JSONObject()
                     .put("street", step.street)
                     .put("roundabout_exit", step.roundaboutExit ?: JSONObject.NULL)
                     .put("then_maneuver", step.thenManeuver?.name?.lowercase() ?: JSONObject.NULL)
+                    .put("destination_side", step.destinationSide?.name?.lowercase().orEmpty())
             },
         ),
     )
@@ -67,3 +70,5 @@ internal fun routeToJson(route: Route): JSONObject = JSONObject()
 
 private fun toManeuver(value: String): Maneuver =
     Maneuver.entries.firstOrNull { it.name.lowercase() == value } ?: Maneuver.STRAIGHT
+
+private fun toSide(value: String): Side? = Side.entries.firstOrNull { it.name.lowercase() == value }

@@ -47,6 +47,8 @@ class RouteStep:
     roundabout_exit: int | None = None
     # Giro unido a este por estar a pocos metros: se avisan juntos ("Luego, gira a la izquierda").
     then_maneuver: Maneuver | None = None
+    # En la llegada, de qué lado queda el destino ("left" o "right"), si el proveedor lo da.
+    destination_side: str = ""
 
 
 @dataclass(frozen=True)

@@ -56,7 +56,8 @@
    "distance_m": 0.0,
    "lat": 1.206129,
    "lng": -77.27007,
-   "street": ""
+   "street": "",
+   "destination_side": "right"
   }
  ],
  "polyline": [

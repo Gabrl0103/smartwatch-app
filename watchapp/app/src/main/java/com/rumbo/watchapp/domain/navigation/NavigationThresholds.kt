@@ -22,6 +22,7 @@ data class NavigationThresholds(
     val maxRecalculations: Int = 5,
     // Señal y llegada
     val signalLostAfterMs: Long = 10_000,
+    val destinationNearM: Double = 100.0,
     val arrivalM: Double = 15.0,
     // Ventana para pegar la posición a la ruta alrededor del progreso actual
     val snapBehindM: Double = 30.0,

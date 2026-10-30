@@ -1,6 +1,7 @@
 package com.rumbo.watchapp.domain.navigation
 
 import com.rumbo.watchapp.domain.model.Maneuver
+import com.rumbo.watchapp.testing.at
 import com.rumbo.watchapp.testing.fixAt
 import com.rumbo.watchapp.testing.lRoute
 import com.rumbo.watchapp.testing.uRoute
@@ -419,11 +420,59 @@ class NavigationEngineTest {
     }
 
     @Test
+    fun destinationNearFiresOnceAtAHundredMeters() {
+        walk(*north(0, 200, step = 10))
+        assertEquals(emptyList<NavigationEvent>(), walk(*east(5, 95)).filterNot { it is NavigationEvent.NextStepChanged })
+
+        val events = walk(*east(100, 180))
+
+        assertEquals(listOf(NavigationEvent.DestinationNear), events)
+    }
+
+    @Test
+    fun aShortLastLegWarnsOfTheDestinationAsItStarts() {
+        val short = uRoute(eastM = 400.0).let { full ->
+            full.copy(
+                steps = full.steps.take(2) + full.steps.last().copy(lat = at(60.0, 200.0).lat, lng = at(60.0, 200.0).lng),
+                polyline = full.polyline.take(33),
+            )
+        }
+        val walker = NavigationEngine(short, 0)
+
+        val events = (0..200 step 10).flatMap { walker.onLocation(fixAt(0.0, it.toDouble(), it * 100L), it * 100L) }
+
+        assertEquals(1, events.count { it == NavigationEvent.DestinationNear })
+        assertTrue(events.indexOf(NavigationEvent.TurnNow(Maneuver.RIGHT)) < events.indexOf(NavigationEvent.DestinationNear))
+    }
+
+    @Test
+    fun aTurnPassedBySurpriseIsNotHiddenByTheDestinationNotice() {
+        // Ruta con el último tramo de 90 m: una sola lectura pasa la esquina y ya deja cerca el destino.
+        val shortLeg = NavigationEngine(route.copy(polyline = route.polyline.take(30)), 0)
+        shortLeg.onLocation(fixAt(0.0, 140.0, 1_000), 1_000)
+
+        val corner = shortLeg.onLocation(fixAt(5.0, 200.0, 2_000), 2_000)
+        val next = shortLeg.onLocation(fixAt(10.0, 200.0, 3_000), 3_000)
+
+        assertTrue(NavigationEvent.TurnNow(Maneuver.RIGHT) in corner)
+        assertTrue(NavigationEvent.DestinationNear !in corner)
+        assertEquals(listOf(NavigationEvent.DestinationNear), next)
+    }
+
+    @Test
+    fun aRouteThatStartsNextToTheDestinationDoesNotRepeatTheStartPhrase() {
+        val short = route.copy(polyline = route.polyline.take(6), steps = listOf(route.steps.first(), route.steps.last().copy(lat = at(0.0, 50.0).lat, lng = at(0.0, 50.0).lng)))
+        val walker = NavigationEngine(short, 0)
+
+        assertEquals(emptyList<NavigationEvent>(), walker.onLocation(fixAt(0.0, 5.0, 1_000), 1_000))
+    }
+
+    @Test
     fun firstFixHalfwayAlongTheRouteResumesThereWithoutGoingOffRoute() {
         // "Continuar ruta anterior" a mitad de camino: ya dobló y va por el tramo este.
         val events = walk(100.0 to 200.0, 105.0 to 200.0, 110.0 to 200.0)
 
-        assertEquals(listOf(NavigationEvent.NextStepChanged(route.steps[2])), events)
+        assertEquals(listOf(NavigationEvent.NextStepChanged(route.steps[2]), NavigationEvent.DestinationNear), events)
         assertEquals(NavigationStatus.ON_ROUTE, engine.snapshot.status)
         assertEquals(310.0, engine.snapshot.progressM, 0.5)
         assertEquals(90.0, engine.snapshot.remainingM, 0.5)

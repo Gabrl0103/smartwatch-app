@@ -28,6 +28,7 @@ class RouteStepResponse(BaseModel):
     street: str = ""
     roundabout_exit: int | None = None
     then_maneuver: str | None = None
+    destination_side: str = ""
 
 
 class RouteResponse(BaseModel):
@@ -57,6 +58,7 @@ class RouteResponse(BaseModel):
                     street=step.street,
                     roundabout_exit=step.roundabout_exit,
                     then_maneuver=step.then_maneuver.value if step.then_maneuver else None,
+                    destination_side=step.destination_side,
                 )
                 for step in route.steps
             ],

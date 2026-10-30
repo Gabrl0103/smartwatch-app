@@ -115,6 +115,10 @@ class DemoGpxTrackingTest {
         assertEquals(pattern(VibrationCue.ARRIVED), vibration.played.last())
         assertTrue(pattern(VibrationCue.OFF_ROUTE) !in vibration.played)
         assertEquals(ARRIVED_PHRASE, speech.spoken.last())
+        // El último tramo mide 83 m: el destino se avisa una vez, con su lado, antes de llegar.
+        val notices = speech.spoken.filter { it.startsWith("Tu destino está en") }
+        assertEquals(notices.toString(), 1, notices.size)
+        assertTrue(notices.single(), notices.single().endsWith(", a la derecha."))
         tracking.stop()
     }
 

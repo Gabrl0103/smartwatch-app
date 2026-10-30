@@ -24,6 +24,9 @@ sealed interface NavigationEvent {
     data object SignalLost : NavigationEvent
     data object SignalRecovered : NavigationEvent
     data object RecalculateRequested : NavigationEvent
+
+    /** El destino está a menos de [NavigationThresholds.destinationNearM]. Solo la voz lo cuenta. */
+    data object DestinationNear : NavigationEvent
     data object Arrived : NavigationEvent
 }
 

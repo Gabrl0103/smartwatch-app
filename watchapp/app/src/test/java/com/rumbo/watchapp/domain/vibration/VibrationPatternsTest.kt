@@ -164,6 +164,7 @@ class VibrationPatternsTest {
         assertNull(forEvent(NavigationEvent.RecalculateRequested))
         assertNull(forEvent(NavigationEvent.NextStepChanged(lRoute().steps[1])))
         assertNull("El aviso lejano es solo de voz", forEvent(NavigationEvent.TurnAhead(Maneuver.LEFT)))
+        assertNull("El destino cercano es solo de voz", forEvent(NavigationEvent.DestinationNear))
     }
 
     @Test

@@ -36,6 +36,17 @@ def to_maneuver(instruction_type: str) -> Maneuver:
     return Maneuver.STRAIGHT
 
 
+def destination_side(instruction_type: str) -> str:
+    """De qué lado queda el destino según DestinationReachedRight/Left; "" si no se sabe."""
+    if not instruction_type.startswith("Destination"):
+        return ""
+    if instruction_type.endswith("Right"):
+        return "right"
+    if instruction_type.endswith("Left"):
+        return "left"
+    return ""
+
+
 class GeoapifyRouting:
     def __init__(
         self,
@@ -90,7 +101,8 @@ class GeoapifyRouting:
             for step in leg["steps"]:
                 instruction = step["instruction"]
                 streets = instruction.get("streets") or [""]
-                maneuver = to_maneuver(instruction.get("type", ""))
+                instruction_type = instruction.get("type", "")
+                maneuver = to_maneuver(instruction_type)
                 # Una rotonda son dos pasos "Roundabout": entrar, con el número de salida, y salir.
                 if maneuver == Maneuver.ROUNDABOUT and steps and steps[-1].maneuver == Maneuver.ROUNDABOUT:
                     maneuver = Maneuver.STRAIGHT
@@ -103,6 +115,7 @@ class GeoapifyRouting:
                         point=line[step["from_index"]],
                         street=streets[0],
                         roundabout_exit=instruction.get("roundabout_exit"),
+                        destination_side=destination_side(instruction_type),
                     )
                 )
 

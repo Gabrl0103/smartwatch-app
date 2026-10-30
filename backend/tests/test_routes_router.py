@@ -55,6 +55,7 @@ def test_create_route_returns_route(monkeypatch):
             "street": "",
             "roundabout_exit": None,
             "then_maneuver": None,
+            "destination_side": "",
         }
     ]
     # 150 m en 140 s (1,07 m/s) se aleja más de un 10 % de 1,25 m/s: se recalcula.
