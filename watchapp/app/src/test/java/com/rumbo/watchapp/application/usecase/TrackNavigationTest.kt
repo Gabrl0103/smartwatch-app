@@ -393,6 +393,73 @@ class TrackNavigationTest {
         }
     }
 
+    /** Recorre la ruta en L, con [text] en el paso del medio, y deja la voz y la vibración en los fakes. */
+    private fun walkPastAnUnknownStep(text: String, check: (FakeSpeech, FakeVibration, TrackingState) -> Unit) = runBlocking {
+        val fixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 64)
+        val speech = FakeSpeech()
+        val vibration = FakeVibration()
+        var now = 0L
+        val tracking = TrackNavigation(
+            fixes,
+            FakeRoutes(detour),
+            vibration,
+            FakeVibrationEvents(),
+            speech,
+            clock = { now },
+            tickMs = 600_000,
+        )
+        val route = lRoute().let { full ->
+            full.copy(steps = full.steps.map { if (it.order == 2) it.copy(maneuver = Maneuver.UNKNOWN, instruction = text) else it })
+        }
+
+        tracking.start(route, this)
+        try {
+            delay(20)
+            (0..195 step 5).forEach {
+                now += 1_000
+                fixes.emit(fixAt(0.0, it.toDouble(), now))
+                delay(2)
+            }
+            delay(20)
+            check(speech, vibration, tracking.state.value)
+        } finally {
+            tracking.stop()
+        }
+    }
+
+    @Test
+    fun anUnknownStepIsAnnouncedWithItsOriginalText() = walkPastAnUnknownStep("Tome el ascensor.") { speech, vibration, state ->
+        assertEquals(
+            listOf(
+                "Iniciando ruta. Camine hacia el norte. En doscientos metros, tome el ascensor.",
+                "En cincuenta metros, tome el ascensor.",
+                "Ahora, tome el ascensor.",
+            ),
+            speech.spoken.map { it.first },
+        )
+        assertEquals(setOf(SpeechPriority.HIGH), speech.spoken.drop(1).map { it.second }.toSet())
+        assertEquals(2, vibration.played.count { it == pattern(VibrationCue.ATTENTION) })
+        assertEquals("Tome el ascensor.", state.nextInstruction)
+        assertEquals(Maneuver.UNKNOWN, state.nextManeuver)
+    }
+
+    @Test
+    fun stairsAreAnnouncedWithAttention() = walkPastAnUnknownStep("Tome las escaleras.") { speech, vibration, state ->
+        assertEquals(
+            listOf(
+                "Iniciando ruta. Camine hacia el norte. Atención: en doscientos metros, tome las escaleras.",
+                "Atención: en cincuenta metros, tome las escaleras.",
+                "Atención: ahora, tome las escaleras.",
+            ),
+            speech.spoken.map { it.first },
+        )
+        assertEquals(2, vibration.played.count { it == pattern(VibrationCue.ATTENTION) })
+        assertTrue(pattern(VibrationCue.TURN_APPROACHING) !in vibration.played)
+        assertTrue(pattern(VibrationCue.LEFT) !in vibration.played)
+        assertTrue(pattern(VibrationCue.RIGHT) !in vibration.played)
+        assertEquals("Atención: tome las escaleras.", state.nextInstruction)
+    }
+
     @Test
     fun everyStageIsPreparedOnceAndBeforeItIsSaid() = runBlocking {
         val fixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 64)

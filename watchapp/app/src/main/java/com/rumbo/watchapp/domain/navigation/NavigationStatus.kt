@@ -13,11 +13,16 @@ sealed interface NavigationEvent {
     data class TurnAhead(val maneuver: Maneuver) : NavigationEvent
     data class TurnApproaching(val maneuver: Maneuver) : NavigationEvent
 
-    /** [then] es el giro siguiente si está tan cerca que hay que avisarlo junto con este. */
+    /**
+     * [then] es el giro siguiente si está tan cerca que hay que avisarlo junto con este e
+     * [instruction], el texto del paso si es desconocido: un paso pasado por sorpresa ya no está
+     * en la foto del motor.
+     */
     data class TurnNow(
         val maneuver: Maneuver,
         val roundaboutExit: Int? = null,
         val then: Maneuver? = null,
+        val instruction: String = "",
     ) : NavigationEvent
     data object OffRoute : NavigationEvent
     data object BackOnRoute : NavigationEvent

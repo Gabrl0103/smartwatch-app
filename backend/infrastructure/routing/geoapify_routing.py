@@ -17,10 +17,11 @@ _TURNS_BY_SIDE = {
 
 def to_maneuver(instruction_type: str) -> Maneuver:
     """Traduce los tipos de Geoapify (Right, SlightLeft, TurnAroundRight, Roundabout...) a
-    maniobras. "Stay" es una bifurcación: se sigue de un lado sin un giro completo."""
+    maniobras. "Stay" es una bifurcación: se sigue de un lado sin un giro completo. Lo que no se
+    reconoce queda como desconocido y no como recto, porque "Tome las escaleras." llega así."""
     if instruction_type.startswith("Destination"):
         return Maneuver.ARRIVE
-    if instruction_type.startswith("Start"):
+    if instruction_type.startswith("Start") or instruction_type == "Straight":
         return Maneuver.STRAIGHT
     if instruction_type == "Roundabout":
         return Maneuver.ROUNDABOUT
@@ -33,7 +34,7 @@ def to_maneuver(instruction_type: str) -> Maneuver:
             if instruction_type.startswith("TurnAround"):
                 return u_turn
             return plain
-    return Maneuver.STRAIGHT
+    return Maneuver.UNKNOWN
 
 
 def destination_side(instruction_type: str) -> str:

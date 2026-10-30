@@ -12,6 +12,8 @@ class Maneuver(str, Enum):
     U_TURN_LEFT = "u_turn_left"
     U_TURN_RIGHT = "u_turn_right"
     ROUNDABOUT = "roundabout"
+    # Lo que el proveedor no clasifica ("Tome las escaleras."): solo se sabe por su texto.
+    UNKNOWN = "unknown"
     STRAIGHT = "straight"
     ARRIVE = "arrive"
 

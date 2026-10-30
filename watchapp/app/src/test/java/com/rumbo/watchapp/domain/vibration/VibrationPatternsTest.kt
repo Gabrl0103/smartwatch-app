@@ -3,6 +3,7 @@ package com.rumbo.watchapp.domain.vibration
 import com.rumbo.watchapp.domain.model.Maneuver
 import com.rumbo.watchapp.domain.navigation.NavigationEvent
 import com.rumbo.watchapp.domain.vibration.VibrationCue.ARRIVED
+import com.rumbo.watchapp.domain.vibration.VibrationCue.ATTENTION
 import com.rumbo.watchapp.domain.vibration.VibrationCue.LEFT
 import com.rumbo.watchapp.domain.vibration.VibrationCue.NO_SIGNAL
 import com.rumbo.watchapp.domain.vibration.VibrationCue.OFF_ROUTE
@@ -175,6 +176,30 @@ class VibrationPatternsTest {
         listOf(Maneuver.SLIGHT_RIGHT, Maneuver.SHARP_RIGHT, Maneuver.U_TURN_RIGHT).forEach {
             assertEquals(RIGHT, forEvent(NavigationEvent.TurnNow(it)))
         }
+    }
+
+    @Test
+    fun anUnknownStepVibratesAttentionInBothStagesNeverATurn() = with(VibrationPatterns) {
+        assertEquals(ATTENTION, forEvent(NavigationEvent.TurnApproaching(Maneuver.UNKNOWN)))
+        assertEquals(ATTENTION, forEvent(NavigationEvent.TurnNow(Maneuver.UNKNOWN)))
+        // Si las dos etapas llegan juntas se siente una sola vez.
+        val both = listOf(NavigationEvent.TurnApproaching(Maneuver.UNKNOWN), NavigationEvent.TurnNow(Maneuver.UNKNOWN))
+        assertEquals(listOf(ATTENTION), cuesFor(both))
+    }
+
+    @Test
+    fun attentionIsFourShortPulsesInEveryVersion() {
+        versions.forEach { version ->
+            assertEquals(listOf(150L, 150L, 150L, 150L), version.getValue(ATTENTION).pulseDurationsMs)
+            assertEquals(null, version.getValue(ATTENTION).repeatEveryMs)
+        }
+    }
+
+    @Test
+    fun attentionIsShownInTheVibrationsScreenOrder() {
+        assertTrue(ATTENTION in VibrationCue.entries)
+        assertEquals("Atención", ATTENTION.title)
+        assertEquals("Atención: 4 pulsos cortos seguidos", VibrationPatterns.of(ATTENTION, supportsAmplitude = false).label)
     }
 
     @Test

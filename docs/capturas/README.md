@@ -27,11 +27,12 @@ misma pantalla desplazada hasta el final.
 | `21_buscando_gps.png` | Procesando mientras espera una lectura GPS buena |
 | `22_continuar_ruta.png` | Inicio con "Continuar ruta anterior" tras cerrarse la app a mitad de ruta |
 | `23_vibraciones_sin_intensidad.png` | Probar vibraciones en un reloj sin control de intensidad ("Intensidad: no", patrones solo por ritmo) |
-| `24_demostracion_vibraciones.png` | Secuencia de demostración: "3 de 7", el nombre en grande y sus barras |
+| `24_demostracion_vibraciones.png` | Secuencia de demostración: "3 de 8", el nombre en grande y sus barras |
 | `25_indicacion_larga.png` | Giro próximo con la indicación real más larga de la demo: baja a 16 sp para leerse entera en el círculo |
 | `28_asistente.png`, `30_asistente_abajo.png` | Asistente en ruta: badge, la pregunta, la respuesta; abajo "Preguntar otra vez" y "Volver a la ruta" |
 | `29_asistente_hablando.png` | Asistente mientras dice la respuesta: el badge se funde en barras |
 | `31_pensando_respuesta.png` | Procesando mientras el asistente responde |
+| `32_atencion_escaleras.png` | Paso desconocido: "Atención" con el ícono de advertencia y el texto de Geoapify |
 
 ## Regenerarlas
 

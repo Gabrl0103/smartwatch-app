@@ -35,7 +35,7 @@ import com.rumbo.watchapp.presentation.viewmodel.DemoStep
 /** Color del estado en que suena cada aviso, el mismo de la pantalla "En ruta". */
 fun VibrationCue.color(): Color = when (this) {
     VibrationCue.ON_ROUTE -> StatusOnRoute
-    VibrationCue.TURN_APPROACHING, VibrationCue.LEFT, VibrationCue.RIGHT -> StatusTurnSoon
+    VibrationCue.TURN_APPROACHING, VibrationCue.LEFT, VibrationCue.RIGHT, VibrationCue.ATTENTION -> StatusTurnSoon
     VibrationCue.OFF_ROUTE -> StatusOffRoute
     VibrationCue.NO_SIGNAL -> StatusNoSignal
     VibrationCue.ARRIVED -> StatusArrived

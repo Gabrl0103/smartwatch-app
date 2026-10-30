@@ -1,6 +1,7 @@
 package com.rumbo.watchapp.application.usecase
 
 import com.rumbo.watchapp.application.speech.Phrase
+import com.rumbo.watchapp.application.speech.instructionText
 import com.rumbo.watchapp.application.speech.navigationPhrase
 import com.rumbo.watchapp.application.speech.repeatPhrase
 import com.rumbo.watchapp.application.speech.startPhrase
@@ -306,7 +307,7 @@ class TrackNavigation(
         _state.value = _state.value.copy(
             status = snapshot.status,
             destinationName = route?.destinationName.orEmpty(),
-            nextInstruction = snapshot.nextStep?.instruction,
+            nextInstruction = snapshot.nextStep?.let(::instructionText),
             nextManeuver = snapshot.nextStep?.maneuver,
             distanceToNextStepM = snapshot.distanceToNextStepM,
             stepLengthM = snapshot.stepLengthM,

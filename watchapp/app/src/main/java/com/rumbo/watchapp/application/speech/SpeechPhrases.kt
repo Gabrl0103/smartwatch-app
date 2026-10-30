@@ -18,6 +18,13 @@ const val SIGNAL_RECOVERED_PHRASE = "Señal recuperada."
 const val ARRIVED_PHRASE = "Llegaste a tu destino."
 const val KEEP_GOING_PHRASE = "Sigue la ruta."
 
+// Lo que en un paso desconocido puede ser un peligro para quien camina sin ver.
+private val ATTENTION_WORDS = setOf(
+    "escalera", "escaleras", "escalón", "escalon", "escalones", "puente", "puentes",
+    "túnel", "tunel", "túneles", "tuneles", "cruce", "cruces",
+)
+private val NOT_A_LETTER = Regex("[^\\p{L}]+")
+
 /** Una frase y con qué prioridad se dice. */
 data class Phrase(val text: String, val priority: SpeechPriority = SpeechPriority.NORMAL)
 
@@ -58,11 +65,24 @@ fun startPhrase(route: Route, snapshot: NavigationSnapshot, thresholds: Navigati
         next == null || distance == null -> ""
         next.maneuver == Maneuver.ARRIVE && distance <= thresholds.destinationNearM ->
             " ${destinationNearPhrase(distance, next.destinationSide)}"
-        next.maneuver.isTurn && distance > thresholds.turnAheadMinM ->
-            " En ${spokenDistance(distance)}, ${turnAction(next)}."
+        next.maneuver.isTurn && distance > thresholds.turnAheadMinM -> " ${inDistance(distance, next)}"
         else -> ""
     }
-    return "Iniciando ruta. ${sentence(first.instruction)}$upcoming"
+    return "Iniciando ruta. ${instructionText(first)}$upcoming"
+}
+
+/**
+ * El texto del paso tal como lo da el proveedor, para pantalla y voz. Si es un paso desconocido
+ * que menciona un peligro, con "Atención:" delante: "Atención: tome las escaleras."
+ */
+fun instructionText(step: RouteStep): String = withAttention(step.maneuver, step.instruction, sentence(step.instruction))
+
+private fun lowerFirst(text: String) = text.replaceFirstChar { it.lowercase() }
+
+// Solo en pasos desconocidos: en los demás el texto del proveedor no se dice.
+private fun withAttention(maneuver: Maneuver, instruction: String, phrase: String): String {
+    val mentionsDanger = instruction.lowercase().split(NOT_A_LETTER).any { it in ATTENTION_WORDS }
+    return if (maneuver == Maneuver.UNKNOWN && mentionsDanger) "Atención: ${lowerFirst(phrase)}" else phrase
 }
 
 /** "Tu destino está en cien metros, a la derecha." Sin lado si el proveedor no lo da. */
@@ -75,8 +95,11 @@ fun destinationNearPhrase(distanceM: Double, side: Side?): String {
     return "Tu destino está en ${spokenDistance(distanceM)}$where."
 }
 
-/** Lo que hay que hacer en la maniobra, sin distancia ni calle: "gira ligeramente a la derecha". */
-private fun turnAction(maneuver: Maneuver, roundaboutExit: Int?): String = when (maneuver) {
+/**
+ * Lo que hay que hacer en la maniobra, sin distancia ni calle: "gira ligeramente a la derecha". Un
+ * paso desconocido solo se sabe por su [instruction], que se dice tal cual: "tome las escaleras".
+ */
+private fun turnAction(maneuver: Maneuver, roundaboutExit: Int?, instruction: String = ""): String = when (maneuver) {
     Maneuver.LEFT -> "gira a la izquierda"
     Maneuver.RIGHT -> "gira a la derecha"
     Maneuver.SLIGHT_LEFT -> "gira ligeramente a la izquierda"
@@ -88,44 +111,53 @@ private fun turnAction(maneuver: Maneuver, roundaboutExit: Int?): String = when 
         roundaboutExit == null || roundaboutExit < 1 -> "entra a la rotonda"
         else -> "en la rotonda toma ${exitInWords(roundaboutExit)}"
     }
+    Maneuver.UNKNOWN -> lowerFirst(instruction.trim().trimEnd('.')).ifEmpty { "sigue con cuidado" }
     Maneuver.STRAIGHT -> "sigue recto"
     Maneuver.ARRIVE -> "llega a tu destino"
 }
 
-private fun turnAction(step: RouteStep) = turnAction(step.maneuver, step.roundaboutExit)
+private fun turnAction(step: RouteStep) = turnAction(step.maneuver, step.roundaboutExit, step.instruction)
 
 private fun straightPhrase(currentStreet: String) =
     if (currentStreet.isBlank()) "Sigue recto." else "Sigue recto por $currentStreet."
 
+private fun inDistance(distanceM: Double, step: RouteStep) =
+    withAttention(step.maneuver, step.instruction, "En ${spokenDistance(distanceM)}, ${turnAction(step)}.")
+
 /** Etapa lejana, al empezar el tramo: "Sigue recto por Carrera 25. En cien metros, gira a la derecha." */
 fun turnAheadPhrase(distanceM: Double, step: RouteStep, currentStreet: String): String =
-    "${straightPhrase(currentStreet)} En ${spokenDistance(distanceM)}, ${turnAction(step)}."
+    "${straightPhrase(currentStreet)} ${inDistance(distanceM, step)}"
 
 /**
  * Etapa de preparación: "En cincuenta metros, gira a la derecha en Calle 18." En una rotonda no
- * va la calle: la que da el proveedor es el nombre de la propia rotonda. Si el paso une dos giros,
- * la calle es la del segundo: "En cincuenta metros, gira a la derecha. Luego, gira a la izquierda
- * en Calle 18."
+ * va la calle: la que da el proveedor es el nombre de la propia rotonda. Tampoco en un paso
+ * desconocido, que ya tiene su texto. Si el paso une dos giros, la calle es la del segundo: "En
+ * cincuenta metros, gira a la derecha. Luego, gira a la izquierda en Calle 18."
  */
 fun turnApproachingPhrase(distanceM: Double, step: RouteStep): String {
-    val hasStreet = step.street.isNotBlank() && step.maneuver != Maneuver.ROUNDABOUT
+    val hasStreet = step.street.isNotBlank() && step.maneuver != Maneuver.ROUNDABOUT && step.maneuver != Maneuver.UNKNOWN
     val street = if (hasStreet) " en ${step.street}" else ""
-    val start = "En ${spokenDistance(distanceM)}, ${turnAction(step)}"
+    val start = inDistance(distanceM, step).removeSuffix(".")
     val then = step.thenManeuver ?: return "$start$street."
     return "$start. Luego, ${turnAction(then, null)}$street."
 }
 
 /**
  * Etapa final, ya encima del giro, con el giro siguiente si está cerca: "Gira ahora a la derecha.
- * Luego, gira a la izquierda."
+ * Luego, gira a la izquierda." De un paso desconocido se dice su [instruction].
  */
-fun turnNowPhrase(maneuver: Maneuver, roundaboutExit: Int? = null, then: Maneuver? = null): String {
-    val action = turnAction(maneuver, roundaboutExit)
+fun turnNowPhrase(
+    maneuver: Maneuver,
+    roundaboutExit: Int? = null,
+    then: Maneuver? = null,
+    instruction: String = "",
+): String {
+    val action = turnAction(maneuver, roundaboutExit, instruction)
     val now = when (maneuver) {
         Maneuver.STRAIGHT -> "Sigue recto."
         Maneuver.ARRIVE -> ARRIVED_PHRASE
         Maneuver.U_TURN_LEFT, Maneuver.U_TURN_RIGHT -> "Da media vuelta ahora."
-        Maneuver.ROUNDABOUT -> "Ahora, $action."
+        Maneuver.ROUNDABOUT, Maneuver.UNKNOWN -> withAttention(maneuver, instruction, "Ahora, $action.")
         else -> "Gira ahora ${action.removePrefix("gira ")}."
     }
     return if (then == null) now else "$now Luego, ${turnAction(then, null)}."
@@ -139,7 +171,7 @@ fun navigationPhrase(events: List<NavigationEvent>, snapshot: NavigationSnapshot
     if (NavigationEvent.Arrived in events) return Phrase(ARRIVED_PHRASE, SpeechPriority.HIGH)
     if (NavigationEvent.OffRoute in events) return Phrase(OFF_ROUTE_PHRASE, SpeechPriority.HIGH)
     events.filterIsInstance<NavigationEvent.TurnNow>().firstOrNull()?.let {
-        return Phrase(turnNowPhrase(it.maneuver, it.roundaboutExit, it.then), SpeechPriority.HIGH)
+        return Phrase(turnNowPhrase(it.maneuver, it.roundaboutExit, it.then, it.instruction), SpeechPriority.HIGH)
     }
     val step = snapshot.nextStep
     val distance = snapshot.distanceToNextStepM
@@ -168,7 +200,7 @@ fun navigationPhrase(events: List<NavigationEvent>, snapshot: NavigationSnapshot
 fun upcomingPhrase(snapshot: NavigationSnapshot, thresholds: NavigationThresholds): String? {
     val step = snapshot.nextStep ?: return null
     val distance = snapshot.distanceToNextStepM ?: return null
-    val turnNow = turnNowPhrase(step.maneuver, step.roundaboutExit, snapshot.thenManeuver)
+    val turnNow = turnNowPhrase(step.maneuver, step.roundaboutExit, snapshot.thenManeuver, step.instruction)
     return when (snapshot.status) {
         NavigationStatus.ON_ROUTE -> when {
             step.maneuver == Maneuver.ARRIVE && distance <= thresholds.destinationNearM -> ARRIVED_PHRASE
@@ -214,7 +246,7 @@ fun repeatPhrase(snapshot: NavigationSnapshot): Phrase {
         step.maneuver == Maneuver.ARRIVE -> destinationNearPhrase(distance, step.destinationSide)
         !step.maneuver.isTurn -> straightPhrase(snapshot.currentStreet)
         snapshot.status == NavigationStatus.MANEUVER ->
-            turnNowPhrase(step.maneuver, step.roundaboutExit, snapshot.thenManeuver)
+            turnNowPhrase(step.maneuver, step.roundaboutExit, snapshot.thenManeuver, step.instruction)
         snapshot.status == NavigationStatus.TURN_APPROACHING -> turnApproachingPhrase(distance, step)
         else -> turnAheadPhrase(distance, step, snapshot.currentStreet)
     }

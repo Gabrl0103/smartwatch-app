@@ -57,6 +57,60 @@ def test_two_turns_closer_than_ten_meters_are_announced_together():
     assert steps[1].then_maneuver == Maneuver.LEFT
 
 
+STAIRS = step(Maneuver.UNKNOWN, "Tome las escaleras.", 5)
+
+
+def test_short_stairs_are_never_dropped_or_joined():
+    steps = merge_short_steps([
+        step(Maneuver.STRAIGHT, "Camine hacia el sur.", 100),
+        STAIRS,
+        step(Maneuver.RIGHT, "Gire a la derecha.", 50, "Calle 18"),
+        ARRIVE,
+    ])
+    assert [s.maneuver for s in steps] == [Maneuver.STRAIGHT, Maneuver.UNKNOWN, Maneuver.RIGHT, Maneuver.ARRIVE]
+    assert steps[2].then_maneuver is None
+
+
+def test_short_stairs_just_before_arriving_stay():
+    steps = merge_short_steps([step(Maneuver.STRAIGHT, "Camine hacia el sur.", 100), STAIRS, ARRIVE])
+    assert STAIRS in steps
+
+
+def test_a_short_turn_does_not_swallow_the_stairs_after_it():
+    steps = merge_short_steps([
+        step(Maneuver.LEFT, "Gire a la izquierda.", 6, "Calle 18"),
+        STAIRS,
+        ARRIVE,
+    ])
+    assert [s.maneuver for s in steps] == [Maneuver.LEFT, Maneuver.UNKNOWN, Maneuver.ARRIVE]
+    assert steps[0].then_maneuver is None
+    assert steps[0].instruction == "Gire a la izquierda."
+
+
+def test_two_stairs_in_a_row_both_stay():
+    steps = merge_short_steps([STAIRS, STAIRS, ARRIVE])
+    assert [s.maneuver for s in steps] == [Maneuver.UNKNOWN, Maneuver.UNKNOWN, Maneuver.ARRIVE]
+
+
+def test_stairs_survive_the_whole_cleanup():
+    route = Route(
+        START,
+        END,
+        "Parque",
+        200,
+        160,
+        [
+            step(Maneuver.STRAIGHT, "Camine hacia el sur.", 4),
+            STAIRS,
+            step(Maneuver.STRAIGHT, "Continúe.", 20),
+            step(Maneuver.STRAIGHT, "Continúe.", 8),
+            ARRIVE,
+        ],
+        [START, END],
+    )
+    assert "Tome las escaleras." in [s.instruction for s in tidy_route(route, START).steps]
+
+
 def test_the_arrival_keeps_its_side_when_a_short_step_joins_it():
     arrive = replace(ARRIVE, destination_side="left")
     steps = merge_short_steps([

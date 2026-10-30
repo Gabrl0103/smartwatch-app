@@ -264,6 +264,122 @@ class SpeechPhrasesTest {
         assertEquals("la salida número once", exitInWords(11))
     }
 
+    private val elevator = RouteStep(2, Maneuver.UNKNOWN, "Tome el ascensor a Level -1.", 20.0, 1.21, -77.28, "Calle 18")
+    private val stairs = elevator.copy(instruction = "Tome las escaleras.")
+
+    @Test
+    fun anUnknownStepIsSaidWithTheProviderTextAndARoundedDistance() {
+        assertEquals(
+            "Sigue recto por Carrera 25. En doscientos metros, tome el ascensor a Level -1.",
+            turnAheadPhrase(203.0, elevator, "Carrera 25"),
+        )
+        assertEquals("En cincuenta metros, tome el ascensor a Level -1.", turnApproachingPhrase(48.0, elevator))
+        assertEquals(
+            "Ahora, tome el ascensor a Level -1.",
+            turnNowPhrase(Maneuver.UNKNOWN, instruction = elevator.instruction),
+        )
+    }
+
+    @Test
+    fun aDangerGoesFirstWithAttentionInEveryStage() {
+        assertEquals(
+            "Sigue recto. Atención: en doscientos metros, tome las escaleras.",
+            turnAheadPhrase(203.0, stairs, ""),
+        )
+        assertEquals("Atención: en treinta metros, tome las escaleras.", turnApproachingPhrase(34.0, stairs))
+        assertEquals(
+            "Atención: ahora, tome las escaleras.",
+            turnNowPhrase(Maneuver.UNKNOWN, instruction = stairs.instruction),
+        )
+    }
+
+    @Test
+    fun everyDangerWordCallsForAttention() {
+        listOf(
+            "Tome las escaleras.",
+            "Tome la escalera mecánica.",
+            "Baje los escalones.",
+            "Suba el escalón.",
+            "Cruce el PUENTE peatonal.",
+            "Entre al túnel.",
+            "Entre al tunel.",
+            "Siga por el cruce.",
+        ).forEach { text ->
+            assertEquals(text, true, instructionText(elevator.copy(instruction = text)).startsWith("Atención: "))
+        }
+    }
+
+    @Test
+    fun otherWordsDoNotCallForAttention() {
+        listOf("Tome el ascensor a Level -1.", "Continúe por Calle de la Cruz.", "Entre al edificio.").forEach { text ->
+            assertEquals(text, instructionText(elevator.copy(instruction = text)))
+        }
+    }
+
+    @Test
+    fun aKnownManeuverDoesNotGetAttentionFromItsStreetName() {
+        val bridge = turn.copy(instruction = "Gire a la izquierda hacia Puente Zubizuri.", street = "Puente Zubizuri")
+
+        assertEquals("En cincuenta metros, gira a la izquierda en Puente Zubizuri.", turnApproachingPhrase(50.0, bridge))
+        assertEquals("Gire a la izquierda hacia Puente Zubizuri.", instructionText(bridge))
+    }
+
+    @Test
+    fun theScreenShowsTheOriginalTextWithAttentionInFront() {
+        assertEquals("Atención: tome las escaleras.", instructionText(stairs))
+        assertEquals("Tome el ascensor a Level -1.", instructionText(elevator))
+        assertEquals("Gire a la izquierda hacia the crosswalk.", instructionText(turn))
+    }
+
+    @Test
+    fun startPhraseWarnsOfAFarUnknownStep() {
+        val far = snapshot(stairs, 300.0, NavigationStatus.ON_ROUTE)
+
+        assertEquals(
+            "Iniciando ruta. Camine hacia el norte por la Carrera 24. Atención: en trescientos metros, tome las escaleras.",
+            startPhrase(route, far, thresholds),
+        )
+    }
+
+    @Test
+    fun startPhraseWarnsIfTheFirstStepIsTheDanger() {
+        val first = route.copy(steps = listOf(stairs))
+
+        assertEquals("Iniciando ruta. Atención: tome las escaleras.", startPhrase(first, snapshot(stairs, 4.0), thresholds))
+    }
+
+    @Test
+    fun anUnknownStepPassedBySurpriseTravelsWithItsText() {
+        val event = NavigationEvent.TurnNow(Maneuver.UNKNOWN, instruction = "Tome las escaleras.")
+
+        assertEquals(
+            Phrase("Atención: ahora, tome las escaleras.", SpeechPriority.HIGH),
+            navigationPhrase(listOf(event), snapshot(nextStep = turn)),
+        )
+    }
+
+    @Test
+    fun unknownStepsArePreparedAndRepeatedLikeTheRest() {
+        assertEquals(
+            "Atención: en cincuenta metros, tome las escaleras.",
+            upcomingPhrase(snapshot(stairs, 300.0, NavigationStatus.ON_ROUTE), thresholds),
+        )
+        assertEquals("Atención: ahora, tome las escaleras.", upcomingPhrase(snapshot(stairs, 30.0), thresholds))
+        assertEquals(
+            "Atención: ahora, tome las escaleras.",
+            repeatPhrase(snapshot(stairs, 9.0, NavigationStatus.MANEUVER)).text,
+        )
+        assertEquals(
+            "Sigue recto por Carrera 25. Atención: en trescientos metros, tome las escaleras.",
+            repeatPhrase(snapshot(stairs, 300.0, NavigationStatus.ON_ROUTE)).text,
+        )
+    }
+
+    @Test
+    fun anUnknownStepWithoutTextIsStillSaid() {
+        assertEquals("Ahora, sigue con cuidado.", turnNowPhrase(Maneuver.UNKNOWN))
+    }
+
     @Test
     fun nowStageWarnsOfACloseNextTurn() {
         assertEquals(

@@ -46,11 +46,13 @@ def walking_speed_mps(distance: float, duration: float) -> float:
 
 
 def merge_short_steps(steps: list[RouteStep]) -> list[RouteStep]:
-    """Une cada paso de menos de MIN_STEP_M con el siguiente (nunca toca la llegada)."""
+    """Une cada paso de menos de MIN_STEP_M con el siguiente. No toca la llegada ni los pasos
+    desconocidos: "Tome las escaleras." puede medir 5 m y es justo lo que no se puede perder."""
     out = list(steps)
     i = 0
     while i < len(out) - 1:
-        if out[i].distance_to_next_m >= MIN_STEP_M:
+        unknown = Maneuver.UNKNOWN in (out[i].maneuver, out[i + 1].maneuver)
+        if out[i].distance_to_next_m >= MIN_STEP_M or unknown:
             i += 1
             continue
         merged, carried_m = _merge(out[i], out[i + 1])

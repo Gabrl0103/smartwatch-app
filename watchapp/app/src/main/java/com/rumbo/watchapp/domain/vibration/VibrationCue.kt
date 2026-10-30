@@ -6,6 +6,7 @@ enum class VibrationCue(val title: String) {
     TURN_APPROACHING("Giro próximo"),
     LEFT("Izquierda"),
     RIGHT("Derecha"),
+    ATTENTION("Atención"),
     OFF_ROUTE("Desviado"),
     NO_SIGNAL("Sin señal"),
     ARRIVED("Llegada"),

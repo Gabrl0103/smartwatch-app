@@ -1,6 +1,7 @@
 package com.rumbo.watchapp.domain.navigation
 
 import com.rumbo.watchapp.domain.model.Maneuver
+import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.testing.at
 import com.rumbo.watchapp.testing.fixAt
 import com.rumbo.watchapp.testing.lRoute
@@ -242,6 +243,120 @@ class NavigationEngineTest {
             )
             assertEquals(NavigationStatus.MANEUVER, walker.snapshot.status)
         }
+    }
+
+    private val stairsNow = NavigationEvent.TurnNow(Maneuver.UNKNOWN, instruction = "Tome las escaleras.")
+
+    private fun withStairs(order: Int, original: Route = route) = original.copy(
+        steps = original.steps.map {
+            if (it.order == order) it.copy(maneuver = Maneuver.UNKNOWN, instruction = "Tome las escaleras.") else it
+        },
+    )
+
+    @Test
+    fun anUnknownStepGoesThroughItsStagesOnce() {
+        val walker = NavigationEngine(withStairs(2), 0, announceFirstLeg = true)
+
+        val events = (0..250 step 5).flatMap {
+            val (east, north) = if (it <= 200) 0.0 to it.toDouble() else it - 200.0 to 200.0
+            walker.onLocation(fixAt(east, north, it * 1_000L), it * 1_000L)
+        }.filterNot { it is NavigationEvent.NextStepChanged }
+
+        assertEquals(
+            listOf(
+                NavigationEvent.TurnAhead(Maneuver.UNKNOWN),
+                NavigationEvent.TurnApproaching(Maneuver.UNKNOWN),
+                stairsNow,
+            ),
+            events,
+        )
+    }
+
+    @Test
+    fun aGpsJumpNeverLeavesAnUnknownStepBehindUnannounced() {
+        val walker = NavigationEngine(withStairs(2), 0)
+        walker.onLocation(fixAt(0.0, 140.0, 1_000), 1_000)
+
+        // El salto cae 40 m pasada la esquina: un giro normal ya no se avisaría.
+        val events = walker.onLocation(fixAt(40.0, 200.0, 2_000), 2_000)
+
+        assertEquals(listOf(NavigationEvent.TurnApproaching(Maneuver.UNKNOWN), stairsNow), events)
+        assertEquals(NavigationStatus.MANEUVER, walker.snapshot.status)
+        assertEquals("Tome las escaleras.", walker.snapshot.nextStep?.instruction)
+    }
+
+    @Test
+    fun afterAnnouncingTheSkippedStepTheRouteGoesOn() {
+        val walker = NavigationEngine(withStairs(2), 0)
+        walker.onLocation(fixAt(0.0, 140.0, 1_000), 1_000)
+        walker.onLocation(fixAt(40.0, 200.0, 2_000), 2_000)
+
+        val events = walker.onLocation(fixAt(45.0, 200.0, 3_000), 3_000)
+
+        assertEquals(listOf(NavigationEvent.NextStepChanged(route.steps[2])), events)
+        assertEquals(NavigationStatus.ON_ROUTE, walker.snapshot.status)
+    }
+
+    @Test
+    fun aJumpOverAnUnknownStepAndATurnSaysBothInOrder() {
+        // Escalera a 200 m y giro a 240 m; un salto cae justo después de los dos.
+        val long = withStairs(2, uRoute(eastM = 40.0))
+        val walker = NavigationEngine(long, 0)
+        walker.onLocation(fixAt(0.0, 170.0, 1_000), 1_000)
+
+        val first = walker.onLocation(fixAt(40.0, 205.0, 2_000), 2_000)
+        val second = walker.onLocation(fixAt(40.0, 207.0, 3_000), 3_000)
+
+        // La escalera avisa además del giro que tiene a 40 m: "Luego, gira a la izquierda."
+        assertEquals(
+            listOf(stairsNow.copy(then = Maneuver.LEFT)),
+            first.filterIsInstance<NavigationEvent.TurnNow>(),
+        )
+        assertTrue("Sigue el giro", NavigationEvent.TurnNow(Maneuver.LEFT) in second)
+    }
+
+    @Test
+    fun aManeuverAlreadySaidInTheReadingLeavesTheUnknownStepForTheNextOne() {
+        // Giro a 200 m y escalera 5 m después: una lectura pasa el giro y deja atrás la escalera.
+        val close = uRoute(eastM = 5.0).let { full ->
+            full.copy(steps = full.steps.map { if (it.order == 3) it.copy(maneuver = Maneuver.UNKNOWN, instruction = "Tome las escaleras.") else it })
+        }
+        val walker = NavigationEngine(close, 0)
+        walker.onLocation(fixAt(0.0, 170.0, 1_000), 1_000)
+
+        val first = walker.onLocation(fixAt(5.0, 206.0, 2_000), 2_000)
+        val second = walker.onLocation(fixAt(5.0, 208.0, 3_000), 3_000)
+
+        assertEquals(listOf(NavigationEvent.TurnNow(Maneuver.RIGHT)), first.filterIsInstance<NavigationEvent.TurnNow>())
+        assertEquals(listOf(stairsNow), second.filterIsInstance<NavigationEvent.TurnNow>())
+    }
+
+    @Test
+    fun resumingARouteDoesNotWarnOfStepsAlreadyWalked() {
+        val walker = NavigationEngine(withStairs(2), 0)
+
+        // "Continuar ruta anterior" 110 m después de la escalera.
+        val events = walker.onLocation(fixAt(110.0, 200.0, 1_000), 1_000)
+
+        assertEquals(emptyList<NavigationEvent>(), events.filterIsInstance<NavigationEvent.TurnNow>())
+    }
+
+    @Test
+    fun anUnknownStepRightAtTheStartIsAnnouncedOnTheFirstReading() {
+        val walker = NavigationEngine(withStairs(2, uRoute().let { it.copy(polyline = it.polyline.drop(19)) }), 0)
+
+        val events = walker.onLocation(fixAt(0.0, 195.0, 1_000), 1_000)
+
+        assertTrue(stairsNow in events)
+    }
+
+    @Test
+    fun aCloseUnknownStepIsNotAnnouncedWithLuego() {
+        val close = uRoute(eastM = 40.0).let { full ->
+            full.copy(steps = full.steps.map { if (it.order == 3) it.copy(maneuver = Maneuver.UNKNOWN) else it })
+        }
+
+        assertEquals(NavigationEvent.TurnNow(Maneuver.RIGHT), firstTurnNow(NavigationEngine(close, 0)))
     }
 
     private fun firstTurnNow(walker: NavigationEngine): NavigationEvent.TurnNow =

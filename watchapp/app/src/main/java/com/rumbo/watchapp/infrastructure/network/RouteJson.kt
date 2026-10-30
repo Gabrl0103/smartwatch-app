@@ -68,7 +68,8 @@ internal fun routeToJson(route: Route): JSONObject = JSONObject()
     )
     .put("polyline", JSONArray(route.polyline.map { JSONArray().put(it.lat).put(it.lng) }))
 
+// Una maniobra nueva no debe pasar por "recto", que no se avisa: se dirá su texto.
 private fun toManeuver(value: String): Maneuver =
-    Maneuver.entries.firstOrNull { it.name.lowercase() == value } ?: Maneuver.STRAIGHT
+    Maneuver.entries.firstOrNull { it.name.lowercase() == value } ?: Maneuver.UNKNOWN
 
 private fun toSide(value: String): Side? = Side.entries.firstOrNull { it.name.lowercase() == value }

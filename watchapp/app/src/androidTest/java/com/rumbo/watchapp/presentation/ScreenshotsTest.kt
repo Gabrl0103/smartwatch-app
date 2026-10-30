@@ -234,6 +234,16 @@ class ScreenshotsTest {
         Shot("29_asistente_hablando") { Assistant(speaking = true) },
         Shot("30_asistente_abajo", scrolls = 3) { Assistant() },
         Shot("31_pensando_respuesta") { ProcessingScreen("Pensando la respuesta...") },
+        Shot("32_atencion_escaleras") {
+            Navigation(
+                tracking(
+                    NavigationStatus.TURN_APPROACHING,
+                    instruction = "Atención: tome las escaleras.",
+                    maneuver = Maneuver.UNKNOWN,
+                    pattern = pattern(VibrationCue.ATTENTION),
+                ),
+            )
+        },
     )
 
     @Test

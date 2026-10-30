@@ -71,7 +71,30 @@ def test_to_maneuver_maps_geoapify_types():
     assert to_maneuver("StartAtRight") == Maneuver.STRAIGHT
     assert to_maneuver("DestinationReachedLeft") == Maneuver.ARRIVE
     assert to_maneuver("DestinationReached") == Maneuver.ARRIVE
-    assert to_maneuver("Unknown") == Maneuver.STRAIGHT
+
+
+def test_to_maneuver_keeps_what_it_cannot_classify_as_unknown():
+    assert to_maneuver("Unknown") == Maneuver.UNKNOWN
+    assert to_maneuver("None") == Maneuver.UNKNOWN
+    assert to_maneuver("Merge") == Maneuver.UNKNOWN
+    assert to_maneuver("FerryEnter") == Maneuver.UNKNOWN
+    assert to_maneuver("TipoNuevoDeGeoapify") == Maneuver.UNKNOWN
+    assert to_maneuver("") == Maneuver.UNKNOWN
+
+
+def test_stairs_reach_the_route_with_their_original_text():
+    steps = [
+        step("StartAt", "Camine hacia el sur.", 100, 0),
+        step("Unknown", "Tome las escaleras.", 5, 1),
+        step("Right", "Gire a la derecha.", 50, 1),
+        step("DestinationReached", "Ha llegado.", 0, 2),
+    ]
+    routing = make_routing(lambda r: httpx.Response(200, json=route_reply(steps)))
+
+    route = routing.get_walking_route(ORIGIN, DESTINATION)
+
+    assert route.steps[1].maneuver == Maneuver.UNKNOWN
+    assert route.steps[1].instruction == "Tome las escaleras."
 
 
 def test_destination_side_comes_from_the_arrival_type():

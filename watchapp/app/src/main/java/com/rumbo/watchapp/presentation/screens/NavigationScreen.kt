@@ -62,10 +62,14 @@ private data class StatusLook(val label: String, val color: Color, val icon: Sta
 private fun lookOf(state: TrackingState): StatusLook {
     val instruction = state.nextInstruction ?: "Sigue la ruta"
     val maneuver = maneuverIcon(state.nextManeuver)
+    // Un paso desconocido no es un giro: no se anuncia como tal, también en lo que lee TalkBack.
+    val notATurn = state.nextManeuver == Maneuver.UNKNOWN
     return when (state.status) {
         NavigationStatus.ON_ROUTE -> StatusLook("En ruta", StatusOnRoute, maneuver, instruction)
-        NavigationStatus.TURN_APPROACHING -> StatusLook("Giro próximo", StatusTurnSoon, maneuver, instruction)
-        NavigationStatus.MANEUVER -> StatusLook("Gira ahora", StatusTurnSoon, maneuver, instruction)
+        NavigationStatus.TURN_APPROACHING ->
+            StatusLook(if (notATurn) "Atención" else "Giro próximo", StatusTurnSoon, maneuver, instruction)
+        NavigationStatus.MANEUVER ->
+            StatusLook(if (notATurn) "Atención" else "Gira ahora", StatusTurnSoon, maneuver, instruction)
         NavigationStatus.OFF_ROUTE ->
             StatusLook("Fuera de ruta", StatusOffRoute, StateIconKind.WARNING, "Te saliste de la ruta")
         NavigationStatus.NO_SIGNAL ->
@@ -81,6 +85,7 @@ private fun maneuverIcon(maneuver: Maneuver?) = when (maneuver) {
     Maneuver.RIGHT, Maneuver.SLIGHT_RIGHT, Maneuver.SHARP_RIGHT -> StateIconKind.RIGHT
     Maneuver.U_TURN_LEFT, Maneuver.U_TURN_RIGHT -> StateIconKind.U_TURN
     Maneuver.ROUNDABOUT -> StateIconKind.ROUNDABOUT
+    Maneuver.UNKNOWN -> StateIconKind.WARNING
     Maneuver.STRAIGHT, Maneuver.ARRIVE, null -> StateIconKind.STRAIGHT
 }
 

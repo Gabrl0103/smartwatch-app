@@ -102,6 +102,7 @@ class NavigationEngine(
         } else {
             near
         }
+        val firstFix = !located
         located = true
         distanceToRouteM = snap.distanceToRouteM
         updateOffRoute(snap.distanceToRouteM, nowMs, events)
@@ -109,7 +110,7 @@ class NavigationEngine(
         if (!offRoute && snap.distanceToRouteM <= thresholds.offRouteM) {
             progressM = max(progressM, snap.alongM)
         }
-        advanceNextStep(events)
+        advanceNextStep(events, canSkipUnknown = firstFix)
 
         if (haversineM(here, destination) <= thresholds.arrivalM) {
             status = NavigationStatus.ARRIVED
@@ -141,9 +142,16 @@ class NavigationEngine(
 
     private fun isDestinationNext() = steps.getOrNull(nextIndex)?.maneuver == Maneuver.ARRIVE
 
-    private fun advanceNextStep(events: MutableList<NavigationEvent>) {
+    // Un paso desconocido puede ser una escalera: el motor se detiene en él hasta avisarlo, por más
+    // que un salto del GPS lo deje atrás. Solo la primera lectura puede saltarlo ([canSkipUnknown]):
+    // al continuar una ruta a mitad de camino, esos pasos ya se caminaron.
+    private fun advanceNextStep(events: MutableList<NavigationEvent>, canSkipUnknown: Boolean = false) {
         var index = nextIndex
-        while (index < steps.size && stepAlong[index] <= progressM) index++
+        while (index < steps.size && stepAlong[index] <= progressM) {
+            val pendingUnknown = steps[index].maneuver == Maneuver.UNKNOWN && !(index == nextIndex && maneuverAnnounced)
+            if (pendingUnknown && !canSkipUnknown) break
+            index++
+        }
         if (index == nextIndex) return
         // Un giro nunca se salta en silencio: si una lectura lo deja atrás sin haberlo avisado (p. ej.
         // el primero, a pocos metros del inicio, y la primera lectura cae un poco más allá) y se acaba
@@ -164,14 +172,20 @@ class NavigationEngine(
 
     private fun turnNow(index: Int): NavigationEvent.TurnNow {
         val step = steps[index]
-        return NavigationEvent.TurnNow(step.maneuver, step.roundaboutExit, step.thenManeuver ?: closeTurnAfter(index))
+        return NavigationEvent.TurnNow(
+            step.maneuver,
+            step.roundaboutExit,
+            step.thenManeuver ?: closeTurnAfter(index),
+            step.instruction.takeIf { step.maneuver == Maneuver.UNKNOWN }.orEmpty(),
+        )
     }
 
-    // El giro que sigue a [index], si queda tan cerca que su preparación empezaría al doblar.
+    // El giro que sigue a [index], si queda tan cerca que su preparación empezaría al doblar. Un paso
+    // desconocido no cuenta: "Luego," no sabría decirlo y sus propias etapas ya suenan enseguida.
     private fun closeTurnAfter(index: Int): Maneuver? {
         val following = steps.getOrNull(index + 1) ?: return null
         val close = stepAlong[index + 1] - stepAlong[index] <= thresholds.turnApproachMinM
-        return following.maneuver.takeIf { close && it.isTurn }
+        return following.maneuver.takeIf { close && it.isTurn && it != Maneuver.UNKNOWN }
     }
 
     private fun updateOffRoute(distanceM: Double, nowMs: Long, events: MutableList<NavigationEvent>) {
@@ -202,7 +216,8 @@ class NavigationEngine(
         }
         if (!step.maneuver.isTurn) return NavigationStatus.ON_ROUTE
         if (maneuverAnnounced || distance <= thresholds.maneuverM) {
-            if (!maneuverAnnounced) {
+            // Si en esta lectura ya sonó otra maniobra, esta espera a la siguiente: si no, se perdería.
+            if (!maneuverAnnounced && !turnJustSaid) {
                 // Cada giro avisa en dos etapas: si se llega a la maniobra sin haber avisado del
                 // giro próximo (un salto del GPS o un tramo corto), se avisan las dos juntas.
                 if (!approachAnnounced) events += NavigationEvent.TurnApproaching(step.maneuver)

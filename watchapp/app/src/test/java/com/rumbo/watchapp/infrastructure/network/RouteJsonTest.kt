@@ -29,6 +29,7 @@ class RouteJsonTest {
             "u_turn_left" to Maneuver.U_TURN_LEFT,
             "u_turn_right" to Maneuver.U_TURN_RIGHT,
             "roundabout" to Maneuver.ROUNDABOUT,
+            "unknown" to Maneuver.UNKNOWN,
             "straight" to Maneuver.STRAIGHT,
             "arrive" to Maneuver.ARRIVE,
         )
@@ -72,8 +73,8 @@ class RouteJsonTest {
     }
 
     @Test
-    fun unknownManeuverIsStraight() {
-        assertEquals(Maneuver.STRAIGHT, routeFromJson(stepJson(""""maneuver": "teleport"""")).steps.single().maneuver)
+    fun aManeuverThisWatchDoesNotKnowIsNeverTakenForStraight() {
+        assertEquals(Maneuver.UNKNOWN, routeFromJson(stepJson(""""maneuver": "teleport"""")).steps.single().maneuver)
     }
 
     @Test

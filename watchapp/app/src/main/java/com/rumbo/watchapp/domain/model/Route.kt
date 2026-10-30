@@ -1,7 +1,12 @@
 package com.rumbo.watchapp.domain.model
 
 enum class Maneuver {
-    LEFT, RIGHT, SLIGHT_LEFT, SLIGHT_RIGHT, SHARP_LEFT, SHARP_RIGHT, U_TURN_LEFT, U_TURN_RIGHT, ROUNDABOUT, STRAIGHT, ARRIVE;
+    LEFT, RIGHT, SLIGHT_LEFT, SLIGHT_RIGHT, SHARP_LEFT, SHARP_RIGHT, U_TURN_LEFT, U_TURN_RIGHT, ROUNDABOUT,
+
+    /** Lo que el proveedor no clasifica ("Tome las escaleras."): solo se sabe por su texto. */
+    UNKNOWN,
+    STRAIGHT,
+    ARRIVE;
 
     /** true si hay que avisarla por etapas: todo lo que no sea seguir recto o llegar. */
     val isTurn: Boolean get() = this != STRAIGHT && this != ARRIVE
