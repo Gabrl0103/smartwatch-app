@@ -11,6 +11,7 @@ qué se espera; si algo no coincide, es un error.
 | Backend | `cd backend` y `pytest` | Casos de uso, routers, repositorios (SQLite en memoria), Gemini y Geoapify con dobles, límite de 50 km en `POST /routes` |
 | Reloj (JUnit) | `cd watchapp` y `gradlew testDebugUnitTest` | Geometría, filtro GPS, motor de navegación, vibraciones, frases, voz (prioridades y pausa al grabar), órdenes de voz y contexto del asistente, casos de uso, red (reintento y mensajes), ViewModel |
 | Recorridos GPX | incluidas en el comando anterior | `DemoGpxNavigationTest` y `DemoGpxTrackingTest` recorren los tres GPX de `docs/demo` segundo a segundo |
+| Doble toque | `gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.rumbo.watchapp.presentation.RouteDoubleTapTest` (emulador abierto) | Toques reales sobre "En ruta": repite sin importar dónde caiga, nunca termina la ruta por un doble toque, y la acción que usa TalkBack |
 | Capturas | `bash tools/capture_screens.sh` (emulador abierto) | Dibuja todas las pantallas en `docs/capturas` |
 
 Las pruebas con GPX usan la ruta real del backend (`docs/demo/ruta_parque_narino_a_parque_bolivar.json`,
@@ -21,8 +22,11 @@ recorridos realistas (una lectura por segundo con ruido de GPS de σ ≈ 3 m, ve
 
 - **Normal**: cada giro avisa una vez en sus dos etapas (Giro próximo → Gira ahora; vibra su lado
   una vez) y termina en Llegaste, sin salirse nunca pese al ruido y los saltos.
+- **Guía completa**: la voz de toda la ruta, frase por frase y en orden; todas salvo la de inicio
+  estaban precargadas antes de sonar y no se precargó ninguna que no sonara.
 - **Ruido con 30 semillas**: el mismo modelo generado en el test (`testing/RealisticWalk.kt`) con 30
-  semillas distintas: ningún desvío ni giro falso, ningún aviso de más ni de menos y siempre llega.
+  semillas distintas: ningún desvío ni giro falso, ningún aviso de más ni de menos (tampoco el
+  lejano ni el del destino) y siempre llega.
 - **Con desvío**: un solo tramo Fuera de ruta, pide recalcular y se recupera; sin internet sigue
   con la ruta anterior, vibra "fuera de ruta" en cada intento (como mucho 5) y llega igual.
 - **Sin señal**: un solo tramo Sin señal GPS, "Perdí la señal de GPS." / "Señal recuperada." y
@@ -80,14 +84,19 @@ Requiere el backend con `POST /voice/ask` desplegado en Render.
 | # | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|
 | R1 | Iniciar ruta | Desde Confirmar tocar "Ir" | "En ruta" con el anillo, la maniobra siguiente, "En X m" y "Faltan X"; voz "Iniciando ruta. ..."; aparece la notificación "Rumbo: navegando"; Logcat `Nav: Estado - → ON_ROUTE` |
-| R2 | Giros | Cargar `ruta_parque_narino_a_parque_bolivar.gpx` y Play route | Antes de cada giro "Giro próximo" (amarillo, 2 pulsos muy cortos, "En treinta metros, gire...") y en el giro "Gira ahora" (izquierda: 2 pulsos medios; derecha: 1 pulso largo): cada giro vibra en esas dos etapas. "Giro próximo" llega a unos 30 m del giro, nunca a más de 40 m aunque el GPS dé un salto. Logcat `Estado ON_ROUTE → TURN_APPROACHING (paso n a ~30 m) → MANEUVER` una vez por giro |
+| R2 | Giros | Cargar `ruta_parque_narino_a_parque_bolivar.gpx` y Play route | Al empezar un tramo de más de 80 m, solo voz: "Sigue recto por Calle 19. En uno coma tres kilómetros, gira a la izquierda." Antes de cada giro "Giro próximo" (amarillo, 2 pulsos muy cortos, "En cincuenta metros, gira a la izquierda en Carrera 14.") y en el giro "Gira ahora" ("Gira ahora a la izquierda."; izquierda: 2 pulsos medios; derecha: 1 pulso largo): cada giro vibra en esas dos etapas. "Giro próximo" llega a unos 50 m del giro, nunca a más de 40 m aunque el GPS dé un salto. Logcat `Estado ON_ROUTE → TURN_APPROACHING (paso n a ~30 m) → MANEUVER` una vez por giro |
 | R3 | Pantalla apagada | En ruta, apagar la pantalla (`adb shell input keyevent KEYCODE_SLEEP`) y seguir el GPX | Logcat sigue mostrando vibraciones ("Recto: 1 pulso suave cada 6 s", o "1 pulso corto" si el reloj no controla la intensidad) y cambios de estado; al encender la pantalla se ve el estado actual |
 | R4 | Pantalla encendida y atenuada | En ruta, no tocar nada 15 s | La pantalla no se apaga sola; baja a ~30 % de brillo. Al tocarla o en el siguiente giro vuelve al brillo normal |
 | R5 | Volver a la app | En ruta, salir con el botón de inicio del reloj y abrir Rumbo (o tocar la notificación) | Abre directo en "En ruta", con la ruta que seguía |
 | R6 | El proceso muere | En ruta, `adb shell am force-stop com.rumbo.watchapp` y abrir Rumbo | Inicio muestra primero "Continuar ruta anterior" con el destino y la voz lo dice. Al tocarlo vuelve a "En ruta" desde donde esté el usuario, sin un falso "Fuera de ruta" |
-| R7 | Terminar | En ruta, tocar "Terminar" | Vuelve a Inicio al instante; Logcat `Vibracion: Detenida`, `Nav: Navegación terminada` y `Servicio detenido`; desaparece la notificación; `adb shell dumpsys location` muestra `gps provider request = ProviderRequest[OFF]`; no se ofrece "Continuar ruta anterior" |
+| R7 | Terminar | En ruta, tocar "Terminar" una vez | Vuelve a Inicio tras los 300 ms de espera del doble toque; Logcat `Vibracion: Detenida`, `Nav: Navegación terminada` y `Servicio detenido`; desaparece la notificación; `adb shell dumpsys location` muestra `gps provider request = ProviderRequest[OFF]`; no se ofrece "Continuar ruta anterior" |
 | R8 | Volver en ruta | En ruta, gesto de volver | Pregunta "¿Terminar la ruta?" con "Seguir navegando" (primero) y "Terminar"; volver otra vez sigue navegando |
-| R9 | Repetir | En ruta, tocar "Repetir" | Vuelve a vibrar el último patrón y dice la indicación completa ("En ... metros, gire ...") |
+| R9 | Repetir | En ruta, tocar "Repetir" | Vuelve a vibrar el último patrón y dice la indicación de la etapa actual con la distancia de ahora ("Sigue recto por ... En ... metros, gira ..."); Logcat `Nav: Repetir indicación`. Después de doblar nunca dice "Gira ahora" |
+| R10 | Doble toque | En ruta, dos toques rápidos en cualquier parte (con `adb`: `adb shell 'input tap 227 300 & sleep 0.12; input tap 227 300; wait'`) | Una sola vez `Nav: Repetir indicación`. Un toque suelto no repite |
+| R11 | Doble toque sobre "Terminar" | Bajar hasta "Terminar" y dar dos toques rápidos encima | Repite y la ruta sigue, sin `Nav: Navegación terminada` |
+| R12 | Destino | Dejar correr el GPX hasta el final | Antes de llegar, una vez, "Tu destino está en ochenta metros, a la derecha." (el último tramo mide 83 m; en uno más largo, a cien metros) y al llegar "Llegaste a tu destino." |
+| R13 | Precarga | Con voz Gemini, mirar `adb logcat -s Red` al tocar "Ir" | Dos `POST /speech` seguidos: la frase de inicio y la de la siguiente etapa. Al sonar la siguiente etapa no hay otro `POST /speech` con esa frase |
+| R14 | TalkBack en ruta (solo reloj real) | Con TalkBack, tocar la indicación para enfocarla y dar doble toque en cualquier parte | Anuncia "repetir la indicación" y repite. Con el foco en un botón, activa ese botón |
 
 ### Lugares guardados
 

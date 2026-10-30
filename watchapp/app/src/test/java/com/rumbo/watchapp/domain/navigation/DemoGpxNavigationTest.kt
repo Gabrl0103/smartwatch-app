@@ -28,6 +28,9 @@ private val ON_ROUTE_STATES = setOf(ON_ROUTE, TURN_APPROACHING, MANEUVER)
 // Recorridos realistas generados en el test, además de los tres GPX de docs/demo.
 private const val SEEDS = 30
 
+// Tramos de la ruta de demo que terminan en giro y miden más de turnAheadMinM.
+private const val LONG_LEGS = 3
+
 // Lo más lejos que puede avisarse un giro: a la velocidad más alta creíble a pie.
 private val MAX_APPROACH_M = NavigationThresholds().let { maxOf(it.turnApproachMinM, it.maxSpeedMps * it.turnApproachLookaheadS) }
 
@@ -76,6 +79,9 @@ class DemoGpxNavigationTest {
         assertTrue("Nunca fuera de ruta ni sin señal: $description", replay.statuses.none { it == OFF_ROUTE || it == NO_SIGNAL })
         assertEquals("Giros próximos: $description", turns, replay.countOf<NavigationEvent.TurnApproaching>())
         assertEquals("Gira ahora: $description", turns, replay.countOf<NavigationEvent.TurnNow>())
+        // Tres tramos de más de 80 m: como mucho un aviso lejano por cada uno, por más ruido que haya.
+        assertTrue("Lejanos: $description", replay.countOf<NavigationEvent.TurnAhead>() <= LONG_LEGS)
+        assertEquals("Destino cerca: $description", 1, replay.count(NavigationEvent.DestinationNear))
         assertEquals("Llegadas: $description", 1, replay.count(NavigationEvent.Arrived))
         assertEquals(description, ARRIVED, replay.statuses.last())
         // Un salto del GPS no adelanta el aviso: "Giro próximo" nunca antes de MAX_APPROACH_M.
