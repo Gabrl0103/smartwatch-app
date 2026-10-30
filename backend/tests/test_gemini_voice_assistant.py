@@ -58,6 +58,32 @@ def test_answer_question_returns_text():
     assert assistant.answer_question("¿hacia dónde?", "ruta") == "Sigue recto."
 
 
+def test_answer_prompt_says_what_rumbo_cannot_do():
+    seen = {}
+
+    def handler(request):
+        seen["prompt"] = json.loads(request.content)["contents"][0]["parts"][0]["text"]
+        return httpx.Response(200, json=gemini_reply("No detecto obstáculos."))
+
+    make_assistant(handler).answer_question("¿Hay obstáculos?", "Navegando a pie hacia Parque Bolívar.")
+    prompt = seen["prompt"]
+    assert "NO ve" in prompt and "obstáculos" in prompt
+    assert "sin inventar" in prompt
+    assert prompt.endswith("Contexto de la ruta: Navegando a pie hacia Parque Bolívar.\nPregunta: ¿Hay obstáculos?")
+
+
+def test_html_entities_from_gemini_are_decoded():
+    payload = {"text": "cancelar navegaci&oacute;n", "intent": "ask", "question": "¿d&oacute;nde estoy?"}
+    command = make_assistant(
+        lambda r: httpx.Response(200, json=gemini_reply(json.dumps(payload)))
+    ).interpret_audio(b"a", "audio/aac")
+    assert command.text == "cancelar navegación"
+    assert command.question == "¿dónde estoy?"
+
+    assistant = make_assistant(lambda r: httpx.Response(200, json=gemini_reply("Gira a la izquierda en la esquina.&nbsp;")))
+    assert assistant.answer_question("¿qué sigue?", "") == "Gira a la izquierda en la esquina."
+
+
 def test_quota_exhausted_raises_quota_error():
     assistant = make_assistant(lambda r: httpx.Response(429, json={}))
     with pytest.raises(QuotaExhaustedError):

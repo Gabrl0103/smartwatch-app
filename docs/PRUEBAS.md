@@ -72,6 +72,7 @@ Requiere el backend con `POST /voice/ask` desplegado en Render.
 | A4 | "Repite" y "cancela" | En ruta → "Preguntar" → "repite"; luego "Preguntar" → "termina la ruta" | "Repite" vuelve a la ruta, vibra y dice la indicación; "termina" pregunta "¿Terminar la ruta?" |
 | A5 | Otro destino en ruta | En ruta → "Preguntar" → "llévame a la Universidad" | Sigue en la misma ruta y dice "Ya vas hacia Parque Bolívar. Para ir a otro lugar, termina esta ruta." |
 | A6 | Aviso mientras graba | Con el GPX corriendo, tocar "Preguntar" justo antes de un giro y hablar | La voz no dice el aviso mientras graba (la vibración sí suena); al terminar de grabar se dice el aviso más importante que llegó |
+| A8 | Lo que Rumbo no hace | Preguntar "¿qué puedes hacer?" y "¿hay obstáculos adelante?" | Describe solo lo que hace (ruta a pie, avisos por vibración y voz, repetir, preguntas sobre la ruta) y dice que no detecta obstáculos; nunca promete ver el entorno |
 | A7 | Cuota agotada | Con la cuota gratis de Gemini agotada, hacer una pregunta | Error "Se agotó la cuota gratuita del asistente de Gemini. Intenta más tarde."; en ruta, "Volver a la ruta" sigue navegando |
 
 ### Ruta y navegación

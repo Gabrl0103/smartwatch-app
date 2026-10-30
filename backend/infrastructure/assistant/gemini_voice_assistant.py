@@ -1,4 +1,5 @@
 import base64
+import html
 import json
 
 import httpx
@@ -32,9 +33,22 @@ RESPONSE_SCHEMA = {
     "required": ["text", "intent"],
 }
 
+# Lo que la app hace y lo que no: sin esto Gemini promete, por ejemplo, avisar de obstáculos,
+# algo peligroso de creer para una persona ciega.
 ANSWER_PROMPT = (
-    "Eres un asistente de voz para una persona ciega que camina. Responde en "
-    "español, en máximo 2 frases cortas y claras, sin símbolos ni listas. "
+    "Eres el asistente de voz de Rumbo, una app de reloj que guía a pie a una "
+    "persona ciega en Pasto, Colombia. Rumbo solo hace esto: busca una ruta a pie "
+    "hacia un lugar que se pide por voz o desde los lugares guardados, y durante la "
+    "ruta usa el GPS para avisar con vibraciones y voz los giros, si la persona se "
+    "salió de la ruta (y la recalcula), si se perdió la señal de GPS y la llegada; "
+    "también repite la indicación y responde preguntas sobre la ruta. Rumbo NO ve: "
+    "no tiene cámara ni detecta obstáculos, escalones, huecos, semáforos, carros ni "
+    "personas, y no sabe qué hay alrededor. Nunca digas que puedes hacer algo fuera "
+    "de esa lista. Para distancias e indicaciones usa solo el contexto de la ruta; "
+    "si la respuesta no está ahí, di con honestidad que no lo sabes, sin inventar. "
+    "Si preguntan por cruzar una calle o por obstáculos, recuerda que Rumbo no los "
+    "detecta y que use su bastón o pida ayuda. Responde en español, en máximo 2 "
+    "frases cortas y claras, sin símbolos ni listas.\n"
     "Contexto de la ruta: {context}\nPregunta: {question}"
 )
 
@@ -72,7 +86,7 @@ class GeminiVoiceAssistant:
 
     def answer_question(self, question: str, context: str) -> str:
         prompt = ANSWER_PROMPT.format(context=context or "sin ruta activa", question=question)
-        return self._generate([{"text": prompt}], {"temperature": 0.3}).strip()
+        return _clean(self._generate([{"text": prompt}], {"temperature": 0.3}))
 
     def _generate(self, parts: list[dict], generation_config: dict) -> str:
         if not self._api_key or not self._model:
@@ -109,8 +123,13 @@ class GeminiVoiceAssistant:
         except (ValueError, KeyError, TypeError) as error:
             raise ExternalServiceError("No pude interpretar la respuesta de Gemini.") from error
         return VoiceCommand(
-            text=(data.get("text") or "").strip(),
+            text=_clean(data.get("text")),
             intent=intent,
-            destination=(data.get("destination") or None),
-            question=(data.get("question") or None),
+            destination=_clean(data.get("destination")) or None,
+            question=_clean(data.get("question")) or None,
         )
+
+
+def _clean(text: str | None) -> str:
+    """A veces Gemini escribe las tildes como entidades HTML ("navegaci&oacute;n")."""
+    return html.unescape(text or "").strip()
