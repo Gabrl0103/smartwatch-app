@@ -13,7 +13,7 @@ misma pantalla desplazada hasta el final.
 | `05_confirmar.png`, `06_confirmar_abajo.png` | Confirmar destino: Ir / Hablar / Cambiar / Guardar |
 | `27_confirmar_hablando.png` | Confirmar mientras la app dice el destino: el badge se funde en barras que se mueven |
 | `07_error.png` | Error: Reintentar / Inicio |
-| `08_en_ruta.png`, `09_en_ruta_abajo.png` | En ruta, con distancias, vibración, Repetir, Preguntar (asistente) y Terminar |
+| `08_en_ruta.png`, `09_en_ruta_abajo.png` | En ruta, con distancias, vibración, Repetir, Preguntar (asistente), Ver mapa y Terminar |
 | `10_giro_proximo.png` | Giro próximo |
 | `11_gira_ahora.png` | Gira ahora |
 | `12_fuera_de_ruta.png` | Fuera de ruta |
@@ -33,6 +33,11 @@ misma pantalla desplazada hasta el final.
 | `29_asistente_hablando.png` | Asistente mientras dice la respuesta: el badge se funde en barras |
 | `31_pensando_respuesta.png` | Procesando mientras el asistente responde |
 | `32_atencion_escaleras.png` | Paso desconocido: "Atención" con el ícono de advertencia y el texto de Geoapify |
+| `33_mapa_en_ruta.png` | Mapa de cerca: la persona al centro con el rumbo arriba, lo recorrido en azul, lo que falta en claro y el próximo giro con un aro |
+| `34_mapa_desviado.png` | Mapa, desviado: persona naranja, ruta resaltada y "Fuera de ruta" |
+| `35_mapa_sin_senal.png` | Mapa, sin señal: persona gris en la última posición y "Sin señal" |
+| `36_mapa_toda_la_ruta.png` | Mapa con toda la ruta: norte arriba, destino en verde y botón "Cerca" |
+| `37_mapa_llegada.png` | Mapa, llegada: la persona sobre el destino y "Llegaste" |
 
 ## Regenerarlas
 

@@ -39,7 +39,7 @@ private val RouteBaseWidth = 9.dp
 private val OffRouteHighlightWidth = 13.dp
 private val TurnRadius = 10.dp
 private val TurnStroke = 3.dp
-private val DestinationRadius = 10.dp
+private val DestinationRadius = 12.dp
 private val PersonRadius = 7.dp
 private val ArrowTip = 19.dp
 private val ArrowHalfWidth = 8.dp
@@ -47,8 +47,8 @@ private val Outline = 2.dp
 
 /**
  * El mapa de la ruta, solo con lo que trae [state]: no usa teselas ni internet. Se dibuja una vez por
- * cada [state] o [zoom] nuevo, sin animaciones. [topInset] y [bottomInset] son lo que tapan los
- * controles: la ruta entera se ajusta entre ellos.
+ * cada [state] o [zoom] nuevo, sin animaciones. [topInset] y [bottomInset] son lo que tapan la hora
+ * y los controles: la ruta entera se ajusta entre ellos.
  */
 @Composable
 fun RouteMapCanvas(

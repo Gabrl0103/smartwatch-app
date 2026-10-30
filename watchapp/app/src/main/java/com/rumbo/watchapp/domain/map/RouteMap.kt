@@ -6,8 +6,9 @@ import com.rumbo.watchapp.domain.geo.cumulativeDistances
 import com.rumbo.watchapp.domain.geo.stepAlongDistances
 import com.rumbo.watchapp.domain.model.Coordinates
 import com.rumbo.watchapp.domain.model.Route
-import kotlin.math.hypot
+import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sqrt
 
 /** Lo que muestra la vista cercana delante de la persona. */
 const val NEARBY_RADIUS_M = 150.0
@@ -117,12 +118,26 @@ private fun nearbyRadiusPx(view: MapView) = min(view.width, view.height) / 2 - v
 private fun nearbyCamera(person: Point2, headingDeg: Double, view: MapView) =
     Camera(person, headingDeg, nearbyRadiusPx(view) / NEARBY_RADIUS_M, view.width / 2, view.height / 2)
 
-// Se ajusta por la distancia al centro y no por el rectángulo: en pantalla redonda las esquinas no existen.
+// Lo más grande que cabe en la franja libre sin salirse del círculo: en pantalla redonda las esquinas
+// no existen, y una ruta ancha puede pasar de lado a lado aunque la franja sea baja.
 private fun wholeRouteCamera(points: List<Point2>, view: MapView): Camera {
-    val focus = Point2((points.minOf { it.x } + points.maxOf { it.x }) / 2, (points.minOf { it.y } + points.maxOf { it.y }) / 2)
-    val farthest = points.maxOf { hypot(it.x - focus.x, it.y - focus.y) }
+    val south = points.minOf { it.y }
+    val north = points.maxOf { it.y }
+    val focus = Point2((points.minOf { it.x } + points.maxOf { it.x }) / 2, (south + north) / 2)
     val freeHeight = view.height - view.topInset - view.bottomInset
-    val radiusPx = min(view.width / 2 - view.margin, freeHeight / 2)
-    val scale = if (farthest > 0) radiusPx / farthest else nearbyRadiusPx(view) / NEARBY_RADIUS_M
-    return Camera(focus, 0.0, scale, view.width / 2, view.topInset + freeHeight / 2)
+    val centerY = view.topInset + freeHeight / 2
+    val radius = nearbyRadiusPx(view)
+    val inCircle = points.minOf { scaleInsideCircle(it.x - focus.x, it.y - focus.y, centerY - view.height / 2, radius) }
+    val inBand = if (north > south) freeHeight / (north - south) else Double.MAX_VALUE
+    val scale = min(inCircle, inBand).takeIf { it < Double.MAX_VALUE } ?: (radius / NEARBY_RADIUS_M)
+    return Camera(focus, 0.0, scale, view.width / 2, centerY)
+}
+
+// La mayor escala con la que un punto a (dx, dy) del foco queda en el círculo, si el foco se dibuja
+// [shift] px por debajo del centro: la raíz positiva de (s·dx)² + (shift - s·dy)² = radius².
+private fun scaleInsideCircle(dx: Double, dy: Double, shift: Double, radius: Double): Double {
+    val squared = dx * dx + dy * dy
+    if (squared == 0.0) return Double.MAX_VALUE
+    val along = shift * dy
+    return (along + sqrt(along * along + squared * max(radius * radius - shift * shift, 0.0))) / squared
 }

@@ -153,6 +153,37 @@ class RouteMapTest {
         frame.route.flatten().forEach { assertTrue("$it", it.y in 50.0 - TOLERANCE..304.0 + TOLERANCE) }
     }
 
+    // Hora arriba y controles abajo, como en la pantalla: la franja libre queda por encima del centro.
+    private val highBand = MapView(454.0, 454.0, 27.0, topInset = 48.0, bottomInset = 234.0)
+
+    @Test
+    fun theWholeRouteStaysInsideTheCircleWhenTheFreeBandIsHigh() {
+        val frame = mapFrame(geometry, at(0.0, 100.0), 0.0, 100.0, MapZoom.WHOLE_ROUTE, highBand)
+
+        frame.route.flatten().forEach {
+            assertTrue("$it", hypot(it.x - center.x, it.y - center.y) <= 200.0 + TOLERANCE)
+            assertTrue("$it", it.y in 48.0 - TOLERANCE..220.0 + TOLERANCE)
+        }
+    }
+
+    @Test
+    fun aWideRouteUsesTheWidthOfTheScreenEvenIfTheFreeBandIsLow() {
+        val wide = RouteGeometry(Route("Este", 0.0, 0.0, emptyList(), listOf(at(0.0, 0.0), at(300.0, 0.0))))
+
+        val line = mapFrame(wide, null, null, 0.0, MapZoom.WHOLE_ROUTE, highBand).route.flatten()
+
+        assertTrue("Ancho: ${line.last().x - line.first().x}", line.last().x - line.first().x > 300)
+    }
+
+    @Test
+    fun theWholeRouteFillsTheFreeBandWhenItIsTall() {
+        val tall = RouteGeometry(Route("Norte", 0.0, 0.0, emptyList(), listOf(at(0.0, 0.0), at(0.0, 300.0))))
+
+        val line = mapFrame(tall, null, null, 0.0, MapZoom.WHOLE_ROUTE, highBand).route.flatten()
+
+        assertEquals(172.0, line.first().y - line.last().y, TOLERANCE)
+    }
+
     @Test
     fun theWholeRouteKeepsNorthUp() {
         val frame = frame(heading = 90.0, zoom = MapZoom.WHOLE_ROUTE)

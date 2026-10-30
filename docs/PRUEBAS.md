@@ -9,9 +9,9 @@ qué se espera; si algo no coincide, es un error.
 | Qué | Comando | Qué cubren |
 |---|---|---|
 | Backend | `cd backend` y `pytest` | Casos de uso, routers, repositorios (SQLite en memoria), Gemini y Geoapify con dobles, límite de 50 km en `POST /routes` |
-| Reloj (JUnit) | `cd watchapp` y `gradlew testDebugUnitTest` | Geometría, filtro GPS, motor de navegación, vibraciones, frases, voz (prioridades y pausa al grabar), órdenes de voz y contexto del asistente, casos de uso, red (reintento y mensajes), ViewModel |
+| Reloj (JUnit) | `cd watchapp` y `gradlew testDebugUnitTest` | Geometría, filtro GPS, motor de navegación, vibraciones, frases, voz (prioridades y pausa al grabar), órdenes de voz y contexto del asistente, mapa (proyección, recorte, giro por rumbo, cuadros y ritmo de redibujo), casos de uso, red (reintento y mensajes), ViewModel |
 | Recorridos GPX | incluidas en el comando anterior | `DemoGpxNavigationTest` y `DemoGpxTrackingTest` recorren los tres GPX de `docs/demo` segundo a segundo |
-| Instrumentados | `gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.package=com.rumbo.watchapp.presentation` (emulador abierto) | `RouteDoubleTapTest`: toques reales sobre "En ruta", repite sin importar dónde caiga, nunca termina la ruta por un doble toque, y la acción que usa TalkBack. `UnknownStepScreenTest`: "Atención" en En ruta y en Probar vibraciones. `VoiceCommandScreenTest`: micrófono en Confirmar, "Guardado ✓" en la ruta y las vibraciones "Hecho" y "Error". También corre `ScreenshotsTest` |
+| Instrumentados | `gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.package=com.rumbo.watchapp.presentation` (emulador abierto) | `RouteDoubleTapTest`: toques reales sobre "En ruta", repite sin importar dónde caiga, nunca termina la ruta por un doble toque, y la acción que usa TalkBack. `UnknownStepScreenTest`: "Atención" en En ruta y en Probar vibraciones. `VoiceCommandScreenTest`: micrófono en Confirmar, "Guardado ✓" en la ruta y las vibraciones "Hecho" y "Error". `RouteMapScreenTest`: "Ver mapa", etiquetas de cada estado, descripción para TalkBack, "Atrás", alternar la vista y botones de 48 dp o más. También corre `ScreenshotsTest` |
 | Capturas | `bash tools/capture_screens.sh` (emulador abierto) | Dibuja todas las pantallas en `docs/capturas` |
 
 Las pruebas con GPX usan la ruta real del backend (`docs/demo/ruta_parque_narino_a_parque_bolivar.json`,
@@ -116,6 +116,19 @@ Cada orden termina con "Hecho" (2 pulsos cortos) o "Error" (1 pulso extra largo)
 | R13 | Precarga | Con voz Gemini y frases sin caché, mirar `adb logcat -s Red` al tocar "Ir" | Dos `POST /speech` seguidos: la frase de inicio y la de la siguiente etapa. Al sonar la siguiente etapa no hay otro `POST /speech` con esa frase, ni más de 2 precargas por minuto. Si llega un 429, la voz vuelve sola tras la espera (`Red` lo muestra), no 30 minutos después |
 | R14 | TalkBack en ruta (solo reloj real) | Con TalkBack, tocar la indicación para enfocarla y dar doble toque en cualquier parte | Anuncia "repetir la indicación" y repite. Con el foco en un botón, activa ese botón |
 | R15 | Paso desconocido | Pedir una ruta con escaleras con `GEOAPIFY_ROUTE_TYPE=short` en el backend (p. ej. en Barcelona, de 41.4145, 2.1527 a 41.4120, 2.1500) y caminarla o simularla | Antes del paso: "Atención: en cincuenta metros, tome las escaleras.", pantalla "Atención" con el ícono de advertencia y 4 pulsos cortos; a 12 m, "Atención: ahora, tome las escaleras." y otra vez 4 pulsos. Ninguna escalera de la ruta queda sin avisar |
+
+### Mapa
+
+| # | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|
+| M1 | Abrir y volver | En ruta, bajar hasta "Ver mapa" y tocarlo; luego "Atrás" o el gesto de volver | Abre "Mapa" y vuelve a En ruta sin preguntar "¿Terminar la ruta?"; la voz y las vibraciones no se cortan (`adb logcat -s Nav Vibracion`) |
+| M2 | Recorrido | Con el mapa abierto, Play route en el GPX | La persona sigue al centro con el rumbo hacia arriba; lo recorrido queda azul, lo que falta claro y el próximo giro con un aro amarillo |
+| M3 | Vistas | Tocar "Ruta" y luego "Cerca" | Toda la ruta con el norte arriba, destino en verde y la flecha con su rumbo; vuelve a la vista de cerca. TalkBack lee "Ver toda la ruta" y "Ver de cerca" |
+| M4 | Desviado | Con `ruta_con_desvio.gpx` y el mapa abierto | Persona naranja, ruta con borde naranja y "Fuera de ruta"; al recalcular aparece la ruta nueva |
+| M5 | Sin señal | Con el mapa abierto, apagar la ubicación 15 s | Persona gris en la última posición y "Sin señal"; al volver la señal sigue normal |
+| M6 | Llegada | Dejar correr el GPX hasta el final con el mapa abierto | "Llegaste" sobre el destino; "Atrás" vuelve a la pantalla de llegada |
+| M7 | Sin internet | Activar modo avión con la ruta ya calculada y abrir el mapa | Se dibuja igual: no pide nada a la red (`adb logcat -s Red`) |
+| M8 | Batería | Con el mapa abierto y sin moverse | Nada se mueve en pantalla; tras 15 s se atenúa, y al tocar vuelve el brillo |
 
 ### Lugares guardados
 

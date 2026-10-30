@@ -86,10 +86,10 @@ fun RumboScreen(
             content = content,
         )
     }
-    if (edgeRing == null) {
+    if (edgeRing == null && background == null) {
         ScreenScaffold(scrollState = scrollState, modifier = modifier, contentPadding = padding, content = body)
     } else {
-        // El anillo ocupa el borde: ahí no cabe además el indicador de desplazamiento.
+        // El anillo o el mapa ocupan el borde: ahí no cabe además el indicador de desplazamiento.
         ScreenScaffold(
             scrollState = scrollState,
             modifier = modifier,
