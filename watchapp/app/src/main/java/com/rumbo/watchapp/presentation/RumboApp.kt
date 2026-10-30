@@ -161,9 +161,14 @@ private fun Screen(
         )
         PlanState.Listening -> {
             val level by viewModel.voiceLevel.collectAsState()
-            ListeningScreen(level = level, onCancel = viewModel::cancelListening)
+            ListeningScreen(
+                level = level,
+                onCancel = viewModel::cancelListening,
+                // En ruta no se pide otro destino: el micrófono es para preguntar, repetir o terminar.
+                hint = if (viewModel.navigating) "¿Qué quieres saber?" else "Di a dónde quieres ir",
+            )
         }
-        PlanState.Processing -> ProcessingScreen(waitMessage ?: "Buscando ruta...")
+        PlanState.Processing -> ProcessingScreen(waitMessage ?: if (viewModel.navigating) "Entendiendo..." else "Buscando ruta...")
         PlanState.LoadingPlaces -> ProcessingScreen(waitMessage ?: "Cargando lugares...")
         PlanState.Answering -> ProcessingScreen(waitMessage ?: "Pensando la respuesta...")
         is PlanState.Assistant -> AssistantScreen(

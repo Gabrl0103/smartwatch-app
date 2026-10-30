@@ -47,6 +47,7 @@ import com.rumbo.watchapp.presentation.components.StateBadge
 import com.rumbo.watchapp.presentation.components.StateIcon
 import com.rumbo.watchapp.presentation.components.StateIconKind
 import com.rumbo.watchapp.presentation.components.VibrationIndicator
+import com.rumbo.watchapp.presentation.screens.AssistantScreen
 import com.rumbo.watchapp.presentation.screens.ConfirmDeleteScreen
 import com.rumbo.watchapp.presentation.screens.ConfirmScreen
 import com.rumbo.watchapp.presentation.screens.ErrorScreen
@@ -113,6 +114,17 @@ private fun tracking(
 @Composable
 private fun Navigation(state: TrackingState, confirmFinish: Boolean = false) =
     NavigationScreen(state, confirmFinish, onRepeat = {}, onFinish = {}, onKeepNavigating = {})
+
+// Una respuesta como las de Gemini en ruta: dos frases cortas con el contexto de la ruta.
+@Composable
+private fun Assistant(speaking: Boolean = false) = AssistantScreen(
+    question = "¿Cuánto falta para llegar?",
+    answer = "Faltan unos 470 metros. En 30 metros gira a la izquierda hacia la Carrera 14.",
+    speaking = speaking,
+    onAskAgain = {},
+    onBack = {},
+    backLabel = "Volver a la ruta",
+)
 
 @Composable
 private fun Vibrations(supportsAmplitude: Boolean = true, demo: DemoStep? = null) = VibrationsScreen(
@@ -218,6 +230,10 @@ class ScreenshotsTest {
         Shot("24_demostracion_vibraciones") {
             Vibrations(demo = DemoStep(VibrationCue.LEFT, 3, VibrationCue.entries.size))
         },
+        Shot("28_asistente") { Assistant() },
+        Shot("29_asistente_hablando") { Assistant(speaking = true) },
+        Shot("30_asistente_abajo", scrolls = 3) { Assistant() },
+        Shot("31_pensando_respuesta") { ProcessingScreen("Pensando la respuesta...") },
     )
 
     @Test

@@ -16,12 +16,12 @@ import com.rumbo.watchapp.presentation.theme.Primary
 
 /**
  * Escuchando (diseño A2): anillo y badge en el azul primario, nueve barras que suben y bajan con
- * la voz real ([level], 0 a 1), "Te escucho" (34 sp), "Di a dónde quieres ir" y "Cancelar", que
- * deja de grabar sin enviar. TalkBack anuncia "Escuchando" (título de la pantalla y badge); las
+ * la voz real ([level], 0 a 1), "Te escucho" (34 sp), [hint] ("Di a dónde quieres ir"; en ruta,
+ * "¿Qué quieres saber?") y "Cancelar", que deja de grabar sin enviar. TalkBack anuncia "Escuchando" (título de la pantalla y badge); las
  * barras y el anillo son decorativos.
  */
 @Composable
-fun ListeningScreen(level: Float, onCancel: () -> Unit) {
+fun ListeningScreen(level: Float, onCancel: () -> Unit, hint: String = "Di a dónde quieres ir") {
     RumboScreen(
         paneTitle = "Escuchando",
         edgeRing = { ProgressRing(progress = 1f, color = Primary, contentDescription = null) },
@@ -36,7 +36,7 @@ fun ListeningScreen(level: Float, onCancel: () -> Unit) {
             textAlign = TextAlign.Center,
         )
         Text(
-            text = "Di a dónde quieres ir",
+            text = hint,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

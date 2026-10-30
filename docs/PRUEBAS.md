@@ -9,7 +9,7 @@ qué se espera; si algo no coincide, es un error.
 | Qué | Comando | Qué cubren |
 |---|---|---|
 | Backend | `cd backend` y `pytest` | Casos de uso, routers, repositorios (SQLite en memoria), Gemini y Geoapify con dobles, límite de 50 km en `POST /routes` |
-| Reloj (JUnit) | `cd watchapp` y `gradlew testDebugUnitTest` | Geometría, filtro GPS, motor de navegación, vibraciones, frases, casos de uso, red (reintento y mensajes), ViewModel |
+| Reloj (JUnit) | `cd watchapp` y `gradlew testDebugUnitTest` | Geometría, filtro GPS, motor de navegación, vibraciones, frases, voz (prioridades y pausa al grabar), órdenes de voz y contexto del asistente, casos de uso, red (reintento y mensajes), ViewModel |
 | Recorridos GPX | incluidas en el comando anterior | `DemoGpxNavigationTest` y `DemoGpxTrackingTest` recorren los tres GPX de `docs/demo` segundo a segundo |
 | Capturas | `bash tools/capture_screens.sh` (emulador abierto) | Dibuja todas las pantallas en `docs/capturas` |
 
@@ -54,11 +54,25 @@ recorridos realistas (una lectura por segundo con ruido de GPS de σ ≈ 3 m, ve
 | # | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|
 | V1 | Pedir destino por voz | Inicio → tocar el micrófono → decir "llévame al Parque Bolívar" | "Escuchando" con las barras moviéndose con la voz; al callarse, ~1,2 s después pasa solo a "Procesando" ("Buscando ruta..."), luego "Confirmar destino" con el nombre, la distancia y los minutos a pie; la voz dice "Parque Bolívar, a ..., ... minutos a pie. ¿Vamos?" |
-| V2 | Orden sin destino | Tocar el micrófono y decir "¿qué hora es?" | Error "No entendí el destino, intenta de nuevo" (en pantalla y en voz) con Reintentar e Inicio |
+| V2 | Orden sin sentido | Tocar el micrófono y decir algo que no sea un destino ni una pregunta (p. ej. toser o "eh...") | Error "No te entendí, intenta de nuevo" (en pantalla y en voz) con Reintentar e Inicio |
 | V3 | Lugar inexistente | Decir "llévame a Xyzzy" | Error "No encontré «Xyzzy», intenta con otro nombre" |
 | V4 | Voz apagada | Inicio → "Voz: sí" → pasa a "Voz: no" → hacer V1 e Ir | No se oye nada; las vibraciones siguen. El estado queda guardado al reabrir la app |
 | V5 | Volver mientras escucha | Tocar el micrófono y hacer el gesto de volver (o tocar "Cancelar") | Vuelve a Inicio, la grabación se cancela y no se pide ruta |
 | V6 | No decir nada | Tocar el micrófono y quedarse callado | A los 8 s deja de grabar solo y avisa que no entendió |
+
+### Asistente
+
+Requiere el backend con `POST /voice/ask` desplegado en Render.
+
+| # | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|
+| A1 | Pregunta sin ruta | Inicio → micrófono → "¿qué puedes hacer?" | "Procesando" → "Pensando la respuesta..." → pantalla Asistente con «¿qué puedes hacer?» y la respuesta (máximo 2 frases), que también se dice en voz alta; mientras suena, el badge se vuelve barras. "Inicio" vuelve a Inicio |
+| A2 | Pregunta en ruta | En ruta (R1) → "Preguntar" → "¿cuánto falta?" | Escuchando dice "¿Qué quieres saber?" y Procesando "Entendiendo..."; la respuesta usa los metros que faltan de verdad. Las vibraciones y los avisos de la ruta siguen (Logcat `Nav`, `Vibracion`). "Volver a la ruta" regresa a "En ruta" |
+| A3 | Preguntar otra vez | En Asistente, tocar "Preguntar otra vez" mientras aún habla | La voz se calla al empezar a grabar (no se cuela en la pregunta nueva) y se puede preguntar de nuevo |
+| A4 | "Repite" y "cancela" | En ruta → "Preguntar" → "repite"; luego "Preguntar" → "termina la ruta" | "Repite" vuelve a la ruta, vibra y dice la indicación; "termina" pregunta "¿Terminar la ruta?" |
+| A5 | Otro destino en ruta | En ruta → "Preguntar" → "llévame a la Universidad" | Sigue en la misma ruta y dice "Ya vas hacia Parque Bolívar. Para ir a otro lugar, termina esta ruta." |
+| A6 | Aviso mientras graba | Con el GPX corriendo, tocar "Preguntar" justo antes de un giro y hablar | La voz no dice el aviso mientras graba (la vibración sí suena); al terminar de grabar se dice el aviso más importante que llegó |
+| A7 | Cuota agotada | Con la cuota gratis de Gemini agotada, hacer una pregunta | Error "Se agotó la cuota gratuita del asistente de Gemini. Intenta más tarde."; en ruta, "Volver a la ruta" sigue navegando |
 
 ### Ruta y navegación
 
