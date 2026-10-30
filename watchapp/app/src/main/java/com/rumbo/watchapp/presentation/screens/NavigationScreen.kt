@@ -87,18 +87,19 @@ fun NavigationScreen(
     onRepeat: () -> Unit,
     onFinish: () -> Unit,
     onKeepNavigating: () -> Unit,
+    onAsk: () -> Unit = {},
 ) {
     ScreenOnWhileNavigating(wakeKey = state.status to confirmFinish) {
         if (confirmFinish) {
             FinishRouteScreen(onFinish = onFinish, onKeepNavigating = onKeepNavigating)
         } else {
-            RouteScreen(state, onRepeat = onRepeat, onFinish = onFinish)
+            RouteScreen(state, onRepeat = onRepeat, onAsk = onAsk, onFinish = onFinish)
         }
     }
 }
 
 @Composable
-private fun RouteScreen(state: TrackingState, onRepeat: () -> Unit, onFinish: () -> Unit) {
+private fun RouteScreen(state: TrackingState, onRepeat: () -> Unit, onAsk: () -> Unit, onFinish: () -> Unit) {
     val look = lookOf(state)
     val arrived = state.status == NavigationStatus.ARRIVED
     RumboScreen(
@@ -147,6 +148,8 @@ private fun RouteScreen(state: TrackingState, onRepeat: () -> Unit, onFinish: ()
         if (!arrived) Distances(state, look.color)
         VibrationIndicator(pattern = state.pattern, color = look.color)
         PillButton("Repetir", onClick = onRepeat, style = PillStyle.PRIMARY)
+        // Preguntar algo sin dejar la ruta: las vibraciones y la voz de la ruta siguen.
+        PillButton("Preguntar", onClick = onAsk, style = PillStyle.ASSISTANT, secondaryLabel = "Asistente")
         PillButton("Terminar", onClick = onFinish)
     }
 }

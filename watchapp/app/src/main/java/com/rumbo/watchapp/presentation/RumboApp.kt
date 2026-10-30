@@ -20,6 +20,7 @@ import com.rumbo.watchapp.domain.port.SpeechStatus
 import com.rumbo.watchapp.domain.vibration.VibrationCue
 import com.rumbo.watchapp.domain.vibration.VibrationPattern
 import com.rumbo.watchapp.domain.vibration.VibrationSettings
+import com.rumbo.watchapp.presentation.screens.AssistantScreen
 import com.rumbo.watchapp.presentation.screens.BackGesture
 import com.rumbo.watchapp.presentation.screens.ConfirmDeleteScreen
 import com.rumbo.watchapp.presentation.screens.ConfirmScreen
@@ -164,6 +165,15 @@ private fun Screen(
         }
         PlanState.Processing -> ProcessingScreen(waitMessage ?: "Buscando ruta...")
         PlanState.LoadingPlaces -> ProcessingScreen(waitMessage ?: "Cargando lugares...")
+        PlanState.Answering -> ProcessingScreen(waitMessage ?: "Pensando la respuesta...")
+        is PlanState.Assistant -> AssistantScreen(
+            question = state.question,
+            answer = state.answer,
+            speaking = viewModel.speaking.collectAsState().value,
+            onAskAgain = onSpeak,
+            onBack = viewModel::reset,
+            backLabel = homeLabel(viewModel.navigating),
+        )
         is PlanState.SavedPlaces -> SavedPlacesScreen(
             places = state.places,
             onChoose = onChooseSavedPlace,
@@ -202,6 +212,7 @@ private fun Screen(
             onRepeat = viewModel::repeatInstruction,
             onFinish = viewModel::finish,
             onKeepNavigating = viewModel::keepNavigating,
+            onAsk = onSpeak,
         )
         is PlanState.Error -> ErrorScreen(
             message = state.message,
@@ -210,6 +221,7 @@ private fun Screen(
                 RetryAction.SAVED_PLACES -> viewModel::openSavedPlaces
             },
             onHome = viewModel::reset,
+            homeLabel = homeLabel(viewModel.navigating),
         )
         is PlanState.PermissionNeeded -> PermissionScreen(
             permission = state.permission,
@@ -219,3 +231,6 @@ private fun Screen(
         )
     }
 }
+
+// Con una ruta en curso (se fue a preguntar algo), "Inicio" vuelve a ella.
+private fun homeLabel(navigating: Boolean) = if (navigating) "Volver a la ruta" else "Inicio"

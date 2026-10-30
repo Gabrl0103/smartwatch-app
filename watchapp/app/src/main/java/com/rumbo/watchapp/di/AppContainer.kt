@@ -3,6 +3,7 @@ package com.rumbo.watchapp.di
 import android.content.Context
 import android.util.Log
 import com.rumbo.watchapp.application.location.LocationTracker
+import com.rumbo.watchapp.application.usecase.AskAssistant
 import com.rumbo.watchapp.application.usecase.ManageSavedPlaces
 import com.rumbo.watchapp.application.usecase.PlanRouteFromVoice
 import com.rumbo.watchapp.application.usecase.RegisterDevice
@@ -18,6 +19,7 @@ import com.rumbo.watchapp.infrastructure.audio.MediaAudioRecorder
 import com.rumbo.watchapp.infrastructure.location.AndroidLocationProvider
 import com.rumbo.watchapp.infrastructure.logging.AndroidLogger
 import com.rumbo.watchapp.infrastructure.navigation.ForegroundNavigationRunner
+import com.rumbo.watchapp.infrastructure.network.AssistantApiClient
 import com.rumbo.watchapp.infrastructure.network.BackendServerStatus
 import com.rumbo.watchapp.infrastructure.network.DevicesApiClient
 import com.rumbo.watchapp.infrastructure.network.HealthApiClient
@@ -92,6 +94,8 @@ class AppContainer(context: Context) {
         vibrationSettings = vibrationSettings::load,
     )
     val navigationRunner = ForegroundNavigationRunner(appContext, trackNavigation, locationTracker, appScope)
+    // El asistente conoce la ruta en curso (destino, indicación, distancias) para responder.
+    val askAssistant = AskAssistant(AssistantApiClient) { trackNavigation.state.value }
 
     /**
      * Despierta el servidor de Render apenas se abre la app, para que al pedir la ruta ya esté

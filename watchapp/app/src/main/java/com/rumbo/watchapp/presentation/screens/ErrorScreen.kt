@@ -16,7 +16,7 @@ import com.rumbo.watchapp.presentation.components.StateIconKind
 import com.rumbo.watchapp.presentation.theme.StatusOffRoute
 
 @Composable
-fun ErrorScreen(message: String, onRetry: () -> Unit, onHome: () -> Unit) {
+fun ErrorScreen(message: String, onRetry: () -> Unit, onHome: () -> Unit, homeLabel: String = "Inicio") {
     RumboScreen(paneTitle = "Error") {
         StateIcon(StateIconKind.WARNING, StatusOffRoute)
         Text(
@@ -28,6 +28,6 @@ fun ErrorScreen(message: String, onRetry: () -> Unit, onHome: () -> Unit) {
             overflow = TextOverflow.Ellipsis,
         )
         PillButton("Reintentar", onClick = onRetry, style = PillStyle.PRIMARY)
-        PillButton("Inicio", onClick = onHome)
+        PillButton(homeLabel, onClick = onHome)
     }
 }

@@ -27,12 +27,15 @@ data class DemoStep(val cue: VibrationCue, val number: Int, val total: Int)
  * En [OnRoute], [OnRoute.confirmFinish] muestra "¿Terminar la ruta?" tras el gesto de volver.
  * En [PermissionNeeded], [PermissionNeeded.route] es la ruta que espera el permiso de notificaciones.
  * En [Vibrations], [Vibrations.demo] es el paso de la secuencia de demostración que suena (o null).
+ * [Answering] espera la respuesta del asistente y [Assistant] la muestra junto a la pregunta.
  */
 sealed interface PlanState {
     data object Start : PlanState
     data object Listening : PlanState
     data object Processing : PlanState
     data object LoadingPlaces : PlanState
+    data object Answering : PlanState
+    data class Assistant(val question: String, val answer: String) : PlanState
     data class Vibrations(val demo: DemoStep? = null) : PlanState
     data class SavedPlaces(val places: List<SavedPlace>) : PlanState
     data class ConfirmDelete(val place: SavedPlace, val places: List<SavedPlace>) : PlanState

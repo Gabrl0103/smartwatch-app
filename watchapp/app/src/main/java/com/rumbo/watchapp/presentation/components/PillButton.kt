@@ -22,6 +22,7 @@ import androidx.wear.compose.material3.SwitchButton
 import androidx.wear.compose.material3.SwitchButtonDefaults
 import androidx.wear.compose.material3.Text
 import com.rumbo.watchapp.R
+import com.rumbo.watchapp.presentation.theme.AssistantChip
 import com.rumbo.watchapp.presentation.theme.Border
 import com.rumbo.watchapp.presentation.theme.OnColor
 import com.rumbo.watchapp.presentation.theme.Primary
@@ -35,11 +36,16 @@ val TouchMinHeight = 52.dp
 
 private val PillBorder = BorderStroke(1.dp, Border)
 
-/** PRIMARY: la acción principal de la pantalla; DANGER: borrar. El texto sobre color va oscuro. */
+/**
+ * PRIMARY: la acción principal de la pantalla; DANGER: borrar; ASSISTANT: hablar con el
+ * asistente (en el tono del chip, que da contraste con texto oscuro). El texto sobre color va
+ * oscuro.
+ */
 enum class PillStyle(val container: Color, val content: Color, val secondaryContent: Color) {
     PRIMARY(Primary, OnColor, OnColor),
     SECONDARY(Surface, TextPrimary, TextSecondary),
     DANGER(StatusOffRoute, OnColor, OnColor),
+    ASSISTANT(AssistantChip, OnColor, OnColor),
 }
 
 /** Botón grande en píldora: a lo ancho, mínimo 52 dp de alto, borde de 1 dp y sin sombra. */

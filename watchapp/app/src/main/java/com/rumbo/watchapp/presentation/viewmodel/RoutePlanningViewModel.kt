@@ -4,18 +4,22 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rumbo.watchapp.application.location.LocationTracker
 import com.rumbo.watchapp.application.speech.confirmPhrase
+import com.rumbo.watchapp.application.usecase.AskAssistant
 import com.rumbo.watchapp.application.usecase.ManageSavedPlaces
+import com.rumbo.watchapp.application.usecase.NOT_UNDERSTOOD_MESSAGE
 import com.rumbo.watchapp.application.usecase.PlanRouteFromVoice
 import com.rumbo.watchapp.application.usecase.TrackingState
 import com.rumbo.watchapp.domain.error.AppError
 import com.rumbo.watchapp.domain.error.SERVER_WAKING_MESSAGE
 import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.domain.model.SavedPlace
+import com.rumbo.watchapp.domain.model.VoiceCommand
 import com.rumbo.watchapp.domain.navigation.NavigationStatus
 import com.rumbo.watchapp.domain.port.ActiveRouteStore
 import com.rumbo.watchapp.domain.port.AudioRecorder
 import com.rumbo.watchapp.domain.port.NavigationRunner
 import com.rumbo.watchapp.domain.port.SpeechOutput
+import com.rumbo.watchapp.domain.port.SpeechPriority
 import com.rumbo.watchapp.domain.port.SpeechStatus
 import com.rumbo.watchapp.domain.port.VibrationController
 import com.rumbo.watchapp.domain.port.VibrationSettingsStore
@@ -52,10 +56,12 @@ const val DEMO_PAUSE_MS = 2_000L
 val SETTINGS_SAMPLE = VibrationCue.LEFT
 private const val GENERIC_ERROR = "Algo salió mal, intenta de nuevo"
 const val GPS_SEARCHING_MESSAGE = "Buscando señal GPS"
+const val NOTHING_TO_REPEAT_MESSAGE = "No hay ninguna ruta en curso para repetir"
 
 class RoutePlanningViewModel(
     private val recorder: AudioRecorder,
     private val planRoute: PlanRouteFromVoice,
+    private val askAssistant: AskAssistant,
     private val savedPlaces: ManageSavedPlaces,
     private val locationTracker: LocationTracker,
     private val navigationRunner: NavigationRunner,
@@ -112,7 +118,8 @@ class RoutePlanningViewModel(
     private var job: Job? = null
 
     private val busy get() = _state.value.let {
-        it is PlanState.Listening || it is PlanState.Processing || it is PlanState.LoadingPlaces
+        it is PlanState.Listening || it is PlanState.Processing || it is PlanState.LoadingPlaces ||
+            it is PlanState.Answering
     }
 
     /**
@@ -152,10 +159,14 @@ class RoutePlanningViewModel(
         locationTracker.start()
     }
 
+    /** Si hay una ruta en curso: entonces "volver" o "Inicio" regresan a ella, no a Inicio. */
+    val navigating: Boolean get() = navigationRunner.activeRoute != null
+
     /**
      * Graba la orden hasta que la persona termina de hablar (ver [SpeechEndDetector]: 1,2 s de
-     * silencio tras la voz, como mucho 8 s), la interpreta y busca la ruta. Mientras graba,
-     * [voiceLevel] mueve las barras de "Escuchando". El permiso de micrófono ya debe estar dado.
+     * silencio tras la voz, como mucho 8 s) y hace lo que pidió (ver [handle]): buscar la ruta a
+     * un lugar o responder una pregunta con el asistente. Mientras graba, [voiceLevel] mueve las
+     * barras de "Escuchando". El permiso de micrófono ya debe estar dado.
      */
     fun listen() {
         if (busy) return
@@ -166,7 +177,7 @@ class RoutePlanningViewModel(
                 awaitEndOfSpeech()
                 val audio = recorder.stop()
                 _state.value = PlanState.Processing
-                confirm(planRoute(audio))
+                handle(planRoute.interpret(audio))
             } catch (e: CancellationException) {
                 recorder.release()
                 throw e
@@ -182,7 +193,41 @@ class RoutePlanningViewModel(
         }
     }
 
-    /** "Cancelar" en Escuchando: deja de grabar sin enviar nada y vuelve a Inicio. */
+    /**
+     * Lo que se pidió por voz. En ruta, la ruta sigue mandando: una pregunta se responde y se
+     * vuelve a ella, "repite" dice la indicación, "cancela" pregunta si terminar y pedir otro
+     * destino solo recuerda que primero hay que terminar la ruta.
+     */
+    private suspend fun handle(command: VoiceCommand) {
+        val active = navigationRunner.activeRoute
+        when (command) {
+            is VoiceCommand.Ask -> answer(command.question)
+            is VoiceCommand.Navigate -> if (active == null) {
+                confirm(planRoute.routeTo(command.destination))
+            } else {
+                _state.value = PlanState.OnRoute(active)
+                speech.speak("Ya vas hacia ${active.destinationName}. Para ir a otro lugar, termina esta ruta.")
+            }
+            VoiceCommand.Repeat -> if (active == null) {
+                showError(NOTHING_TO_REPEAT_MESSAGE)
+            } else {
+                _state.value = PlanState.OnRoute(active)
+                repeatNavigation()
+            }
+            VoiceCommand.Cancel -> _state.value = active?.let { PlanState.OnRoute(it, confirmFinish = true) } ?: PlanState.Start
+            VoiceCommand.NotUnderstood -> showError(NOT_UNDERSTOOD_MESSAGE)
+        }
+    }
+
+    /** Pregunta al asistente; la respuesta se muestra y se dice con prioridad alta. */
+    private suspend fun answer(question: String) {
+        _state.value = PlanState.Answering
+        val answer = askAssistant(question)
+        _state.value = PlanState.Assistant(question, answer)
+        speech.speak(answer, SpeechPriority.HIGH)
+    }
+
+    /** "Cancelar" en Escuchando: deja de grabar sin enviar nada y vuelve atrás (Inicio o la ruta). */
     fun cancelListening() {
         if (_state.value == PlanState.Listening) reset()
     }
@@ -392,7 +437,8 @@ class RoutePlanningViewModel(
         if (_state.value is PlanState.Vibrations) vibration.stop()
         speech.stop()
         _previousRoute.value = if (navigationRunner.activeRoute == null) activeRoutes.load() else null
-        _state.value = PlanState.Start
+        // Con una ruta en curso (se fue a preguntar algo), "Inicio" es volver a ella.
+        _state.value = navigationRunner.activeRoute?.let { PlanState.OnRoute(it) } ?: PlanState.Start
     }
 
     /** Muestra el error y también lo lee. */

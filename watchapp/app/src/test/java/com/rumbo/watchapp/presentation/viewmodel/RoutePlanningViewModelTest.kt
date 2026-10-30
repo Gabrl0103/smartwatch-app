@@ -1,7 +1,9 @@
 package com.rumbo.watchapp.presentation.viewmodel
 
 import com.rumbo.watchapp.application.location.LocationTracker
+import com.rumbo.watchapp.application.usecase.AskAssistant
 import com.rumbo.watchapp.application.usecase.ManageSavedPlaces
+import com.rumbo.watchapp.application.usecase.NOT_UNDERSTOOD_MESSAGE
 import com.rumbo.watchapp.application.usecase.PlanRouteFromVoice
 import com.rumbo.watchapp.application.usecase.TrackingState
 import com.rumbo.watchapp.domain.error.SERVER_WAKING_MESSAGE
@@ -13,6 +15,7 @@ import com.rumbo.watchapp.domain.model.SavedPlace
 import com.rumbo.watchapp.domain.model.VoiceResult
 import com.rumbo.watchapp.domain.navigation.NavigationStatus
 import com.rumbo.watchapp.domain.port.ActiveRouteStore
+import com.rumbo.watchapp.domain.port.AssistantRepository
 import com.rumbo.watchapp.domain.port.AudioRecorder
 import com.rumbo.watchapp.domain.port.LocationProvider
 import com.rumbo.watchapp.domain.port.NavigationRunner
@@ -30,6 +33,7 @@ import com.rumbo.watchapp.domain.vibration.VibrationIntensity
 import com.rumbo.watchapp.domain.vibration.VibrationPatterns
 import com.rumbo.watchapp.domain.vibration.VibrationSettings
 import com.rumbo.watchapp.domain.voice.LEVEL_SAMPLE_MS
+import com.rumbo.watchapp.domain.voice.MAX_RECORDING_MS
 import com.rumbo.watchapp.testing.BASE
 import com.rumbo.watchapp.testing.FakeVibration
 import com.rumbo.watchapp.testing.FakeVibrationSettingsStore
@@ -98,9 +102,21 @@ class RoutePlanningViewModelTest {
     private class FakeVoice : VoiceRepository {
         var calls = 0
 
+        /** Lo que "entendió" el backend; null: falla, para los tests que no deben llegar ahí. */
+        var result: VoiceResult? = null
+
         override suspend fun interpret(audioFile: File): VoiceResult {
             calls++
-            throw IllegalStateException("No debería interpretarse")
+            return result ?: throw IllegalStateException("No debería interpretarse")
+        }
+    }
+
+    private class FakeAssistant : AssistantRepository {
+        val asked = mutableListOf<Pair<String, String>>()
+
+        override suspend fun ask(question: String, context: String): String {
+            asked += question to context
+            return "Faltan unos cuatrocientos metros."
         }
     }
 
@@ -185,6 +201,7 @@ class RoutePlanningViewModelTest {
     private val voice = FakeVoice()
     private val runner = FakeRunner()
     private val vibration = FakeVibration()
+    private val assistant = FakeAssistant()
     private val vibrationSettings = FakeVibrationSettingsStore()
     private val speech = FakeSpeech()
     private val navigation = MutableStateFlow(TrackingState())
@@ -203,6 +220,7 @@ class RoutePlanningViewModelTest {
         return RoutePlanningViewModel(
             recorder,
             PlanRouteFromVoice(voice, NoPlaces, routes, tracker::awaitOrigin),
+            AskAssistant(assistant) { navigation.value },
             ManageSavedPlaces(savedPlaces, routes, tracker::awaitOrigin),
             tracker,
             runner,
@@ -345,6 +363,70 @@ class RoutePlanningViewModelTest {
         assertFalse(recorder.stopped)
         assertEquals(0, voice.calls)
         assertEquals(0f, viewModel.voiceLevel.value)
+    }
+
+    /** Dice algo al micrófono y espera a que termine de grabar (8 s sin voz). */
+    private fun say(result: VoiceResult) {
+        voice.result = result
+        viewModel.listen()
+        dispatcher.scheduler.advanceTimeBy(MAX_RECORDING_MS)
+        dispatcher.scheduler.runCurrent()
+    }
+
+    private fun question(text: String) = VoiceResult(text, "ask", null, text)
+
+    @Test
+    fun aQuestionFromStartShowsAndSpeaksTheAnswer() {
+        say(question("¿Qué hora es?"))
+
+        assertEquals(PlanState.Assistant("¿Qué hora es?", "Faltan unos cuatrocientos metros."), viewModel.state.value)
+        assertEquals("Faltan unos cuatrocientos metros.", speech.spoken.last())
+        assertEquals(listOf("¿Qué hora es?" to ""), assistant.asked)
+
+        viewModel.back()
+        assertEquals(PlanState.Start, viewModel.state.value)
+    }
+
+    @Test
+    fun aQuestionDuringTheRouteGoesBackToTheRoute() {
+        startRoute()
+        navigation.value = TrackingState(destinationName = "Parque de prueba", remainingM = 300.0)
+
+        say(question("¿Cuánto falta?"))
+
+        assertTrue(viewModel.state.value is PlanState.Assistant)
+        assertTrue(assistant.asked.single().second.contains("Parque de prueba"))
+        assertTrue(runner.running)
+        viewModel.back()
+        assertEquals(PlanState.OnRoute(route), viewModel.state.value)
+    }
+
+    @Test
+    fun repeatAndCancelByVoiceDuringTheRoute() {
+        startRoute()
+
+        say(VoiceResult("repite", "repeat", null, null))
+        assertEquals(PlanState.OnRoute(route), viewModel.state.value)
+        assertEquals(1, repeats)
+
+        say(VoiceResult("termina", "cancel", null, null))
+        assertEquals(PlanState.OnRoute(route, confirmFinish = true), viewModel.state.value)
+    }
+
+    @Test
+    fun anotherDestinationDuringTheRouteKeepsTheRoute() {
+        startRoute()
+
+        say(VoiceResult("llévame a la plaza", "navigate", "plaza", null))
+
+        assertEquals(PlanState.OnRoute(route), viewModel.state.value)
+        assertTrue(speech.spoken.last().startsWith("Ya vas hacia"))
+    }
+
+    @Test
+    fun notUnderstoodShowsTheError() {
+        say(VoiceResult("", "ask", null, null))
+        assertEquals(PlanState.Error(NOT_UNDERSTOOD_MESSAGE), viewModel.state.value)
     }
 
     @Test

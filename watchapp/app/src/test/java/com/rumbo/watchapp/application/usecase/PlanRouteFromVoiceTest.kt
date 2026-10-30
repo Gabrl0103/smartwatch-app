@@ -7,6 +7,7 @@ import com.rumbo.watchapp.domain.error.TooFarError
 import com.rumbo.watchapp.domain.model.Coordinates
 import com.rumbo.watchapp.domain.model.Place
 import com.rumbo.watchapp.domain.model.Route
+import com.rumbo.watchapp.domain.model.VoiceCommand
 import com.rumbo.watchapp.domain.model.VoiceResult
 import com.rumbo.watchapp.domain.port.PlacesRepository
 import com.rumbo.watchapp.domain.port.RoutesRepository
@@ -56,12 +57,30 @@ class PlanRouteFromVoiceTest {
         VoiceResult("llévame al parque Bolívar", "navigate", destination, null)
 
     @Test
-    fun returnsRouteToSpokenDestinationFromCurrentLocation() = runBlocking {
+    fun spokenDestinationIsUnderstoodAsNavigate() = runBlocking {
+        val places = FakePlaces(park)
+        val useCase = PlanRouteFromVoice(FakeVoice(navigate(" parque Bolívar ")), places, FakeRoutes(route)) { here }
+
+        assertEquals(VoiceCommand.Navigate("parque Bolívar"), useCase.interpret(audio))
+        // Interpretar no busca nada todavía.
+        assertNull(places.query)
+    }
+
+    @Test
+    fun questionIsUnderstoodAsAsk() = runBlocking {
+        val question = VoiceResult("¿cuánto falta?", "ask", null, "¿cuánto falta?")
+        val useCase = PlanRouteFromVoice(FakeVoice(question), FakePlaces(park), FakeRoutes(route)) { here }
+
+        assertEquals(VoiceCommand.Ask("¿cuánto falta?"), useCase.interpret(audio))
+    }
+
+    @Test
+    fun returnsRouteToDestinationFromCurrentLocation() = runBlocking {
         val places = FakePlaces(park)
         val routes = FakeRoutes(route)
-        val useCase = PlanRouteFromVoice(FakeVoice(navigate(" parque Bolívar ")), places, routes) { here }
+        val useCase = PlanRouteFromVoice(FakeVoice(navigate("parque Bolívar")), places, routes) { here }
 
-        val result = useCase(audio)
+        val result = useCase.routeTo("parque Bolívar")
 
         assertEquals(route, result)
         assertEquals("parque Bolívar", places.query)
@@ -71,32 +90,11 @@ class PlanRouteFromVoiceTest {
     }
 
     @Test
-    fun intentOtherThanNavigateFails() {
-        val places = FakePlaces(park)
-        val question = VoiceResult("¿qué hora es?", "ask", null, "qué hora es")
-        val useCase = PlanRouteFromVoice(FakeVoice(question), places, FakeRoutes(route)) { here }
-
-        val error = assertThrows(AppError::class.java) { runBlocking { useCase(audio) } }
-
-        assertEquals(NOT_UNDERSTOOD_MESSAGE, error.message)
-        assertNull(places.query)
-    }
-
-    @Test
-    fun navigateWithoutDestinationFails() {
-        val useCase = PlanRouteFromVoice(FakeVoice(navigate("  ")), FakePlaces(park), FakeRoutes(route)) { here }
-
-        val error = assertThrows(AppError::class.java) { runBlocking { useCase(audio) } }
-
-        assertEquals(NOT_UNDERSTOOD_MESSAGE, error.message)
-    }
-
-    @Test
     fun placeNotFoundFailsWithoutAskingForRoute() {
         val routes = FakeRoutes(route)
         val useCase = PlanRouteFromVoice(FakeVoice(navigate("lugar inventado")), FakePlaces(null), routes) { here }
 
-        val error = assertThrows(AppError::class.java) { runBlocking { useCase(audio) } }
+        val error = assertThrows(AppError::class.java) { runBlocking { useCase.routeTo("lugar inventado") } }
 
         assertEquals("No encontré «lugar inventado», intenta con otro nombre", error.message)
         assertNull(routes.origin)
@@ -108,7 +106,7 @@ class PlanRouteFromVoiceTest {
         val routes = FakeRoutes(route)
         val useCase = PlanRouteFromVoice(FakeVoice(navigate("parque")), places, routes) { throw GpsUnavailableError() }
 
-        assertThrows(GpsUnavailableError::class.java) { runBlocking { useCase(audio) } }
+        assertThrows(GpsUnavailableError::class.java) { runBlocking { useCase.routeTo("parque") } }
 
         assertNull(places.query)
         assertNull(routes.origin)
@@ -120,7 +118,7 @@ class PlanRouteFromVoiceTest {
         val routes = FakeRoutes(route)
         val useCase = PlanRouteFromVoice(FakeVoice(navigate("parque Bolívar")), FakePlaces(bogota), routes) { here }
 
-        val error = assertThrows(TooFarError::class.java) { runBlocking { useCase(audio) } }
+        val error = assertThrows(TooFarError::class.java) { runBlocking { useCase.routeTo("parque Bolívar") } }
 
         assertEquals(TOO_FAR_MESSAGE, error.message)
         assertNull(routes.origin)
