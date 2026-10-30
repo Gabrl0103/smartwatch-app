@@ -45,6 +45,8 @@ class RouteStep:
     street: str = ""
     # Número de salida al entrar a una rotonda, si el proveedor lo da.
     roundabout_exit: int | None = None
+    # Giro unido a este por estar a pocos metros: se avisan juntos ("Luego, gira a la izquierda").
+    then_maneuver: Maneuver | None = None
 
 
 @dataclass(frozen=True)

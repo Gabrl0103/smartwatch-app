@@ -47,11 +47,19 @@ class RouteJsonTest {
     }
 
     @Test
+    fun readsTheJoinedTurn() {
+        val step = routeFromJson(stepJson(""""maneuver": "right", "then_maneuver": "left"""")).steps.single()
+
+        assertEquals(Maneuver.LEFT, step.thenManeuver)
+    }
+
+    @Test
     fun aRouteFromAnOlderBackendStillLoads() {
         val step = routeFromJson(stepJson(""""maneuver": "left"""")).steps.single()
 
         assertEquals("", step.street)
         assertNull(step.roundaboutExit)
+        assertNull(step.thenManeuver)
     }
 
     @Test
@@ -67,7 +75,7 @@ class RouteJsonTest {
             durationS = 80.0,
             steps = listOf(
                 RouteStep(1, Maneuver.ROUNDABOUT, "Tome la salida.", 50.0, 1.2, -77.2, "Glorieta", roundaboutExit = 3),
-                RouteStep(2, Maneuver.U_TURN_RIGHT, "Dé la vuelta.", 50.0, 1.3, -77.3, "Calle 18"),
+                RouteStep(2, Maneuver.U_TURN_RIGHT, "Dé la vuelta.", 50.0, 1.3, -77.3, "Calle 18", thenManeuver = Maneuver.LEFT),
                 RouteStep(3, Maneuver.ARRIVE, "Ha llegado.", 0.0, 1.4, -77.4),
             ),
             polyline = listOf(Coordinates(1.2, -77.2), Coordinates(1.4, -77.4)),

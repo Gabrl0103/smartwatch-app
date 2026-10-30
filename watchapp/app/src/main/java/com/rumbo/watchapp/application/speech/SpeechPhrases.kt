@@ -84,21 +84,32 @@ fun turnAheadPhrase(distanceM: Double, step: RouteStep, currentStreet: String): 
 
 /**
  * Etapa de preparación: "En cincuenta metros, gira a la derecha en Calle 18." En una rotonda no
- * va la calle: la que da el proveedor es el nombre de la propia rotonda.
+ * va la calle: la que da el proveedor es el nombre de la propia rotonda. Si el paso une dos giros,
+ * la calle es la del segundo: "En cincuenta metros, gira a la derecha. Luego, gira a la izquierda
+ * en Calle 18."
  */
 fun turnApproachingPhrase(distanceM: Double, step: RouteStep): String {
     val hasStreet = step.street.isNotBlank() && step.maneuver != Maneuver.ROUNDABOUT
     val street = if (hasStreet) " en ${step.street}" else ""
-    return "En ${spokenDistance(distanceM)}, ${turnAction(step)}$street."
+    val start = "En ${spokenDistance(distanceM)}, ${turnAction(step)}"
+    val then = step.thenManeuver ?: return "$start$street."
+    return "$start. Luego, ${turnAction(then, null)}$street."
 }
 
-/** Etapa final, ya encima del giro: "Gira ahora a la derecha." */
-fun turnNowPhrase(maneuver: Maneuver, roundaboutExit: Int? = null): String = when (maneuver) {
-    Maneuver.STRAIGHT -> "Sigue recto."
-    Maneuver.ARRIVE -> ARRIVED_PHRASE
-    Maneuver.U_TURN_LEFT, Maneuver.U_TURN_RIGHT -> "Da media vuelta ahora."
-    Maneuver.ROUNDABOUT -> "Ahora, ${turnAction(maneuver, roundaboutExit)}."
-    else -> "Gira ahora ${turnAction(maneuver, roundaboutExit).removePrefix("gira ")}."
+/**
+ * Etapa final, ya encima del giro, con el giro siguiente si está cerca: "Gira ahora a la derecha.
+ * Luego, gira a la izquierda."
+ */
+fun turnNowPhrase(maneuver: Maneuver, roundaboutExit: Int? = null, then: Maneuver? = null): String {
+    val action = turnAction(maneuver, roundaboutExit)
+    val now = when (maneuver) {
+        Maneuver.STRAIGHT -> "Sigue recto."
+        Maneuver.ARRIVE -> ARRIVED_PHRASE
+        Maneuver.U_TURN_LEFT, Maneuver.U_TURN_RIGHT -> "Da media vuelta ahora."
+        Maneuver.ROUNDABOUT -> "Ahora, $action."
+        else -> "Gira ahora ${action.removePrefix("gira ")}."
+    }
+    return if (then == null) now else "$now Luego, ${turnAction(then, null)}."
 }
 
 /**
@@ -109,7 +120,7 @@ fun navigationPhrase(events: List<NavigationEvent>, snapshot: NavigationSnapshot
     if (NavigationEvent.Arrived in events) return Phrase(ARRIVED_PHRASE, SpeechPriority.HIGH)
     if (NavigationEvent.OffRoute in events) return Phrase(OFF_ROUTE_PHRASE, SpeechPriority.HIGH)
     events.filterIsInstance<NavigationEvent.TurnNow>().firstOrNull()?.let {
-        return Phrase(turnNowPhrase(it.maneuver, it.roundaboutExit), SpeechPriority.HIGH)
+        return Phrase(turnNowPhrase(it.maneuver, it.roundaboutExit, it.then), SpeechPriority.HIGH)
     }
     val step = snapshot.nextStep
     val distance = snapshot.distanceToNextStepM

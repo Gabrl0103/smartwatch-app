@@ -52,6 +52,16 @@ def test_two_turns_closer_than_ten_meters_are_announced_together():
     ]
     assert steps[1].maneuver == Maneuver.RIGHT
     assert steps[1].street == "Carrera 17B"
+    assert steps[1].then_maneuver == Maneuver.LEFT
+
+
+def test_turn_followed_by_a_short_continue_has_no_second_turn():
+    steps = merge_short_steps([
+        step(Maneuver.LEFT, "Gire a la izquierda.", 8, "Carrera 25"),
+        step(Maneuver.STRAIGHT, "Continúe.", 50, "Carrera 25"),
+        ARRIVE,
+    ])
+    assert steps[0].then_maneuver is None
 
 
 def test_turn_followed_by_a_short_continue_keeps_the_turn():

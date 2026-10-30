@@ -29,6 +29,7 @@ internal fun routeFromJson(json: JSONObject): Route {
                 lng = step.getDouble("lng"),
                 street = step.optString("street"),
                 roundaboutExit = if (step.isNull("roundabout_exit")) null else step.getInt("roundabout_exit"),
+                thenManeuver = if (step.isNull("then_maneuver")) null else toManeuver(step.getString("then_maneuver")),
             )
         },
         polyline = List(polyline.length()) { i ->
@@ -58,6 +59,7 @@ internal fun routeToJson(route: Route): JSONObject = JSONObject()
                     .put("lng", step.lng)
                     .put("street", step.street)
                     .put("roundabout_exit", step.roundaboutExit ?: JSONObject.NULL)
+                    .put("then_maneuver", step.thenManeuver?.name?.lowercase() ?: JSONObject.NULL)
             },
         ),
     )

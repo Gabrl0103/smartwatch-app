@@ -243,6 +243,52 @@ class NavigationEngineTest {
         }
     }
 
+    private fun firstTurnNow(walker: NavigationEngine): NavigationEvent.TurnNow =
+        (0..195 step 5).flatMap { walker.onLocation(fixAt(0.0, it.toDouble(), it * 1_000L), it * 1_000L) }
+            .filterIsInstance<NavigationEvent.TurnNow>().single()
+
+    @Test
+    fun aCloseNextTurnTravelsWithTheCurrentOne() {
+        val event = firstTurnNow(NavigationEngine(uRoute(eastM = 40.0), 0))
+
+        assertEquals(NavigationEvent.TurnNow(Maneuver.RIGHT, then = Maneuver.LEFT), event)
+    }
+
+    @Test
+    fun aNextTurnBeyondFiftyMetersIsNotMentioned() {
+        val event = firstTurnNow(NavigationEngine(uRoute(eastM = 70.0), 0))
+
+        assertEquals(NavigationEvent.TurnNow(Maneuver.RIGHT), event)
+    }
+
+    @Test
+    fun arrivingRightAfterATurnIsNotAnotherTurn() {
+        val close = route.copy(steps = route.steps.mapIndexed { i, step -> if (i == 2) step.copy(lat = route.polyline[23].lat, lng = route.polyline[23].lng) else step })
+
+        val event = firstTurnNow(NavigationEngine(close, 0))
+
+        assertEquals(NavigationEvent.TurnNow(Maneuver.RIGHT), event)
+    }
+
+    @Test
+    fun aTurnJoinedByTheBackendIsAnnouncedAlthoughItHasNoStepOfItsOwn() {
+        val joined = route.steps.map { if (it.order == 2) it.copy(thenManeuver = Maneuver.LEFT) else it }
+
+        val event = firstTurnNow(NavigationEngine(route.copy(steps = joined), 0))
+
+        assertEquals(NavigationEvent.TurnNow(Maneuver.RIGHT, then = Maneuver.LEFT), event)
+    }
+
+    @Test
+    fun aSurpriseTurnAlsoWarnsOfTheCloseNextOne() {
+        val walker = NavigationEngine(uRoute(eastM = 40.0), 0)
+        walker.onLocation(fixAt(0.0, 140.0, 1_000), 1_000)
+
+        val events = walker.onLocation(fixAt(5.0, 200.0, 2_000), 2_000)
+
+        assertTrue(NavigationEvent.TurnNow(Maneuver.RIGHT, then = Maneuver.LEFT) in events)
+    }
+
     @Test
     fun aSurpriseRoundaboutKeepsItsExitNumber() {
         val steps = route.steps.map { if (it.order == 2) it.copy(maneuver = Maneuver.ROUNDABOUT, roundaboutExit = 3) else it }

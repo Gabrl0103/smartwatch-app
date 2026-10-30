@@ -212,6 +212,40 @@ class SpeechPhrasesTest {
     }
 
     @Test
+    fun nowStageWarnsOfACloseNextTurn() {
+        assertEquals(
+            "Gira ahora a la derecha. Luego, gira a la izquierda.",
+            turnNowPhrase(Maneuver.RIGHT, then = Maneuver.LEFT),
+        )
+        assertEquals(
+            "Da media vuelta ahora. Luego, gira ligeramente a la derecha.",
+            turnNowPhrase(Maneuver.U_TURN_LEFT, then = Maneuver.SLIGHT_RIGHT),
+        )
+        assertEquals(
+            "Ahora, en la rotonda toma la primera salida. Luego, entra a la rotonda.",
+            turnNowPhrase(Maneuver.ROUNDABOUT, 1, then = Maneuver.ROUNDABOUT),
+        )
+        assertEquals(
+            Phrase("Gira ahora a la derecha. Luego, gira a la izquierda.", SpeechPriority.HIGH),
+            navigationPhrase(listOf(NavigationEvent.TurnNow(Maneuver.RIGHT, then = Maneuver.LEFT)), snapshot()),
+        )
+    }
+
+    @Test
+    fun approachStageOfTwoJoinedTurnsSaysBothAndTheStreetOfTheSecond() {
+        val joined = turn.copy(maneuver = Maneuver.RIGHT, street = "Carrera 17B", thenManeuver = Maneuver.LEFT)
+
+        assertEquals(
+            "En cincuenta metros, gira a la derecha. Luego, gira a la izquierda en Carrera 17B.",
+            turnApproachingPhrase(50.0, joined),
+        )
+        assertEquals(
+            "En cincuenta metros, gira a la derecha. Luego, gira a la izquierda.",
+            turnApproachingPhrase(50.0, joined.copy(street = "")),
+        )
+    }
+
+    @Test
     fun theExitNumberTravelsWithTheEventForTurnsPassedBySurprise() {
         val event = NavigationEvent.TurnNow(Maneuver.ROUNDABOUT, 3)
 

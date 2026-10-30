@@ -12,7 +12,13 @@ sealed interface NavigationEvent {
     /** Aviso lejano, al empezar un tramo largo. No vibra: solo la voz cuenta qué viene. */
     data class TurnAhead(val maneuver: Maneuver) : NavigationEvent
     data class TurnApproaching(val maneuver: Maneuver) : NavigationEvent
-    data class TurnNow(val maneuver: Maneuver, val roundaboutExit: Int? = null) : NavigationEvent
+
+    /** [then] es el giro siguiente si está tan cerca que hay que avisarlo junto con este. */
+    data class TurnNow(
+        val maneuver: Maneuver,
+        val roundaboutExit: Int? = null,
+        val then: Maneuver? = null,
+    ) : NavigationEvent
     data object OffRoute : NavigationEvent
     data object BackOnRoute : NavigationEvent
     data object SignalLost : NavigationEvent

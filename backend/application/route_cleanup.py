@@ -76,6 +76,7 @@ def _merge(short: RouteStep, following: RouteStep) -> tuple[RouteStep, float]:
         instruction=instruction,
         distance_to_next_m=total,
         street=following.street or short.street,
+        then_maneuver=short.then_maneuver or following.maneuver,
     ), 0.0
 
 

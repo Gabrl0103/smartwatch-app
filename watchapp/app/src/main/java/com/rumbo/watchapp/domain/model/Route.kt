@@ -10,7 +10,8 @@ enum class Maneuver {
 /**
  * Una maniobra de la ruta: dónde ocurre y cuánto se camina hasta la siguiente. [street] es la
  * calle por la que se sigue después del paso; vacía si el proveedor no la da. [roundaboutExit]
- * es el número de salida al entrar a una rotonda, si se conoce.
+ * es el número de salida al entrar a una rotonda, si se conoce. [thenManeuver] es un segundo
+ * giro a pocos metros que el backend unió a este paso: no tiene avisos propios y se dice aquí.
  */
 data class RouteStep(
     val order: Int,
@@ -21,6 +22,7 @@ data class RouteStep(
     val lng: Double,
     val street: String = "",
     val roundaboutExit: Int? = null,
+    val thenManeuver: Maneuver? = null,
 )
 
 /** Ruta a pie calculada por el backend. [id] es null si el backend no pudo guardarla. */

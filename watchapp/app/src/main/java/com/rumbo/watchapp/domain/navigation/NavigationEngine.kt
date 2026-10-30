@@ -145,13 +145,25 @@ class NavigationEngine(
         val announced = passed == nextIndex && maneuverAnnounced
         if (turn.maneuver.isTurn && !announced && progressM - stepAlong[passed] <= thresholds.maneuverM) {
             if (!(passed == nextIndex && approachAnnounced)) events += NavigationEvent.TurnApproaching(turn.maneuver)
-            events += NavigationEvent.TurnNow(turn.maneuver, turn.roundaboutExit)
+            events += turnNow(passed)
         }
         nextIndex = index
         aheadAnnounced = false
         approachAnnounced = false
         maneuverAnnounced = false
         steps.getOrNull(index)?.let { events += NavigationEvent.NextStepChanged(it) }
+    }
+
+    private fun turnNow(index: Int): NavigationEvent.TurnNow {
+        val step = steps[index]
+        return NavigationEvent.TurnNow(step.maneuver, step.roundaboutExit, step.thenManeuver ?: closeTurnAfter(index))
+    }
+
+    // El giro que sigue a [index], si queda tan cerca que su preparación empezaría al doblar.
+    private fun closeTurnAfter(index: Int): Maneuver? {
+        val following = steps.getOrNull(index + 1) ?: return null
+        val close = stepAlong[index + 1] - stepAlong[index] <= thresholds.turnApproachMinM
+        return following.maneuver.takeIf { close && it.isTurn }
     }
 
     private fun updateOffRoute(distanceM: Double, nowMs: Long, events: MutableList<NavigationEvent>) {
@@ -183,7 +195,7 @@ class NavigationEngine(
                 if (!approachAnnounced) events += NavigationEvent.TurnApproaching(step.maneuver)
                 maneuverAnnounced = true
                 approachAnnounced = true
-                events += NavigationEvent.TurnNow(step.maneuver, step.roundaboutExit)
+                events += turnNow(nextIndex)
             }
             return NavigationStatus.MANEUVER
         }
