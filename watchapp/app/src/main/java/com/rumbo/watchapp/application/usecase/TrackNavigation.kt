@@ -75,7 +75,8 @@ data class TrackingState(
  * viewModelScope) para no tener carreras.
  * Cada vibración se anota en [vibrationEvents] en segundo plano; si falla, se sigue navegando.
  * La voz ([speech]) solo acompaña: dice el inicio y los avisos importantes sin esperar a que
- * terminen, y si falla las vibraciones siguen igual.
+ * terminen, y si falla las vibraciones siguen igual. Cada giro se dice en tres etapas: la lejana
+ * al empezar el tramo, si es largo, y las dos que también vibran.
  *
  * Fuera de ruta pide una ruta nueva como mucho cada [NavigationThresholds.recalculateAfterMs] y
  * hasta [NavigationThresholds.maxRecalculations] veces seguidas; si falla, sigue con la anterior
@@ -121,7 +122,7 @@ class TrackNavigation(
         logger.info(TAG, "Navegación iniciada hacia «${route.destinationName}»: ${describe(route)}")
         useRoute(route, now)
         vibrate(VibrationCue.ON_ROUTE, now)
-        say(Phrase(startPhrase(route)))
+        engine?.let { say(Phrase(startPhrase(route, it.snapshot, thresholds.turnAheadMinM))) }
         job = scope.launch {
             launch {
                 val filter = LocationFilter(thresholds)
@@ -255,7 +256,7 @@ class TrackNavigation(
                 val end = current.end
                 val destination = Place(current.destinationName, end.lat, end.lng)
                 val newRoute = routes.create(from, destination)
-                useRoute(newRoute, clock())
+                useRoute(newRoute, clock(), announceFirstLeg = true)
                 logger.info(TAG, "Ruta recalculada: ${describe(newRoute)}")
             } catch (e: CancellationException) {
                 throw e
@@ -270,9 +271,9 @@ class TrackNavigation(
         }
     }
 
-    private fun useRoute(newRoute: Route, now: Long) {
+    private fun useRoute(newRoute: Route, now: Long, announceFirstLeg: Boolean = false) {
         route = newRoute
-        engine = NavigationEngine(newRoute, now, thresholds)
+        engine = NavigationEngine(newRoute, now, thresholds, announceFirstLeg)
         activeRoutes?.save(newRoute)
         publish()
     }

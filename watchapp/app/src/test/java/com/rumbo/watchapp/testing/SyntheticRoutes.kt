@@ -45,3 +45,27 @@ fun lRoute(): Route {
         polyline = north + east,
     )
 }
+
+/**
+ * Ruta con dos giros: 200 m al norte por Carrera 1, derecha, [eastM] al este por Carrera 2,
+ * izquierda y 200 m más al norte por Calle 3 hasta el destino; un punto cada 5 o 10 m.
+ */
+fun uRoute(eastM: Double = 400.0): Route {
+    val north = (0..20).map { at(0.0, it * 10.0) }
+    val east = (1..(eastM / 5).toInt()).map { at(it * 5.0, 200.0) }
+    val last = (1..20).map { at(eastM, 200.0 + it * 10.0) }
+    fun step(order: Int, maneuver: Maneuver, text: String, distance: Double, point: Coordinates, street: String) =
+        RouteStep(order, maneuver, text, distance, point.lat, point.lng, street)
+    return Route(
+        destinationName = "Parque de prueba",
+        distanceM = 400.0 + eastM,
+        durationS = 300.0,
+        steps = listOf(
+            step(1, Maneuver.STRAIGHT, "Camine hacia el norte.", 200.0, at(0.0, 0.0), "Carrera 1"),
+            step(2, Maneuver.RIGHT, "Gire a la derecha.", eastM, at(0.0, 200.0), "Carrera 2"),
+            step(3, Maneuver.LEFT, "Gire a la izquierda.", 200.0, at(eastM, 200.0), "Calle 3"),
+            step(4, Maneuver.ARRIVE, "Ha llegado.", 0.0, at(eastM, 400.0), ""),
+        ),
+        polyline = north + east + last,
+    )
+}

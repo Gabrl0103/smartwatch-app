@@ -1,8 +1,16 @@
 package com.rumbo.watchapp.domain.model
 
-enum class Maneuver { LEFT, RIGHT, STRAIGHT, ARRIVE }
+enum class Maneuver {
+    LEFT, RIGHT, STRAIGHT, ARRIVE;
 
-/** Una maniobra de la ruta: dónde ocurre y cuánto se camina hasta la siguiente. */
+    /** true si hay que avisarla por etapas: todo lo que no sea seguir recto o llegar. */
+    val isTurn: Boolean get() = this != STRAIGHT && this != ARRIVE
+}
+
+/**
+ * Una maniobra de la ruta: dónde ocurre y cuánto se camina hasta la siguiente. [street] es la
+ * calle por la que se sigue después del paso; vacía si el proveedor no la da.
+ */
 data class RouteStep(
     val order: Int,
     val maneuver: Maneuver,
@@ -10,6 +18,7 @@ data class RouteStep(
     val distanceM: Double,
     val lat: Double,
     val lng: Double,
+    val street: String = "",
 )
 
 /** Ruta a pie calculada por el backend. [id] es null si el backend no pudo guardarla. */

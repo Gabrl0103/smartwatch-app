@@ -8,6 +8,9 @@ enum class NavigationStatus { ON_ROUTE, TURN_APPROACHING, MANEUVER, OFF_ROUTE, N
 /** Lo que el motor avisa en cada lectura; cada evento sale una sola vez por situación. */
 sealed interface NavigationEvent {
     data class NextStepChanged(val step: RouteStep) : NavigationEvent
+
+    /** Aviso lejano, al empezar un tramo largo. No vibra: solo la voz cuenta qué viene. */
+    data class TurnAhead(val maneuver: Maneuver) : NavigationEvent
     data class TurnApproaching(val maneuver: Maneuver) : NavigationEvent
     data class TurnNow(val maneuver: Maneuver) : NavigationEvent
     data object OffRoute : NavigationEvent
@@ -28,4 +31,6 @@ data class NavigationSnapshot(
     val remainingM: Double,
     val progressM: Double,
     val distanceToRouteM: Double?,
+    /** Calle por la que se va ahora, la del último paso ya pasado; vacía si no se conoce. */
+    val currentStreet: String = "",
 )

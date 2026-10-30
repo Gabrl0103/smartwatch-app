@@ -137,7 +137,7 @@ object VibrationPatterns {
         NavigationEvent.SignalLost -> NO_SIGNAL
         NavigationEvent.Arrived -> ARRIVED
         NavigationEvent.BackOnRoute, NavigationEvent.SignalRecovered -> ON_ROUTE
-        is NavigationEvent.NextStepChanged, NavigationEvent.RecalculateRequested -> null
+        is NavigationEvent.NextStepChanged, is NavigationEvent.TurnAhead, NavigationEvent.RecalculateRequested -> null
     }
 
     fun mostImportant(events: List<NavigationEvent>): VibrationCue? =

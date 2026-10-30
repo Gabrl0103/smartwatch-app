@@ -14,11 +14,15 @@ import kotlin.math.max
  * Máquina de estados de la navegación. No lee el reloj del sistema: el tiempo llega en cada
  * llamada, así se prueba con rutas y tiempos sintéticos. Espera lecturas ya filtradas
  * ([LocationFilter]) y [onTick] cada segundo aunque no lleguen lecturas.
+ *
+ * Con [announceFirstLeg] el primer tramo también da su aviso lejano: en una ruta recalculada hace
+ * falta y al iniciar no, porque ya lo dice la frase de inicio.
  */
 class NavigationEngine(
     route: Route,
     startMs: Long,
     private val thresholds: NavigationThresholds = NavigationThresholds(),
+    announceFirstLeg: Boolean = false,
 ) {
     private val steps = route.steps
     private val polyline = route.polyline.ifEmpty { steps.map { Coordinates(it.lat, it.lng) } }
@@ -46,11 +50,13 @@ class NavigationEngine(
     private var lastRecalculateMs: Long? = null
 
     // Avisos ya dados para el paso actual: evitan repetirlos y que el estado parpadee.
+    private var aheadAnnounced = false
     private var approachAnnounced = false
     private var maneuverAnnounced = false
 
     init {
         advanceNextStep(mutableListOf())
+        aheadAnnounced = !announceFirstLeg
     }
 
     val snapshot: NavigationSnapshot
@@ -64,6 +70,7 @@ class NavigationEngine(
                 remainingM = (totalM - progressM).coerceAtLeast(0.0),
                 progressM = progressM,
                 distanceToRouteM = distanceToRouteM,
+                currentStreet = steps.getOrNull(nextIndex - 1)?.street.orEmpty(),
             )
         }
 
@@ -136,13 +143,12 @@ class NavigationEngine(
         val passed = index - 1
         val turn = steps[passed].maneuver
         val announced = passed == nextIndex && maneuverAnnounced
-        if ((turn == Maneuver.LEFT || turn == Maneuver.RIGHT) && !announced &&
-            progressM - stepAlong[passed] <= thresholds.maneuverM
-        ) {
+        if (turn.isTurn && !announced && progressM - stepAlong[passed] <= thresholds.maneuverM) {
             if (!(passed == nextIndex && approachAnnounced)) events += NavigationEvent.TurnApproaching(turn)
             events += NavigationEvent.TurnNow(turn)
         }
         nextIndex = index
+        aheadAnnounced = false
         approachAnnounced = false
         maneuverAnnounced = false
         steps.getOrNull(index)?.let { events += NavigationEvent.NextStepChanged(it) }
@@ -168,9 +174,7 @@ class NavigationEngine(
 
     private fun turnStatus(events: MutableList<NavigationEvent>): NavigationStatus {
         val step = steps.getOrNull(nextIndex) ?: return NavigationStatus.ON_ROUTE
-        if (step.maneuver != Maneuver.LEFT && step.maneuver != Maneuver.RIGHT) {
-            return NavigationStatus.ON_ROUTE
-        }
+        if (!step.maneuver.isTurn) return NavigationStatus.ON_ROUTE
         val distance = distanceToNextStep()
         if (maneuverAnnounced || distance <= thresholds.maneuverM) {
             if (!maneuverAnnounced) {
@@ -190,6 +194,12 @@ class NavigationEngine(
                 events += NavigationEvent.TurnApproaching(step.maneuver)
             }
             return NavigationStatus.TURN_APPROACHING
+        }
+        // Si en esta lectura se avisó un giro pasado por sorpresa, el lejano espera a la siguiente:
+        // solo suena una frase por lectura y la de la maniobra es la que importa.
+        if (!aheadAnnounced && distance > thresholds.turnAheadMinM && events.none { it is NavigationEvent.TurnNow }) {
+            aheadAnnounced = true
+            events += NavigationEvent.TurnAhead(step.maneuver)
         }
         return NavigationStatus.ON_ROUTE
     }

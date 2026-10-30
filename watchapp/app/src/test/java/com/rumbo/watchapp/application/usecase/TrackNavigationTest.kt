@@ -28,6 +28,7 @@ import com.rumbo.watchapp.testing.at
 import com.rumbo.watchapp.testing.fixAt
 import com.rumbo.watchapp.testing.lRoute
 import com.rumbo.watchapp.testing.pattern
+import com.rumbo.watchapp.testing.uRoute
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -337,8 +338,89 @@ class TrackNavigationTest {
         tracking.start(lRoute(), this)
         tracking.stop()
 
-        assertEquals(listOf("Iniciando ruta. Camine hacia el norte." to SpeechPriority.NORMAL), speech.spoken)
+        assertEquals(
+            listOf("Iniciando ruta. Camine hacia el norte. En doscientos metros, gira a la derecha." to SpeechPriority.NORMAL),
+            speech.spoken,
+        )
         assertEquals(1, speech.stops)
+    }
+
+    @Test
+    fun walkingARouteSaysEachStageOnceWithTheStreets() = runBlocking {
+        val fixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 64)
+        val speech = FakeSpeech()
+        var now = 0L
+        val tracking = TrackNavigation(
+            fixes,
+            FakeRoutes(detour),
+            FakeVibration(),
+            FakeVibrationEvents(),
+            speech,
+            clock = { now },
+            tickMs = 600_000,
+        )
+        val track = (0..200 step 5).map { 0.0 to it.toDouble() } + (5..395 step 5).map { it.toDouble() to 200.0 }
+
+        tracking.start(uRoute(), this)
+        try {
+            delay(20)
+            track.forEach { (east, north) ->
+                now += 1_000
+                fixes.emit(fixAt(east, north, now))
+                delay(2)
+            }
+            delay(20)
+
+            assertEquals(
+                listOf(
+                    "Iniciando ruta. Camine hacia el norte. En doscientos metros, gira a la derecha.",
+                    "En cincuenta metros, gira a la derecha en Carrera 2.",
+                    "Gira ahora a la derecha.",
+                    "Sigue recto por Carrera 2. En cuatrocientos metros, gira a la izquierda.",
+                    "En cincuenta metros, gira a la izquierda en Calle 3.",
+                    "Gira ahora a la izquierda.",
+                ),
+                speech.spoken.map { it.first },
+            )
+        } finally {
+            tracking.stop()
+        }
+    }
+
+    @Test
+    fun aRecalculatedRouteSaysItsFirstLegOnTheNextReading() = runBlocking {
+        val fixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 16)
+        val speech = FakeSpeech()
+        var now = 0L
+        val tracking = TrackNavigation(
+            fixes,
+            FakeRoutes(uRoute()),
+            FakeVibration(),
+            FakeVibrationEvents(),
+            speech,
+            clock = { now },
+            tickMs = 600_000,
+        )
+
+        tracking.start(lRoute(), this)
+        try {
+            delay(20)
+            listOf(0L, 1_000L, 2_000L, 12_000L).forEach { t ->
+                now = t
+                fixes.emit(fixAt(40.0, 100.0, t))
+                delay(20)
+            }
+            now = 13_000
+            fixes.emit(fixAt(0.0, 5.0, now))
+            delay(20)
+
+            assertEquals(
+                "Sigue recto por Carrera 1. En doscientos metros, gira a la derecha." to SpeechPriority.NORMAL,
+                speech.spoken.last(),
+            )
+        } finally {
+            tracking.stop()
+        }
     }
 
     @Test
@@ -362,7 +444,7 @@ class TrackNavigationTest {
             tracking.repeat()
 
             assertEquals(listOf(pattern(VibrationCue.ON_ROUTE), pattern(VibrationCue.ON_ROUTE)), vibration.played)
-            assertEquals("En doscientos metros, gire a la derecha." to SpeechPriority.HIGH, speech.spoken.last())
+            assertEquals("En doscientos metros, gira a la derecha." to SpeechPriority.HIGH, speech.spoken.last())
         } finally {
             tracking.stop()
         }

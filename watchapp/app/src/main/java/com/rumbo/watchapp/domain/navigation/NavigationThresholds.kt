@@ -8,8 +8,9 @@ data class NavigationThresholds(
     val medianWindow: Int = 3,
     // Más rápido que esto no camina nadie: una velocidad así es un salto del GPS y se descarta.
     val maxSpeedMps: Double = 4.0,
-    // Giros
-    val turnApproachMinM: Double = 30.0,
+    // Giros, en tres etapas: al empezar un tramo más largo que turnAheadMinM, giro próximo y maniobra
+    val turnAheadMinM: Double = 80.0,
+    val turnApproachMinM: Double = 50.0,
     val turnApproachLookaheadS: Double = 10.0,
     val maneuverM: Double = 12.0,
     // Desvío (entra con offRouteM, sale con backOnRouteM: la diferencia evita el parpadeo)

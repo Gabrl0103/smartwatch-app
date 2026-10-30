@@ -27,6 +27,7 @@ internal fun routeFromJson(json: JSONObject): Route {
                 distanceM = step.getDouble("distance_m"),
                 lat = step.getDouble("lat"),
                 lng = step.getDouble("lng"),
+                street = step.optString("street"),
             )
         },
         polyline = List(polyline.length()) { i ->
@@ -54,6 +55,7 @@ internal fun routeToJson(route: Route): JSONObject = JSONObject()
                     .put("distance_m", step.distanceM)
                     .put("lat", step.lat)
                     .put("lng", step.lng)
+                    .put("street", step.street)
             },
         ),
     )

@@ -3,6 +3,7 @@ package com.rumbo.watchapp.domain.navigation
 import com.rumbo.watchapp.domain.model.Maneuver
 import com.rumbo.watchapp.testing.fixAt
 import com.rumbo.watchapp.testing.lRoute
+import com.rumbo.watchapp.testing.uRoute
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -28,20 +29,22 @@ class NavigationEngineTest {
 
     @Test
     fun followingTheRouteWithLateralNoiseEmitsNoEvents() {
-        val noisy = (0..150 step 5).mapIndexed { i, n -> (if (i % 2 == 0) 3.0 else -3.0) to n.toDouble() }
+        val noisy = (0..140 step 5).mapIndexed { i, n -> (if (i % 2 == 0) 3.0 else -3.0) to n.toDouble() }
 
         val events = walk(*noisy.toTypedArray())
 
         assertEquals(emptyList<NavigationEvent>(), events)
         assertEquals(NavigationStatus.ON_ROUTE, engine.snapshot.status)
         assertEquals("Gire a la derecha.", engine.snapshot.nextStep?.instruction)
-        assertEquals(50.0, engine.snapshot.distanceToNextStepM!!, 0.5)
+        assertEquals(60.0, engine.snapshot.distanceToNextStepM!!, 0.5)
         assertEquals(200.0, engine.snapshot.stepLengthM!!, 0.5)
     }
 
     @Test
-    fun turnApproachingFiresOnceWithinThirtyMeters() {
-        val events = walk(*north(100, 185))
+    fun turnApproachingFiresOnceWithinFiftyMeters() {
+        assertEquals(emptyList<NavigationEvent>(), walk(*north(100, 145)))
+
+        val events = walk(*north(150, 185))
 
         assertEquals(listOf(NavigationEvent.TurnApproaching(Maneuver.RIGHT)), events)
         assertEquals(NavigationStatus.TURN_APPROACHING, engine.snapshot.status)
@@ -49,11 +52,120 @@ class NavigationEngineTest {
 
     @Test
     fun approachDistanceGrowsWithSpeed() {
-        val slow = walk(*north(100, 140), speedMps = 5.0)
-        val fast = walk(0.0 to 150.0, speedMps = 5.0)
+        val shortApproach = NavigationEngine(route, 0, NavigationThresholds(turnApproachMinM = 30.0))
+        val fix = { north: Double -> shortApproach.onLocation(fixAt(0.0, north, 1_000, speedMps = 5.0), 1_000) }
 
-        assertEquals(emptyList<NavigationEvent>(), slow)
-        assertEquals(listOf(NavigationEvent.TurnApproaching(Maneuver.RIGHT)), fast)
+        assertEquals(emptyList<NavigationEvent>(), fix(140.0))
+        assertEquals(listOf(NavigationEvent.TurnApproaching(Maneuver.RIGHT)), fix(150.0))
+    }
+
+    @Test
+    fun theFirstLegIsLeftToTheStartPhrase() {
+        val events = walk(*north(0, 145))
+
+        assertEquals(emptyList<NavigationEvent>(), events)
+    }
+
+    @Test
+    fun aRecalculatedRouteAnnouncesItsFirstLeg() {
+        val recalculated = NavigationEngine(route, 0, announceFirstLeg = true)
+
+        val events = recalculated.onLocation(fixAt(0.0, 5.0, 1_000), 1_000)
+
+        assertEquals(listOf(NavigationEvent.TurnAhead(Maneuver.RIGHT)), events)
+    }
+
+    @Test
+    fun farStageFiresOnceWhenTheLongLegStarts() {
+        val long = uRoute()
+        val walker = NavigationEngine(long, 0)
+        var time = 0L
+        fun step(east: Double, north: Double): List<NavigationEvent> {
+            time += 1_000
+            return walker.onLocation(fixAt(east, north, time), time)
+        }
+        (0..195 step 5).forEach { step(0.0, it.toDouble()) }
+
+        val events = step(5.0, 200.0)
+
+        assertEquals(listOf(NavigationEvent.NextStepChanged(long.steps[2]), NavigationEvent.TurnAhead(Maneuver.LEFT)), events)
+        assertEquals(395.0, walker.snapshot.distanceToNextStepM!!, 0.5)
+        assertEquals("Carrera 2", walker.snapshot.currentStreet)
+        // Caminando el resto del tramo no vuelve a sonar, con o sin ruido.
+        val rest = (10..140 step 5).flatMap { step(it.toDouble(), 200.0 + if (it % 2 == 0) 3.0 else -3.0) }
+        assertEquals(emptyList<NavigationEvent>(), rest)
+    }
+
+    @Test
+    fun aShortLegHasNoFarStage() {
+        val short = uRoute(eastM = 70.0)
+        val walker = NavigationEngine(short, 0)
+        var time = 0L
+        fun step(east: Double, north: Double): List<NavigationEvent> {
+            time += 1_000
+            return walker.onLocation(fixAt(east, north, time), time)
+        }
+        (0..195 step 5).forEach { step(0.0, it.toDouble()) }
+
+        val events = step(5.0, 200.0)
+
+        // Tramo de 70 m: 65 m hasta el siguiente giro, entre la etapa lejana y la de preparación.
+        assertEquals(listOf(NavigationEvent.NextStepChanged(short.steps[2])), events)
+        assertEquals(
+            listOf(NavigationEvent.TurnApproaching(Maneuver.LEFT)),
+            (10..25 step 5).flatMap { step(it.toDouble(), 200.0) },
+        )
+    }
+
+    @Test
+    fun afterASurpriseTurnTheFarStageWaitsForTheNextReading() {
+        val long = uRoute()
+        val walker = NavigationEngine(long, 0)
+        var time = 0L
+        fun step(east: Double, north: Double): List<NavigationEvent> {
+            time += 1_000
+            return walker.onLocation(fixAt(east, north, time), time)
+        }
+        (100..140 step 5).forEach { step(0.0, it.toDouble()) }
+
+        // La lectura cae pasada la esquina: "Gira ahora" no puede perderse por el aviso lejano.
+        val corner = step(5.0, 200.0)
+        val next = step(10.0, 200.0)
+
+        assertEquals(
+            listOf(
+                NavigationEvent.TurnApproaching(Maneuver.RIGHT),
+                NavigationEvent.TurnNow(Maneuver.RIGHT),
+                NavigationEvent.NextStepChanged(long.steps[2]),
+            ),
+            corner,
+        )
+        assertEquals(listOf(NavigationEvent.TurnAhead(Maneuver.LEFT)), next)
+    }
+
+    @Test
+    fun eachStageOfATurnFiresOnceAndInOrder() {
+        val long = uRoute()
+        val walker = NavigationEngine(long, 0, announceFirstLeg = true)
+        var time = 0L
+        val track = (0..200 step 5).map { 0.0 to it.toDouble() } + (5..400 step 5).map { it.toDouble() to 200.0 }
+
+        val events = track.flatMap { (east, north) ->
+            time += 1_000
+            walker.onLocation(fixAt(east, north, time), time)
+        }.filterNot { it is NavigationEvent.NextStepChanged }
+
+        assertEquals(
+            listOf(
+                NavigationEvent.TurnAhead(Maneuver.RIGHT),
+                NavigationEvent.TurnApproaching(Maneuver.RIGHT),
+                NavigationEvent.TurnNow(Maneuver.RIGHT),
+                NavigationEvent.TurnAhead(Maneuver.LEFT),
+                NavigationEvent.TurnApproaching(Maneuver.LEFT),
+                NavigationEvent.TurnNow(Maneuver.LEFT),
+            ),
+            events,
+        )
     }
 
     @Test
