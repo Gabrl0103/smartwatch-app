@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-from domain.errors import ExternalServiceError
+from domain.errors import ExternalServiceError, QuotaExhaustedError
 from domain.models.voice import Intent
 from infrastructure.assistant.gemini_voice_assistant import GeminiVoiceAssistant
 
@@ -56,3 +56,16 @@ def test_missing_key_raises_external_service_error():
 def test_answer_question_returns_text():
     assistant = make_assistant(lambda r: httpx.Response(200, json=gemini_reply(" Sigue recto. ")))
     assert assistant.answer_question("¿hacia dónde?", "ruta") == "Sigue recto."
+
+
+def test_quota_exhausted_raises_quota_error():
+    assistant = make_assistant(lambda r: httpx.Response(429, json={}))
+    with pytest.raises(QuotaExhaustedError):
+        assistant.answer_question("¿qué sigue?", "")
+
+
+def test_other_errors_are_not_quota():
+    assistant = make_assistant(lambda r: httpx.Response(500, json={}))
+    with pytest.raises(ExternalServiceError) as error:
+        assistant.answer_question("¿qué sigue?", "")
+    assert not isinstance(error.value, QuotaExhaustedError)

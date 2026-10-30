@@ -3,6 +3,16 @@ from pydantic import BaseModel
 from domain.models.voice import VoiceCommand
 
 
+class QuestionRequest(BaseModel):
+    # Opcionales para que el caso de uso valide y responda con el formato de error común.
+    question: str | None = None
+    context: str | None = None
+
+
+class AnswerResponse(BaseModel):
+    answer: str
+
+
 class VoiceCommandResponse(BaseModel):
     text: str
     intent: str

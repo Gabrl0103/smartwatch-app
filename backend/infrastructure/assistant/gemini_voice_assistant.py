@@ -3,7 +3,7 @@ import json
 
 import httpx
 
-from domain.errors import ExternalServiceError
+from domain.errors import ExternalServiceError, QuotaExhaustedError
 from domain.models.voice import Intent, VoiceCommand
 
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
@@ -88,6 +88,10 @@ class GeminiVoiceAssistant:
             )
         except httpx.HTTPError as error:
             raise ExternalServiceError("No pude conectar con Gemini.") from error
+        if response.status_code == 429:
+            raise QuotaExhaustedError(
+                "Se agotó la cuota gratuita del asistente de Gemini. Intenta más tarde."
+            )
         if response.status_code != 200:
             raise ExternalServiceError(
                 f"Gemini respondió con error {response.status_code}."
