@@ -9,17 +9,30 @@ ROUTING_URL = "https://api.geoapify.com/v1/routing"
 # hasta un 9 % más de distancia (ver docs/REQUIREMENTS.md, "Rutas reales").
 DEFAULT_ROUTE_TYPE = "less_maneuvers"
 
+_TURNS_BY_SIDE = {
+    "Right": (Maneuver.RIGHT, Maneuver.SLIGHT_RIGHT, Maneuver.SHARP_RIGHT, Maneuver.U_TURN_RIGHT),
+    "Left": (Maneuver.LEFT, Maneuver.SLIGHT_LEFT, Maneuver.SHARP_LEFT, Maneuver.U_TURN_LEFT),
+}
+
 
 def to_maneuver(instruction_type: str) -> Maneuver:
-    """Reduce los tipos de Geoapify (Right, SlightLeft, StayRight...) a 4 maniobras."""
+    """Traduce los tipos de Geoapify (Right, SlightLeft, TurnAroundRight, Roundabout...) a
+    maniobras. "Stay" es una bifurcación: se sigue de un lado sin un giro completo."""
     if instruction_type.startswith("Destination"):
         return Maneuver.ARRIVE
     if instruction_type.startswith("Start"):
         return Maneuver.STRAIGHT
-    if "Right" in instruction_type:
-        return Maneuver.RIGHT
-    if "Left" in instruction_type:
-        return Maneuver.LEFT
+    if instruction_type == "Roundabout":
+        return Maneuver.ROUNDABOUT
+    for side, (plain, slight, sharp, u_turn) in _TURNS_BY_SIDE.items():
+        if side in instruction_type:
+            if instruction_type.startswith(("Slight", "Stay")):
+                return slight
+            if instruction_type.startswith("Sharp"):
+                return sharp
+            if instruction_type.startswith("TurnAround"):
+                return u_turn
+            return plain
     return Maneuver.STRAIGHT
 
 
@@ -77,14 +90,19 @@ class GeoapifyRouting:
             for step in leg["steps"]:
                 instruction = step["instruction"]
                 streets = instruction.get("streets") or [""]
+                maneuver = to_maneuver(instruction.get("type", ""))
+                # Una rotonda son dos pasos "Roundabout": entrar, con el número de salida, y salir.
+                if maneuver == Maneuver.ROUNDABOUT and steps and steps[-1].maneuver == Maneuver.ROUNDABOUT:
+                    maneuver = Maneuver.STRAIGHT
                 steps.append(
                     RouteStep(
                         order=len(steps) + 1,
-                        maneuver=to_maneuver(instruction.get("type", "")),
+                        maneuver=maneuver,
                         instruction=instruction["text"],
                         distance_to_next_m=float(step["distance"]),
                         point=line[step["from_index"]],
                         street=streets[0],
+                        roundabout_exit=instruction.get("roundabout_exit"),
                     )
                 )
 

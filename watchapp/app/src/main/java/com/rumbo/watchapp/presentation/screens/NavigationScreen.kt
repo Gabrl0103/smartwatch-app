@@ -70,8 +70,10 @@ private fun lookOf(state: TrackingState): StatusLook {
 
 // La llegada aún no alcanzada se muestra como "recto": el check queda para "Llegaste".
 private fun maneuverIcon(maneuver: Maneuver?) = when (maneuver) {
-    Maneuver.LEFT -> StateIconKind.LEFT
-    Maneuver.RIGHT -> StateIconKind.RIGHT
+    Maneuver.LEFT, Maneuver.SLIGHT_LEFT, Maneuver.SHARP_LEFT -> StateIconKind.LEFT
+    Maneuver.RIGHT, Maneuver.SLIGHT_RIGHT, Maneuver.SHARP_RIGHT -> StateIconKind.RIGHT
+    Maneuver.U_TURN_LEFT, Maneuver.U_TURN_RIGHT -> StateIconKind.U_TURN
+    Maneuver.ROUNDABOUT -> StateIconKind.ROUNDABOUT
     Maneuver.STRAIGHT, Maneuver.ARRIVE, null -> StateIconKind.STRAIGHT
 }
 

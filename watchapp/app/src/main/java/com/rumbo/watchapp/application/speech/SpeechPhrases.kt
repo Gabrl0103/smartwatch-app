@@ -53,36 +53,52 @@ fun startPhrase(route: Route, snapshot: NavigationSnapshot, aheadMinM: Double): 
     val next = snapshot.nextStep
     val distance = snapshot.distanceToNextStepM
     val ahead = next != null && next != first && next.maneuver.isTurn && distance != null && distance > aheadMinM
-    val turn = if (ahead) " En ${spokenDistance(distance!!)}, ${turnAction(next!!.maneuver)}." else ""
+    val turn = if (ahead) " En ${spokenDistance(distance!!)}, ${turnAction(next!!)}." else ""
     return "Iniciando ruta. ${sentence(first.instruction)}$turn"
 }
 
-/** Lo que hay que hacer en la maniobra, sin distancia ni calle: "gira a la derecha". */
-private fun turnAction(maneuver: Maneuver): String = when (maneuver) {
+/** Lo que hay que hacer en la maniobra, sin distancia ni calle: "gira ligeramente a la derecha". */
+private fun turnAction(maneuver: Maneuver, roundaboutExit: Int?): String = when (maneuver) {
     Maneuver.LEFT -> "gira a la izquierda"
     Maneuver.RIGHT -> "gira a la derecha"
+    Maneuver.SLIGHT_LEFT -> "gira ligeramente a la izquierda"
+    Maneuver.SLIGHT_RIGHT -> "gira ligeramente a la derecha"
+    Maneuver.SHARP_LEFT -> "gira cerrado a la izquierda"
+    Maneuver.SHARP_RIGHT -> "gira cerrado a la derecha"
+    Maneuver.U_TURN_LEFT, Maneuver.U_TURN_RIGHT -> "da media vuelta"
+    Maneuver.ROUNDABOUT -> when {
+        roundaboutExit == null || roundaboutExit < 1 -> "entra a la rotonda"
+        else -> "en la rotonda toma ${exitInWords(roundaboutExit)}"
+    }
     Maneuver.STRAIGHT -> "sigue recto"
     Maneuver.ARRIVE -> "llega a tu destino"
 }
 
+private fun turnAction(step: RouteStep) = turnAction(step.maneuver, step.roundaboutExit)
+
 /** Etapa lejana, al empezar el tramo: "Sigue recto por Carrera 25. En cien metros, gira a la derecha." */
 fun turnAheadPhrase(distanceM: Double, step: RouteStep, currentStreet: String): String {
     val straight = if (currentStreet.isBlank()) "Sigue recto." else "Sigue recto por $currentStreet."
-    return "$straight En ${spokenDistance(distanceM)}, ${turnAction(step.maneuver)}."
+    return "$straight En ${spokenDistance(distanceM)}, ${turnAction(step)}."
 }
 
-/** Etapa de preparación: "En cincuenta metros, gira a la derecha en Calle 18." */
+/**
+ * Etapa de preparación: "En cincuenta metros, gira a la derecha en Calle 18." En una rotonda no
+ * va la calle: la que da el proveedor es el nombre de la propia rotonda.
+ */
 fun turnApproachingPhrase(distanceM: Double, step: RouteStep): String {
-    val street = if (step.street.isBlank()) "" else " en ${step.street}"
-    return "En ${spokenDistance(distanceM)}, ${turnAction(step.maneuver)}$street."
+    val hasStreet = step.street.isNotBlank() && step.maneuver != Maneuver.ROUNDABOUT
+    val street = if (hasStreet) " en ${step.street}" else ""
+    return "En ${spokenDistance(distanceM)}, ${turnAction(step)}$street."
 }
 
 /** Etapa final, ya encima del giro: "Gira ahora a la derecha." */
-fun turnNowPhrase(maneuver: Maneuver): String = when (maneuver) {
-    Maneuver.LEFT -> "Gira ahora a la izquierda."
-    Maneuver.RIGHT -> "Gira ahora a la derecha."
+fun turnNowPhrase(maneuver: Maneuver, roundaboutExit: Int? = null): String = when (maneuver) {
     Maneuver.STRAIGHT -> "Sigue recto."
     Maneuver.ARRIVE -> ARRIVED_PHRASE
+    Maneuver.U_TURN_LEFT, Maneuver.U_TURN_RIGHT -> "Da media vuelta ahora."
+    Maneuver.ROUNDABOUT -> "Ahora, ${turnAction(maneuver, roundaboutExit)}."
+    else -> "Gira ahora ${turnAction(maneuver, roundaboutExit).removePrefix("gira ")}."
 }
 
 /**
@@ -93,7 +109,7 @@ fun navigationPhrase(events: List<NavigationEvent>, snapshot: NavigationSnapshot
     if (NavigationEvent.Arrived in events) return Phrase(ARRIVED_PHRASE, SpeechPriority.HIGH)
     if (NavigationEvent.OffRoute in events) return Phrase(OFF_ROUTE_PHRASE, SpeechPriority.HIGH)
     events.filterIsInstance<NavigationEvent.TurnNow>().firstOrNull()?.let {
-        return Phrase(turnNowPhrase(it.maneuver), SpeechPriority.HIGH)
+        return Phrase(turnNowPhrase(it.maneuver, it.roundaboutExit), SpeechPriority.HIGH)
     }
     val step = snapshot.nextStep
     val distance = snapshot.distanceToNextStepM

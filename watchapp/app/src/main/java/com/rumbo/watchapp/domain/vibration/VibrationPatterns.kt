@@ -129,9 +129,11 @@ object VibrationPatterns {
     fun forEvent(event: NavigationEvent): VibrationCue? = when (event) {
         is NavigationEvent.TurnApproaching -> TURN_APPROACHING
         is NavigationEvent.TurnNow -> when (event.maneuver) {
-            Maneuver.LEFT -> LEFT
-            Maneuver.RIGHT -> RIGHT
-            else -> null
+            Maneuver.LEFT, Maneuver.SLIGHT_LEFT, Maneuver.SHARP_LEFT, Maneuver.U_TURN_LEFT -> LEFT
+            Maneuver.RIGHT, Maneuver.SLIGHT_RIGHT, Maneuver.SHARP_RIGHT, Maneuver.U_TURN_RIGHT -> RIGHT
+            // La rotonda no tiene lado: se repite el aviso para que la maniobra no pase sin vibrar.
+            Maneuver.ROUNDABOUT -> TURN_APPROACHING
+            Maneuver.STRAIGHT, Maneuver.ARRIVE -> null
         }
         NavigationEvent.OffRoute -> OFF_ROUTE
         NavigationEvent.SignalLost -> NO_SIGNAL

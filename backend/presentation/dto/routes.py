@@ -26,6 +26,7 @@ class RouteStepResponse(BaseModel):
     lat: float
     lng: float
     street: str = ""
+    roundabout_exit: int | None = None
 
 
 class RouteResponse(BaseModel):
@@ -53,6 +54,7 @@ class RouteResponse(BaseModel):
                     lat=step.point.lat,
                     lng=step.point.lng,
                     street=step.street,
+                    roundabout_exit=step.roundabout_exit,
                 )
                 for step in route.steps
             ],

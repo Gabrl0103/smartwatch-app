@@ -28,6 +28,7 @@ internal fun routeFromJson(json: JSONObject): Route {
                 lat = step.getDouble("lat"),
                 lng = step.getDouble("lng"),
                 street = step.optString("street"),
+                roundaboutExit = if (step.isNull("roundabout_exit")) null else step.getInt("roundabout_exit"),
             )
         },
         polyline = List(polyline.length()) { i ->
@@ -56,14 +57,11 @@ internal fun routeToJson(route: Route): JSONObject = JSONObject()
                     .put("lat", step.lat)
                     .put("lng", step.lng)
                     .put("street", step.street)
+                    .put("roundabout_exit", step.roundaboutExit ?: JSONObject.NULL)
             },
         ),
     )
     .put("polyline", JSONArray(route.polyline.map { JSONArray().put(it.lat).put(it.lng) }))
 
-private fun toManeuver(value: String): Maneuver = when (value) {
-    "left" -> Maneuver.LEFT
-    "right" -> Maneuver.RIGHT
-    "arrive" -> Maneuver.ARRIVE
-    else -> Maneuver.STRAIGHT
-}
+private fun toManeuver(value: String): Maneuver =
+    Maneuver.entries.firstOrNull { it.name.lowercase() == value } ?: Maneuver.STRAIGHT

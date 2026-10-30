@@ -27,7 +27,7 @@ enum class StateIconKind(val description: String, vararg paths: String) {
     LEFT("Gira a la izquierda", "M17 20v-8a4 4 0 0 0-4-4H5", "M9 4L5 8l4 4"),
     RIGHT("Gira a la derecha", "M7 20v-8a4 4 0 0 1 4-4h8", "M15 4l4 4-4 4"),
     STRAIGHT("Sigue recto", "M12 20V4", "M6 10l6-6 6 6"),
-    U_TURN("Vuelta en U", "M16 20V10a4 4 0 0 0-8 0v7", "M4 13l4 4 4-4"),
+    U_TURN("Da media vuelta", "M16 20V10a4 4 0 0 0-8 0v7", "M4 13l4 4 4-4"),
     ROUNDABOUT(
         "Rotonda",
         "M7.5 9.5a4.5 4.5 0 1 0 9 0a4.5 4.5 0 1 0-9 0",

@@ -163,6 +163,25 @@ class VibrationPatternsTest {
         assertEquals(ON_ROUTE, forEvent(NavigationEvent.BackOnRoute))
         assertNull(forEvent(NavigationEvent.RecalculateRequested))
         assertNull(forEvent(NavigationEvent.NextStepChanged(lRoute().steps[1])))
+        assertNull("El aviso lejano es solo de voz", forEvent(NavigationEvent.TurnAhead(Maneuver.LEFT)))
+    }
+
+    @Test
+    fun specialManeuversVibrateTheirSide() = with(VibrationPatterns) {
+        listOf(Maneuver.SLIGHT_LEFT, Maneuver.SHARP_LEFT, Maneuver.U_TURN_LEFT).forEach {
+            assertEquals(LEFT, forEvent(NavigationEvent.TurnNow(it)))
+        }
+        listOf(Maneuver.SLIGHT_RIGHT, Maneuver.SHARP_RIGHT, Maneuver.U_TURN_RIGHT).forEach {
+            assertEquals(RIGHT, forEvent(NavigationEvent.TurnNow(it)))
+        }
+    }
+
+    @Test
+    fun everyTurnVibratesAtTheManeuverEvenARoundaboutWithoutSide() = with(VibrationPatterns) {
+        assertEquals(TURN_APPROACHING, forEvent(NavigationEvent.TurnNow(Maneuver.ROUNDABOUT, 2)))
+        Maneuver.entries.filter { it.isTurn }.forEach {
+            assertEquals(it.name, true, forEvent(NavigationEvent.TurnNow(it)) != null)
+        }
     }
 
     @Test

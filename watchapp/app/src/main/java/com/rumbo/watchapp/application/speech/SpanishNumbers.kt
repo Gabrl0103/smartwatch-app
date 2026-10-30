@@ -14,6 +14,14 @@ private val HUNDREDS = listOf(
     "setecientos", "ochocientos", "novecientos",
 )
 
+private val EXIT_ORDINALS = listOf(
+    "primera", "segunda", "tercera", "cuarta", "quinta", "sexta", "séptima", "octava", "novena", "décima",
+)
+
+/** "la segunda salida"; de la once en adelante, "la salida número once". */
+fun exitInWords(n: Int): String =
+    EXIT_ORDINALS.getOrNull(n - 1)?.let { "la $it salida" } ?: "la salida número ${numberInWords(n)}"
+
 /** 0..999 en palabras ("treinta y uno", "ciento cinco"); fuera de ese rango, en cifras. */
 fun numberInWords(n: Int): String = when {
     n !in 0..999 -> n.toString()

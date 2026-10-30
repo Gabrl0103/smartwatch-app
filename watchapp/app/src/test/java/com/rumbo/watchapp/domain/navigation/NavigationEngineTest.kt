@@ -222,6 +222,51 @@ class NavigationEngineTest {
     }
 
     @Test
+    fun everySpecialManeuverIsAnnouncedInStagesLikeATurn() {
+        val special = listOf(
+            Maneuver.SLIGHT_LEFT, Maneuver.SLIGHT_RIGHT, Maneuver.SHARP_LEFT, Maneuver.SHARP_RIGHT,
+            Maneuver.U_TURN_LEFT, Maneuver.U_TURN_RIGHT, Maneuver.ROUNDABOUT,
+        )
+        special.forEach { maneuver ->
+            val steps = route.steps.map { if (it.order == 2) it.copy(maneuver = maneuver, roundaboutExit = 2) else it }
+            val walker = NavigationEngine(route.copy(steps = steps), 0)
+
+            val events = (0..195 step 5).flatMap {
+                walker.onLocation(fixAt(0.0, it.toDouble(), it * 1_000L), it * 1_000L)
+            }
+
+            assertEquals(
+                listOf(NavigationEvent.TurnApproaching(maneuver), NavigationEvent.TurnNow(maneuver, 2)),
+                events,
+            )
+            assertEquals(NavigationStatus.MANEUVER, walker.snapshot.status)
+        }
+    }
+
+    @Test
+    fun aSurpriseRoundaboutKeepsItsExitNumber() {
+        val steps = route.steps.map { if (it.order == 2) it.copy(maneuver = Maneuver.ROUNDABOUT, roundaboutExit = 3) else it }
+        val walker = NavigationEngine(route.copy(steps = steps), 0)
+        walker.onLocation(fixAt(0.0, 140.0, 1_000), 1_000)
+
+        val events = walker.onLocation(fixAt(5.0, 200.0, 2_000), 2_000)
+
+        assertTrue(NavigationEvent.TurnNow(Maneuver.ROUNDABOUT, 3) in events)
+    }
+
+    @Test
+    fun theStepThatLeavesARoundaboutIsSilent() {
+        val steps = route.steps.map { if (it.order == 2) it.copy(maneuver = Maneuver.STRAIGHT) else it }
+        val walker = NavigationEngine(route.copy(steps = steps), 0)
+
+        val events = (0..195 step 5).flatMap {
+            walker.onLocation(fixAt(0.0, it.toDouble(), it * 1_000L), it * 1_000L)
+        }
+
+        assertEquals(emptyList<NavigationEvent>(), events)
+    }
+
+    @Test
     fun passingTheTurnMovesToNextStep() {
         walk(*north(100, 195))
 

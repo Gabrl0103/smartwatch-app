@@ -160,6 +160,68 @@ class SpeechPhrasesTest {
     }
 
     @Test
+    fun slightAndSharpTurnsSaySoInEveryStage() {
+        val slight = turn.copy(maneuver = Maneuver.SLIGHT_RIGHT)
+        val sharp = turn.copy(maneuver = Maneuver.SHARP_LEFT)
+
+        assertEquals("Sigue recto. En cien metros, gira ligeramente a la derecha.", turnAheadPhrase(100.0, slight, ""))
+        assertEquals("En cincuenta metros, gira ligeramente a la derecha en Calle 18.", turnApproachingPhrase(50.0, slight))
+        assertEquals("Gira ahora ligeramente a la derecha.", turnNowPhrase(Maneuver.SLIGHT_RIGHT))
+        assertEquals("Gira ahora ligeramente a la izquierda.", turnNowPhrase(Maneuver.SLIGHT_LEFT))
+
+        assertEquals("Sigue recto. En cien metros, gira cerrado a la izquierda.", turnAheadPhrase(100.0, sharp, ""))
+        assertEquals("En cincuenta metros, gira cerrado a la izquierda en Calle 18.", turnApproachingPhrase(50.0, sharp))
+        assertEquals("Gira ahora cerrado a la izquierda.", turnNowPhrase(Maneuver.SHARP_LEFT))
+        assertEquals("Gira ahora cerrado a la derecha.", turnNowPhrase(Maneuver.SHARP_RIGHT))
+    }
+
+    @Test
+    fun uTurnSaysHalfTurnWithoutTheSide() {
+        val uTurn = turn.copy(maneuver = Maneuver.U_TURN_LEFT)
+
+        assertEquals("Sigue recto. En cien metros, da media vuelta.", turnAheadPhrase(100.0, uTurn, ""))
+        assertEquals("En cincuenta metros, da media vuelta en Calle 18.", turnApproachingPhrase(50.0, uTurn))
+        assertEquals("Da media vuelta ahora.", turnNowPhrase(Maneuver.U_TURN_LEFT))
+        assertEquals("Da media vuelta ahora.", turnNowPhrase(Maneuver.U_TURN_RIGHT))
+    }
+
+    @Test
+    fun roundaboutSaysTheExitAndNotItsOwnName() {
+        val roundabout = turn.copy(maneuver = Maneuver.ROUNDABOUT, street = "Glorieta de Chapal", roundaboutExit = 2)
+
+        assertEquals(
+            "Sigue recto. En cien metros, en la rotonda toma la segunda salida.",
+            turnAheadPhrase(100.0, roundabout, ""),
+        )
+        assertEquals("En cincuenta metros, en la rotonda toma la segunda salida.", turnApproachingPhrase(50.0, roundabout))
+        assertEquals("Ahora, en la rotonda toma la segunda salida.", turnNowPhrase(Maneuver.ROUNDABOUT, 2))
+    }
+
+    @Test
+    fun roundaboutWithoutExitNumberOnlySaysToEnter() {
+        assertEquals("Ahora, entra a la rotonda.", turnNowPhrase(Maneuver.ROUNDABOUT))
+        assertEquals("Ahora, entra a la rotonda.", turnNowPhrase(Maneuver.ROUNDABOUT, 0))
+    }
+
+    @Test
+    fun exitsAreOrdinalUpToTheTenth() {
+        assertEquals("la primera salida", exitInWords(1))
+        assertEquals("la séptima salida", exitInWords(7))
+        assertEquals("la décima salida", exitInWords(10))
+        assertEquals("la salida número once", exitInWords(11))
+    }
+
+    @Test
+    fun theExitNumberTravelsWithTheEventForTurnsPassedBySurprise() {
+        val event = NavigationEvent.TurnNow(Maneuver.ROUNDABOUT, 3)
+
+        assertEquals(
+            Phrase("Ahora, en la rotonda toma la tercera salida.", SpeechPriority.HIGH),
+            navigationPhrase(listOf(event), snapshot(nextStep = null, distance = null)),
+        )
+    }
+
+    @Test
     fun navigationEventsMapToPhrasesWithPriority() {
         assertEquals(
             Phrase("En treinta metros, gira a la izquierda en Calle 18.", SpeechPriority.HIGH),

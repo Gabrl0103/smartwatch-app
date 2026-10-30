@@ -141,11 +141,11 @@ class NavigationEngine(
         // el primero, a pocos metros del inicio, y la primera lectura cae un poco más allá) y se acaba
         // de pasar, la persona está en la esquina: se avisa igual, en sus dos etapas.
         val passed = index - 1
-        val turn = steps[passed].maneuver
+        val turn = steps[passed]
         val announced = passed == nextIndex && maneuverAnnounced
-        if (turn.isTurn && !announced && progressM - stepAlong[passed] <= thresholds.maneuverM) {
-            if (!(passed == nextIndex && approachAnnounced)) events += NavigationEvent.TurnApproaching(turn)
-            events += NavigationEvent.TurnNow(turn)
+        if (turn.maneuver.isTurn && !announced && progressM - stepAlong[passed] <= thresholds.maneuverM) {
+            if (!(passed == nextIndex && approachAnnounced)) events += NavigationEvent.TurnApproaching(turn.maneuver)
+            events += NavigationEvent.TurnNow(turn.maneuver, turn.roundaboutExit)
         }
         nextIndex = index
         aheadAnnounced = false
@@ -183,7 +183,7 @@ class NavigationEngine(
                 if (!approachAnnounced) events += NavigationEvent.TurnApproaching(step.maneuver)
                 maneuverAnnounced = true
                 approachAnnounced = true
-                events += NavigationEvent.TurnNow(step.maneuver)
+                events += NavigationEvent.TurnNow(step.maneuver, step.roundaboutExit)
             }
             return NavigationStatus.MANEUVER
         }
