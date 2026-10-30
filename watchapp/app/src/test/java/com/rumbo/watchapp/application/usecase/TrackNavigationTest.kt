@@ -162,6 +162,80 @@ class TrackNavigationTest {
         assertEquals(TrackingState(), tracking.state.value)
     }
 
+    // Camina hacia el norte, una lectura por segundo, para que el filtro calcule el rumbo.
+    private suspend fun walkNorth(fixes: MutableSharedFlow<LocationFix>, clock: (Long) -> Unit, vararg northM: Double) {
+        northM.forEachIndexed { i, north ->
+            val now = (i + 1) * 1_000L
+            clock(now)
+            fixes.emit(fixAt(0.0, north, now))
+            delay(5)
+        }
+    }
+
+    @Test
+    fun theMapReadsTheRoutePositionHeadingAndProgress() = runBlocking {
+        val fixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 16)
+        var now = 0L
+        val tracking = TrackNavigation(fixes, FakeRoutes(detour), FakeVibration(), FakeVibrationEvents(), FakeSpeech(), clock = { now })
+        val route = lRoute()
+
+        tracking.start(route, this)
+        try {
+            assertEquals(route, tracking.state.value.route)
+            assertNull(tracking.state.value.position)
+            assertNull(tracking.state.value.headingDeg)
+
+            delay(20)
+            walkNorth(fixes, { now = it }, 0.0, 3.0, 6.0, 9.0, 12.0)
+
+            val state = tracking.state.value
+            assertEquals(0.0, state.headingDeg!!, 0.5)
+            assertTrue("Avanzó: ${state.progressM}", state.progressM > 0)
+            assertEquals(state.progressM, haversineM(at(0.0, 0.0), state.position!!), 1.0)
+        } finally {
+            tracking.stop()
+        }
+    }
+
+    @Test
+    fun aStillPersonKeepsTheLastHeading() = runBlocking {
+        val fixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 16)
+        var now = 0L
+        val tracking = TrackNavigation(fixes, FakeRoutes(detour), FakeVibration(), FakeVibrationEvents(), FakeSpeech(), clock = { now })
+
+        tracking.start(lRoute(), this)
+        try {
+            delay(20)
+            // Al final se queda en 12 m: quieta, el filtro ya no da rumbo.
+            walkNorth(fixes, { now = it }, 0.0, 3.0, 6.0, 9.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0)
+
+            assertEquals(0.0, tracking.state.value.headingDeg!!, 0.5)
+        } finally {
+            tracking.stop()
+        }
+    }
+
+    @Test
+    fun aNewRouteForgetsThePositionOfTheLastOne() = runBlocking {
+        val fixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 16)
+        var now = 0L
+        val tracking = TrackNavigation(fixes, FakeRoutes(detour), FakeVibration(), FakeVibrationEvents(), FakeSpeech(), clock = { now })
+
+        tracking.start(lRoute(), this)
+        delay(20)
+        walkNorth(fixes, { now = it }, 0.0, 3.0, 6.0)
+        assertTrue(tracking.state.value.position != null)
+        tracking.stop()
+
+        tracking.start(lRoute(), this)
+        try {
+            assertNull(tracking.state.value.position)
+            assertNull(tracking.state.value.headingDeg)
+        } finally {
+            tracking.stop()
+        }
+    }
+
     @Test
     fun watchWithoutAmplitudeControlVibratesTheRhythmOnlyVersion() = runBlocking {
         val vibration = FakeVibration(supportsAmplitude = false)

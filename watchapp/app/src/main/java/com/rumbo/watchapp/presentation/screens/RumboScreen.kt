@@ -56,18 +56,21 @@ private fun screenPadding(ring: Dp): PaddingValues {
  * Contenedor de todas las pantallas: centra el contenido si cabe y, si no, se desplaza con el
  * dedo o la corona; la hora se esconde al desplazar. [paneTitle] es lo que anuncia TalkBack al
  * cambiar de pantalla. Con [edgeRing] dibuja el anillo en el borde y aleja el contenido de él.
+ * [background] va detrás de todo, a pantalla completa.
  */
 @Composable
 fun RumboScreen(
     paneTitle: String,
     modifier: Modifier = Modifier,
     edgeRing: (@Composable () -> Unit)? = null,
+    background: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val scrollState = rememberScrollState()
     val ring = if (edgeRing != null) RingInset else 0.dp
     val padding = screenPadding(ring)
     val body: @Composable BoxScope.(PaddingValues) -> Unit = { contentPadding ->
+        background?.invoke()
         edgeRing?.invoke()
         RoundColumn(
             scrollState = scrollState,

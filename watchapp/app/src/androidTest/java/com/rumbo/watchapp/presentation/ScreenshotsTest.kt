@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.wear.compose.material3.AppScaffold
 import com.rumbo.watchapp.application.usecase.TrackingState
+import com.rumbo.watchapp.domain.map.MapZoom
 import com.rumbo.watchapp.domain.model.Coordinates
 import com.rumbo.watchapp.domain.model.Maneuver
 import com.rumbo.watchapp.domain.model.Route
@@ -55,6 +56,7 @@ import com.rumbo.watchapp.presentation.screens.ListeningScreen
 import com.rumbo.watchapp.presentation.screens.NavigationScreen
 import com.rumbo.watchapp.presentation.screens.PermissionScreen
 import com.rumbo.watchapp.presentation.screens.ProcessingScreen
+import com.rumbo.watchapp.presentation.screens.RouteMapScreen
 import com.rumbo.watchapp.presentation.screens.SavedPlacesScreen
 import com.rumbo.watchapp.presentation.screens.StartScreen
 import com.rumbo.watchapp.presentation.screens.VibrationsScreen
@@ -81,6 +83,35 @@ private val ROUTE = Route(
     durationS = 1433.0,
     steps = listOf(RouteStep(1, Maneuver.ARRIVE, "Su destino está a la derecha.", 0.0, 1.206129, -77.27007)),
     polyline = listOf(Coordinates(1.214997, -77.278419), Coordinates(1.206129, -77.27007)),
+)
+
+// Una ruta con cuatro giros para el mapa, en metros al este y al norte de la Plaza de Nariño.
+private fun metersFromPlaza(east: Double, north: Double) =
+    Coordinates(1.214997 + north / 111_195, -77.278419 + east / 111_195)
+
+private fun mapStep(order: Int, maneuver: Maneuver, east: Double, north: Double) = metersFromPlaza(east, north).let {
+    RouteStep(order, maneuver, "Gire.", 100.0, it.lat, it.lng)
+}
+
+private val MAP_ROUTE = Route(
+    destinationName = "Parque Bolívar",
+    distanceM = 522.0,
+    durationS = 418.0,
+    steps = listOf(
+        mapStep(1, Maneuver.RIGHT, 0.0, 120.0),
+        mapStep(2, Maneuver.LEFT, 90.0, 130.0),
+        mapStep(3, Maneuver.RIGHT, 100.0, 240.0),
+        mapStep(4, Maneuver.LEFT, 220.0, 250.0),
+        mapStep(5, Maneuver.ARRIVE, 230.0, 330.0),
+    ),
+    polyline = listOf(
+        metersFromPlaza(0.0, 0.0),
+        metersFromPlaza(0.0, 120.0),
+        metersFromPlaza(90.0, 130.0),
+        metersFromPlaza(100.0, 240.0),
+        metersFromPlaza(220.0, 250.0),
+        metersFromPlaza(230.0, 330.0),
+    ),
 )
 
 private val PLACES = listOf(
@@ -110,6 +141,16 @@ private fun tracking(
     pattern = pattern,
     recalculating = recalculating,
 )
+
+private fun onTheMap(status: NavigationStatus, east: Double, north: Double, heading: Double, progress: Double) =
+    tracking(status, instruction = "Gire a la izquierda.", toNext = 45.0).copy(
+        route = MAP_ROUTE,
+        position = metersFromPlaza(east, north),
+        headingDeg = heading,
+        progressM = progress,
+    )
+
+private val WALKING = onTheMap(NavigationStatus.ON_ROUTE, 45.0, 125.0, heading = 84.0, progress = 165.0)
 
 @Composable
 private fun Navigation(state: TrackingState, confirmFinish: Boolean = false) =
@@ -243,6 +284,15 @@ class ScreenshotsTest {
                     pattern = pattern(VibrationCue.ATTENTION),
                 ),
             )
+        },
+        Shot("33_mapa_en_ruta") { RouteMapScreen(WALKING, onBack = {}) },
+        Shot("34_mapa_desviado") {
+            RouteMapScreen(onTheMap(NavigationStatus.OFF_ROUTE, 60.0, 170.0, heading = 20.0, progress = 215.0), onBack = {})
+        },
+        Shot("35_mapa_sin_senal") { RouteMapScreen(WALKING.copy(status = NavigationStatus.NO_SIGNAL), onBack = {}) },
+        Shot("36_mapa_toda_la_ruta") { RouteMapScreen(WALKING, onBack = {}, initialZoom = MapZoom.WHOLE_ROUTE) },
+        Shot("37_mapa_llegada") {
+            RouteMapScreen(onTheMap(NavigationStatus.ARRIVED, 230.0, 330.0, heading = 7.0, progress = 522.0), onBack = {})
         },
     )
 

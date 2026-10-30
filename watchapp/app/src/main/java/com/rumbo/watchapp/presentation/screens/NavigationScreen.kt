@@ -57,9 +57,9 @@ private const val VERY_LONG_INSTRUCTION = 30
 private const val MAX_INSTRUCTION_LINES = 3
 
 /** Cómo se ve cada estado: nombre, color, ícono y la frase principal. Nunca solo el color. */
-private data class StatusLook(val label: String, val color: Color, val icon: StateIconKind, val headline: String)
+internal data class StatusLook(val label: String, val color: Color, val icon: StateIconKind, val headline: String)
 
-private fun lookOf(state: TrackingState): StatusLook {
+internal fun lookOf(state: TrackingState): StatusLook {
     val instruction = state.nextInstruction ?: "Sigue la ruta"
     val maneuver = maneuverIcon(state.nextManeuver)
     // Un paso desconocido no es un giro: no se anuncia como tal, también en lo que lee TalkBack.
@@ -90,7 +90,7 @@ private fun maneuverIcon(maneuver: Maneuver?) = when (maneuver) {
 }
 
 /**
- * Pantalla "En ruta" sin mapa. Arriba lo que hay que hacer (estado, ícono de la maniobra e
+ * Pantalla "En ruta"; el mapa va aparte, tras "Ver mapa". Arriba lo que hay que hacer (estado, ícono de la maniobra e
  * indicación); debajo las distancias, la vibración y los botones. El anillo del borde muestra el
  * avance hacia el siguiente giro. Un doble toque en cualquier parte repite la indicación.
  */
@@ -102,18 +102,25 @@ fun NavigationScreen(
     onFinish: () -> Unit,
     onKeepNavigating: () -> Unit,
     onAsk: () -> Unit = {},
+    onMap: () -> Unit = {},
 ) {
     ScreenOnWhileNavigating(wakeKey = state.status to confirmFinish) {
         if (confirmFinish) {
             FinishRouteScreen(onFinish = onFinish, onKeepNavigating = onKeepNavigating)
         } else {
-            RouteScreen(state, onRepeat = onRepeat, onAsk = onAsk, onFinish = onFinish)
+            RouteScreen(state, onRepeat = onRepeat, onAsk = onAsk, onMap = onMap, onFinish = onFinish)
         }
     }
 }
 
 @Composable
-private fun RouteScreen(state: TrackingState, onRepeat: () -> Unit, onAsk: () -> Unit, onFinish: () -> Unit) {
+private fun RouteScreen(
+    state: TrackingState,
+    onRepeat: () -> Unit,
+    onAsk: () -> Unit,
+    onMap: () -> Unit,
+    onFinish: () -> Unit,
+) {
     val look = lookOf(state)
     val arrived = state.status == NavigationStatus.ARRIVED
     val scope = rememberCoroutineScope()
@@ -189,6 +196,7 @@ private fun RouteScreen(state: TrackingState, onRepeat: () -> Unit, onAsk: () ->
             style = PillStyle.ASSISTANT,
             secondaryLabel = "Asistente",
         )
+        PillButton("Ver mapa", onClick = { gate.click(onMap) })
         PillButton("Terminar", onClick = { gate.click(onFinish) })
     }
 }

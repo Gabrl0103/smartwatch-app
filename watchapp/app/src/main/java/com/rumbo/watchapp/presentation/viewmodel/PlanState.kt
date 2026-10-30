@@ -26,6 +26,7 @@ data class DemoStep(val cue: VibrationCue, val number: Int, val total: Int)
  * En [PermissionNeeded], [PermissionNeeded.route] es la ruta que espera el permiso de notificaciones.
  * En [Vibrations], [Vibrations.demo] es el paso de la secuencia de demostración que suena (o null).
  * [Answering] espera la respuesta del asistente y [Assistant] la muestra junto a la pregunta.
+ * [RouteMap] es el mapa de la ruta en curso, que se abre desde [OnRoute] y sigue leyendo su estado.
  */
 sealed interface PlanState {
     data object Start : PlanState
@@ -39,6 +40,7 @@ sealed interface PlanState {
     data class ConfirmDelete(val place: SavedPlace, val places: List<SavedPlace>) : PlanState
     data class Confirming(val route: Route, val save: SaveStatus = SaveStatus.IDLE) : PlanState
     data class OnRoute(val route: Route, val confirmFinish: Boolean = false) : PlanState
+    data object RouteMap : PlanState
     data class Error(val message: String, val retry: RetryAction = RetryAction.LISTEN) : PlanState
     data class PermissionNeeded(val permission: Permission, val route: Route? = null) : PlanState
 }

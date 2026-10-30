@@ -13,8 +13,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.wear.compose.material3.AppScaffold
 import com.rumbo.watchapp.application.usecase.TrackingState
+import com.rumbo.watchapp.application.usecase.mapUpdates
 import com.rumbo.watchapp.domain.model.SavedPlace
 import com.rumbo.watchapp.domain.port.SpeechStatus
 import com.rumbo.watchapp.domain.vibration.VibrationCue
@@ -29,6 +31,7 @@ import com.rumbo.watchapp.presentation.screens.ListeningScreen
 import com.rumbo.watchapp.presentation.screens.NavigationScreen
 import com.rumbo.watchapp.presentation.screens.PermissionScreen
 import com.rumbo.watchapp.presentation.screens.ProcessingScreen
+import com.rumbo.watchapp.presentation.screens.RouteMapScreen
 import com.rumbo.watchapp.presentation.screens.SavedPlacesScreen
 import com.rumbo.watchapp.presentation.screens.StartScreen
 import com.rumbo.watchapp.presentation.screens.VibrationsScreen
@@ -225,7 +228,14 @@ private fun Screen(
             onFinish = viewModel::finish,
             onKeepNavigating = viewModel::keepNavigating,
             onAsk = onSpeak,
+            onMap = viewModel::openMap,
         )
+        // Solo se recoge aquí: al salir del mapa (o con la app detrás) deja de redibujar.
+        PlanState.RouteMap -> {
+            val updates = remember(viewModel) { viewModel.navigationState.mapUpdates() }
+            val map by updates.collectAsStateWithLifecycle(navigation)
+            RouteMapScreen(state = map, onBack = viewModel::closeMap)
+        }
         is PlanState.Error -> ErrorScreen(
             message = state.message,
             onRetry = when (state.retry) {

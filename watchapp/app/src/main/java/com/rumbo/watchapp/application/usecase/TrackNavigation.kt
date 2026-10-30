@@ -43,7 +43,11 @@ import kotlinx.coroutines.launch
 
 private const val TAG = "Nav"
 
-/** Lo que muestra la pantalla "En ruta". */
+/**
+ * Lo que muestran las pantallas "En ruta" y "Mapa". [route] es la ruta en uso (cambia al
+ * recalcular), [position] la última lectura suavizada, [headingDeg] el último rumbo conocido y
+ * [progressM] lo avanzado desde el inicio de [route].
+ */
 data class TrackingState(
     val status: NavigationStatus = NavigationStatus.ON_ROUTE,
     val destinationName: String = "",
@@ -55,6 +59,10 @@ data class TrackingState(
     val pattern: VibrationPattern? = null,
     val recalculating: Boolean = false,
     val destinationSaved: Boolean = false,
+    val route: Route? = null,
+    val position: Coordinates? = null,
+    val headingDeg: Double? = null,
+    val progressM: Double = 0.0,
 ) {
     /**
      * Avance hacia el siguiente paso, de 0 (recién pasado el anterior) a 1 (encima del giro): la
@@ -108,6 +116,7 @@ class TrackNavigation(
     private var route: Route? = null
     private var engine: NavigationEngine? = null
     private var lastPosition: Coordinates? = null
+    private var lastHeadingDeg: Double? = null
     private var lastVibrationMs = 0L
     private var lastCues: List<VibrationCue> = emptyList()
     private var lastPrepared: String? = null
@@ -124,6 +133,8 @@ class TrackNavigation(
         lastRecalculationMs = null
         lastStatus = null
         lastPrepared = null
+        lastPosition = null
+        lastHeadingDeg = null
         val now = clock()
         logger.info(TAG, "Navegación iniciada hacia «${route.destinationName}»: ${describe(route)}")
         useRoute(route, now)
@@ -137,6 +148,7 @@ class TrackNavigation(
                     val now = clock()
                     val fix = filter.accept(raw, now) ?: return@collect
                     lastPosition = Coordinates(fix.lat, fix.lng)
+                    fix.bearingDeg?.let { lastHeadingDeg = it }
                     val current = engine ?: return@collect
                     handle(current.onLocation(fix, now), now)
                     if (current.snapshot.isBackOnRoute()) recalculations = 0
@@ -323,6 +335,10 @@ class TrackNavigation(
             remainingM = snapshot.remainingM,
             recalculating = recalculating,
             destinationSaved = route?.destinationSaved == true,
+            route = route,
+            position = lastPosition,
+            headingDeg = lastHeadingDeg,
+            progressM = snapshot.progressM,
         )
     }
 

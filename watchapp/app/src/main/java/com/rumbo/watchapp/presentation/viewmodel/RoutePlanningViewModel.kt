@@ -459,6 +459,16 @@ class RoutePlanningViewModel(
         if (_state.value is PlanState.OnRoute) repeatNavigation()
     }
 
+    /** "Ver mapa" en ruta: solo cambia la pantalla; la guía sigue igual. */
+    fun openMap() {
+        if (_state.value is PlanState.OnRoute) _state.value = PlanState.RouteMap
+    }
+
+    /** "Atrás" en el mapa. No pasa por [reset]: ese calla la voz, y la guía tiene que seguir. */
+    fun closeMap() {
+        if (_state.value == PlanState.RouteMap) returnToOrigin()
+    }
+
     /** "Terminar": apaga GPS, vibraciones, voz, servicio y notificación, olvida la ruta y vuelve a Inicio. */
     fun finish() {
         navigationRunner.stop()
@@ -474,12 +484,13 @@ class RoutePlanningViewModel(
 
     /**
      * Gesto de volver. En ruta primero pregunta si terminar (salvo que ya se haya llegado); en
-     * Borrar vuelve a la lista; en la demostración de vibraciones la detiene; en el resto, a
-     * Inicio. En Inicio no hace nada: ahí sale de la app.
+     * el mapa vuelve a En ruta; en Borrar vuelve a la lista; en la demostración de vibraciones la
+     * detiene; en el resto, a Inicio. En Inicio no hace nada: ahí sale de la app.
      */
     fun back() {
         when (val current = _state.value) {
             PlanState.Start -> Unit
+            PlanState.RouteMap -> closeMap()
             is PlanState.ConfirmDelete -> cancelDelete()
             is PlanState.Vibrations -> if (current.demo != null) stopVibrationDemo() else reset()
             is PlanState.OnRoute -> when {
@@ -559,6 +570,6 @@ class RoutePlanningViewModel(
     override fun onCleared() {
         recorder.release()
         // Si se está navegando, el servicio sigue dueño del GPS; si no, se apaga.
-        if (_state.value !is PlanState.OnRoute) locationTracker.stop()
+        if (!navigating) locationTracker.stop()
     }
 }

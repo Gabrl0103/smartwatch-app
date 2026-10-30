@@ -209,7 +209,11 @@ class RoutePlanningViewModelTest {
             spoken += text
         }
 
-        override fun stop() = Unit
+        var stops = 0
+
+        override fun stop() {
+            stops++
+        }
 
         var paused = false
 
@@ -364,6 +368,52 @@ class RoutePlanningViewModelTest {
 
         assertEquals(PlanState.Start, viewModel.state.value)
         assertFalse(runner.running)
+    }
+
+    @Test
+    fun theMapOpensFromTheRouteAndComesBackWithoutTouchingTheGuidance() {
+        startRoute()
+        val stops = speech.stops
+
+        viewModel.openMap()
+        assertEquals(PlanState.RouteMap, viewModel.state.value)
+
+        viewModel.closeMap()
+        assertEquals(PlanState.OnRoute(savedRoute), viewModel.state.value)
+        assertTrue(runner.running)
+        assertEquals(stops, speech.stops)
+    }
+
+    @Test
+    fun backOnTheMapReturnsToTheRouteWithoutAskingToFinish() {
+        startRoute()
+        val stops = speech.stops
+        viewModel.openMap()
+
+        viewModel.back()
+
+        assertEquals(PlanState.OnRoute(savedRoute), viewModel.state.value)
+        assertTrue(runner.running)
+        assertEquals(stops, speech.stops)
+    }
+
+    @Test
+    fun theMapOnlyOpensOnARoute() {
+        viewModel.openMap()
+
+        assertEquals(PlanState.Start, viewModel.state.value)
+    }
+
+    @Test
+    fun arrivingWithTheMapOpenStaysThereUntilGoingBack() {
+        startRoute()
+        viewModel.openMap()
+        navigation.value = TrackingState(status = NavigationStatus.ARRIVED)
+
+        viewModel.back()
+
+        assertEquals(PlanState.OnRoute(savedRoute), viewModel.state.value)
+        assertTrue(runner.running)
     }
 
     private fun levels(durationMs: Long, level: Float) = List((durationMs / LEVEL_SAMPLE_MS).toInt()) { level }
