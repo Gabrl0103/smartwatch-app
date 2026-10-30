@@ -344,24 +344,56 @@ class SpeechOutputImplTest {
     }
 
     @Test
-    fun quotaExhaustedPausesGeminiForThirtyMinutes() = speechTest {
-        remote.error = QuotaExhaustedError("Se agotó la cuota gratuita de voz de Gemini.")
+    fun theLimitPerMinutePausesGeminiOnlyAsLongAsTheBackendSays() = speechTest {
+        remote.error = QuotaExhaustedError("Límite por minuto.", retryAfterMs = 27_000)
 
         speech.speak("Uno", SpeechPriority.NORMAL)
         settle()
         assertEquals(SpeechEngine.NONE, speech.status.value.engine)
 
         remote.error = null
-        now = 29 * 60 * 1000L
+        now = 26_999
         speech.speak("Dos", SpeechPriority.NORMAL)
         settle()
         assertEquals(listOf("Uno"), remote.started)
 
-        now = QUOTA_PAUSE_MS + 1
+        now = 27_000
         speech.speak("Tres", SpeechPriority.NORMAL)
         settle()
         assertEquals(listOf("Uno", "Tres"), remote.started)
         assertEquals(SpeechEngine.GEMINI, speech.status.value.engine)
+    }
+
+    @Test
+    fun theDailyQuotaPausesAsLongAsTheBackendSaysToo() = speechTest {
+        remote.error = QuotaExhaustedError("Cuota del día.", retryAfterMs = 30 * 60_000L)
+
+        speech.speak("Uno", SpeechPriority.NORMAL)
+        settle()
+        remote.error = null
+        now = 29 * 60_000L
+        speech.speak("Dos", SpeechPriority.NORMAL)
+        settle()
+
+        assertEquals(listOf("Uno"), remote.started)
+    }
+
+    @Test
+    fun withoutAWaitFromTheBackendItTriesAgainInAMinute() = speechTest {
+        remote.error = QuotaExhaustedError("Render aún sin redesplegar.")
+
+        speech.speak("Uno", SpeechPriority.NORMAL)
+        settle()
+        remote.error = null
+        now = DEFAULT_QUOTA_PAUSE_MS - 1
+        speech.speak("Dos", SpeechPriority.NORMAL)
+        settle()
+        assertEquals(listOf("Uno"), remote.started)
+
+        now = DEFAULT_QUOTA_PAUSE_MS
+        speech.speak("Tres", SpeechPriority.NORMAL)
+        settle()
+        assertEquals(listOf("Uno", "Tres"), remote.started)
     }
 
     @Test
@@ -426,19 +458,48 @@ class SpeechOutputImplTest {
     }
 
     @Test
-    fun exhaustedQuotaWhilePreparingAlsoPausesGemini() = speechTest {
-        remote.error = QuotaExhaustedError("Se agotó la cuota gratuita de voz de Gemini.")
+    fun aRejectedPreparationNeverSilencesWhatHasToBeSaid() = speechTest {
+        remote.error = QuotaExhaustedError("Límite por minuto.", retryAfterMs = 27_000)
 
         speech.prepare("Uno")
         settle()
-        assertEquals(SpeechEngine.NONE, speech.status.value.engine)
+        assertEquals(SpeechEngine.GEMINI, speech.status.value.engine)
 
         remote.error = null
+        speech.speak("Gira ahora a la derecha.", SpeechPriority.HIGH)
+        settle()
+        assertEquals(listOf("Gira ahora a la derecha."), remote.started)
+    }
+
+    @Test
+    fun aRejectedPreparationHoldsTheNextPreparationsForTheWait() = speechTest {
+        remote.error = QuotaExhaustedError("Límite por minuto.", retryAfterMs = 27_000)
+        speech.prepare("Uno")
+        settle()
+        remote.error = null
+
+        now = 26_999
         speech.prepare("Dos")
-        speech.speak("Tres", SpeechPriority.HIGH)
         settle()
         assertEquals(listOf("Uno"), remote.prepared)
-        assertEquals(emptyList<String>(), remote.started)
+
+        now = 27_000
+        speech.prepare("Tres")
+        settle()
+        assertEquals(listOf("Uno", "Tres"), remote.prepared)
+    }
+
+    @Test
+    fun nothingIsPreparedWhileGeminiIsPaused() = speechTest {
+        remote.error = QuotaExhaustedError("Límite por minuto.", retryAfterMs = 27_000)
+        speech.speak("Uno", SpeechPriority.NORMAL)
+        settle()
+        remote.error = null
+
+        speech.prepare("Dos")
+        settle()
+
+        assertEquals(emptyList<String>(), remote.prepared)
     }
 
     @Test

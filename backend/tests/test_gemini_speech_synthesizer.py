@@ -8,6 +8,7 @@ import pytest
 
 from domain.errors import ExternalServiceError, QuotaExhaustedError
 from infrastructure.speech.gemini_speech_synthesizer import (
+    DAILY_QUOTA_RETRY_S,
     VOICE_NAME,
     GeminiSpeechSynthesizer,
     pcm_to_wav,
@@ -75,11 +76,80 @@ def test_returns_wav_unchanged_when_gemini_already_sends_wav():
     assert synthesizer.synthesize("Hola") == wav
 
 
-def test_quota_exceeded_raises_clear_error():
-    synthesizer = make_synthesizer(lambda r: httpx.Response(429, json={}))
+def rate_limit_reply(quota_id, retry_delay="27s"):
+    """Forma real del 429 de Gemini TTS, copiada de una respuesta del 2026-10-30."""
+    return {
+        "error": {
+            "code": 429,
+            "message": "You exceeded your current quota, please check your plan and billing details.",
+            "status": "RESOURCE_EXHAUSTED",
+            "details": [
+                {"@type": "type.googleapis.com/google.rpc.Help", "links": []},
+                {
+                    "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                    "violations": [
+                        {
+                            "quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_requests",
+                            "quotaId": quota_id,
+                            "quotaDimensions": {"model": "gemini-3.8-flash-tts", "location": "global"},
+                            "quotaValue": "3",
+                        }
+                    ],
+                },
+                {"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": retry_delay},
+            ],
+        }
+    }
 
-    with pytest.raises(QuotaExhaustedError, match="cuota"):
+
+def quota_error_of(reply):
+    synthesizer = make_synthesizer(lambda r: httpx.Response(429, json=reply))
+    with pytest.raises(QuotaExhaustedError) as error:
         synthesizer.synthesize("Hola")
+    return error.value
+
+
+def test_the_limit_per_minute_says_how_long_to_wait():
+    error = quota_error_of(rate_limit_reply("GenerateRequestsPerMinutePerProjectPerModel-FreeTier"))
+
+    assert error.retry_after_s == 27
+    assert "por minuto" in error.message
+
+
+def test_a_fractional_delay_rounds_up():
+    reply = rate_limit_reply("GenerateRequestsPerMinutePerProjectPerModel-FreeTier", "26.28s")
+
+    assert quota_error_of(reply).retry_after_s == 27
+
+
+def test_the_daily_quota_waits_until_gemini_says_it_renews():
+    error = quota_error_of(rate_limit_reply("GenerateRequestsPerDayPerProjectPerModel-FreeTier", "43157s"))
+
+    assert error.retry_after_s == 43157
+    assert "cuota" in error.message
+
+
+def test_the_daily_quota_without_a_delay_waits_half_an_hour():
+    reply = rate_limit_reply("GenerateRequestsPerDayPerProjectPerModel-FreeTier")
+    reply["error"]["details"].pop()
+
+    assert quota_error_of(reply).retry_after_s == DAILY_QUOTA_RETRY_S
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [{}, {"error": {}}, {"error": {"details": "nada"}}, {"error": {"details": ["nada", {"retryDelay": "mucho"}]}}],
+)
+def test_a_429_without_details_does_not_invent_a_wait(reply):
+    assert quota_error_of(reply).retry_after_s is None
+
+
+def test_a_429_that_is_not_json_is_still_a_quota_error():
+    synthesizer = make_synthesizer(lambda r: httpx.Response(429, text="Too Many Requests"))
+
+    with pytest.raises(QuotaExhaustedError) as error:
+        synthesizer.synthesize("Hola")
+    assert error.value.retry_after_s is None
 
 
 def test_other_http_error_raises_external_service_error():

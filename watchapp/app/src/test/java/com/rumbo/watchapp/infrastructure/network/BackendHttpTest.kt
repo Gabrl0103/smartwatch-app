@@ -19,6 +19,31 @@ import org.junit.Test
 /** Mensajes distintos para "sin internet" y "servidor dormido", con un solo reintento automático. */
 class BackendHttpTest {
 
+    private fun error(json: String) = HttpResponse(429, json.toByteArray())
+
+    @Test
+    fun a429SaysHowLongToWaitWhenTheBackendKnows() {
+        val quota = quotaError(error("""{"error": {"code": "QUOTA_EXHAUSTED", "message": "Espera.", "retry_after_s": 27}}"""))
+
+        assertEquals(27_000L, quota.retryAfterMs)
+        assertEquals("Espera.", quota.message)
+    }
+
+    @Test
+    fun a429FromAnOlderBackendHasNoWait() {
+        val quota = quotaError(error("""{"error": {"code": "QUOTA_EXHAUSTED", "message": "Sin cuota."}}"""))
+
+        assertNull(quota.retryAfterMs)
+    }
+
+    @Test
+    fun a429WithoutOurErrorFormatStillIsAQuotaError() {
+        val quota = quotaError(error("Too Many Requests"))
+
+        assertNull(quota.retryAfterMs)
+        assertEquals("Se agotó la cuota de voz de Gemini", quota.message)
+    }
+
     @Test
     fun withoutDnsOrConnectionItIsNoConnection() {
         assertEquals(NO_CONNECTION_MESSAGE, networkError(UnknownHostException("smartwatch-app.onrender.com"), false).message)

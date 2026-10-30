@@ -60,7 +60,7 @@ class AppContainer(context: Context) {
     // La voz del reloj arranca aquí, al iniciar la app, para estar lista en la primera frase.
     val speech: SpeechOutput = SpeechOutputImpl(
         local = AndroidTextToSpeech(appContext),
-        remote = GeminiSpeechPlayer(appContext),
+        remote = GeminiSpeechPlayer(appContext, appScope, clock),
         isEnabled = voiceSettings::isEnabled,
         scope = appScope,
         clock = clock,

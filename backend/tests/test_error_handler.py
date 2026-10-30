@@ -21,6 +21,10 @@ def _client():
     def quota():
         raise QuotaExhaustedError("Sin cuota.")
 
+    @app.get("/quota-wait")
+    def quota_wait():
+        raise QuotaExhaustedError("Espera.", retry_after_s=27)
+
     @app.get("/external")
     def external():
         raise ExternalServiceError("Falló.")
@@ -47,6 +51,19 @@ def test_quota_exhausted_maps_to_429_before_its_parent():
     assert r.status_code == 429
     assert r.json()["error"]["code"] == "QUOTA_EXHAUSTED"
     assert _client().get("/external").status_code == 502
+
+
+def test_quota_error_says_how_long_to_wait_when_it_knows():
+    r = _client().get("/quota-wait")
+    assert r.status_code == 429
+    assert r.headers["retry-after"] == "27"
+    assert r.json()["error"] == {"code": "QUOTA_EXHAUSTED", "message": "Espera.", "retry_after_s": 27}
+
+
+def test_quota_error_without_a_wait_does_not_invent_one():
+    r = _client().get("/quota")
+    assert "retry-after" not in r.headers
+    assert "retry_after_s" not in r.json()["error"]
 
 
 def test_unexpected_error_maps_to_500_without_leaking_details():

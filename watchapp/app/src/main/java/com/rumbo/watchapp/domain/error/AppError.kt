@@ -8,8 +8,11 @@ const val TOO_FAR_MESSAGE = "Estás muy lejos del destino"
 /** Error con un mensaje en español listo para mostrar (y leer) al usuario. */
 open class AppError(message: String) : Exception(message)
 
-/** El backend avisó que se agotó la cuota de un servicio gratuito (HTTP 429, QUOTA_EXHAUSTED). */
-class QuotaExhaustedError(message: String) : AppError(message)
+/**
+ * El backend rechazó la petición por el límite de un servicio gratuito (HTTP 429, QUOTA_EXHAUSTED).
+ * [retryAfterMs] es cuánto esperar para volver a pedir, si el backend lo dice.
+ */
+class QuotaExhaustedError(message: String, val retryAfterMs: Long? = null) : AppError(message)
 
 /** El reloj no tiene internet: no se pudo resolver ni conectar con el servidor. */
 class NoConnectionError : AppError(NO_CONNECTION_MESSAGE)

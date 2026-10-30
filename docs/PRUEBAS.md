@@ -44,8 +44,10 @@ recorridos realistas (una lectura por segundo con ruido de GPS de σ ≈ 3 m, ve
   `adb emu geo fix -77.278419 1.214997` (primero la longitud).
 - Log en una terminal aparte: `adb logcat -s Nav Vibracion Red`.
 - El emulador no vibra: cada vibración se ve en Logcat (`Vibracion`) y en el indicador de "En ruta".
-- El emulador no trae voz propia: habla Gemini por el backend; si responde 429 se agotó la cuota
-  gratuita y la app sigue sin voz (solo vibraciones). En un reloj con TextToSpeech habla el reloj.
+- El emulador no trae voz propia: habla Gemini por el backend, que en el plan gratis da 3 frases
+  nuevas por minuto y 10 por día. Pasado el límite la app sigue sin voz, solo con vibraciones, hasta
+  que se libere (segundos el de minuto; el diario, hasta que se renueve), así que conviene no gastar
+  esas 10 antes de una demo. En un reloj con TextToSpeech habla el reloj y nada de esto aplica.
 - Para volver a ver los diálogos de permisos:
   `adb shell pm revoke com.rumbo.watchapp android.permission.RECORD_AUDIO` (o
   `ACCESS_FINE_LOCATION`, `POST_NOTIFICATIONS`) y
@@ -111,7 +113,7 @@ Requieren Render redesplegado con las intenciones nuevas. Cada orden termina con
 | R10 | Doble toque | En ruta, dos toques rápidos en cualquier parte (con `adb`: `adb shell 'input tap 227 300 & sleep 0.12; input tap 227 300; wait'`) | Una sola vez `Nav: Repetir indicación`. Un toque suelto no repite |
 | R11 | Doble toque sobre "Terminar" | Bajar hasta "Terminar" y dar dos toques rápidos encima | Repite y la ruta sigue, sin `Nav: Navegación terminada` |
 | R12 | Destino | Dejar correr el GPX hasta el final | Antes de llegar, una vez, "Tu destino está en ochenta metros, a la derecha." (el último tramo mide 83 m; en uno más largo, a cien metros) y al llegar "Llegaste a tu destino." |
-| R13 | Precarga | Con voz Gemini, mirar `adb logcat -s Red` al tocar "Ir" | Dos `POST /speech` seguidos: la frase de inicio y la de la siguiente etapa. Al sonar la siguiente etapa no hay otro `POST /speech` con esa frase |
+| R13 | Precarga | Con voz Gemini y frases sin caché, mirar `adb logcat -s Red` al tocar "Ir" | Dos `POST /speech` seguidos: la frase de inicio y la de la siguiente etapa. Al sonar la siguiente etapa no hay otro `POST /speech` con esa frase, ni más de 2 precargas por minuto. Si llega un 429, la voz vuelve sola tras la espera (`Red` lo muestra), no 30 minutos después |
 | R14 | TalkBack en ruta (solo reloj real) | Con TalkBack, tocar la indicación para enfocarla y dar doble toque en cualquier parte | Anuncia "repetir la indicación" y repite. Con el foco en un botón, activa ese botón |
 | R15 | Paso desconocido | Pedir una ruta con escaleras con `GEOAPIFY_ROUTE_TYPE=short` en el backend (p. ej. en Barcelona, de 41.4145, 2.1527 a 41.4120, 2.1500) y caminarla o simularla | Antes del paso: "Atención: en cincuenta metros, tome las escaleras.", pantalla "Atención" con el ícono de advertencia y 4 pulsos cortos; a 12 m, "Atención: ahora, tome las escaleras." y otra vez 4 pulsos. Ninguna escalera de la ruta queda sin avisar |
 

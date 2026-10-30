@@ -196,6 +196,11 @@ internal fun HttpResponse.errorField(key: String): String? = runCatching {
     JSONObject(body).getJSONObject("error").getString(key)
 }.getOrNull()?.ifBlank { null }
 
+/** Como [errorField], para un campo numérico del error. */
+internal fun HttpResponse.errorNumber(key: String): Long? = runCatching {
+    JSONObject(body).getJSONObject("error").getLong(key)
+}.getOrNull()
+
 /** Devuelve el cuerpo si la respuesta es 2xx; si no, lanza el mensaje de error del backend. */
 internal fun HttpResponse.requireOk(): String {
     if (code in 200..299) return body

@@ -4,6 +4,7 @@ import com.rumbo.watchapp.application.speech.ARRIVED_PHRASE
 import com.rumbo.watchapp.application.speech.SIGNAL_LOST_PHRASE
 import com.rumbo.watchapp.application.speech.SIGNAL_RECOVERED_PHRASE
 import com.rumbo.watchapp.domain.error.NoConnectionError
+import com.rumbo.watchapp.domain.error.QuotaExhaustedError
 import com.rumbo.watchapp.domain.model.Coordinates
 import com.rumbo.watchapp.domain.model.LocationFix
 import com.rumbo.watchapp.domain.model.Maneuver
@@ -19,15 +20,24 @@ import com.rumbo.watchapp.domain.port.VibrationEventsRepository
 import com.rumbo.watchapp.domain.vibration.VibrationCue
 import com.rumbo.watchapp.domain.vibration.VibrationPatterns
 import com.rumbo.watchapp.domain.vibration.VibrationSettings
+import com.rumbo.watchapp.infrastructure.tts.LocalSpeechPlayer
+import com.rumbo.watchapp.infrastructure.tts.LocalVoiceState
+import com.rumbo.watchapp.infrastructure.tts.SpeechAudioStore
+import com.rumbo.watchapp.infrastructure.tts.SpeechOutputImpl
+import com.rumbo.watchapp.infrastructure.tts.SpeechPlayer
 import com.rumbo.watchapp.testing.FakeVibration
 import com.rumbo.watchapp.testing.GpxPoint
 import com.rumbo.watchapp.testing.pattern
 import com.rumbo.watchapp.testing.readDemoRoute
 import com.rumbo.watchapp.testing.readGpx
+import java.nio.file.Files
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
@@ -160,6 +170,72 @@ class DemoGpxTrackingTest {
         // Lo precargado se dijo: una frase que no suena gastaría cuota de Gemini para nada.
         assertTrue(speech.prepared.toString(), speech.spoken.containsAll(speech.prepared))
         tracking.stop()
+    }
+
+    /** Gemini gratis tal como es: 3 frases por minuto, tarda 3 s y dice cuánto esperar al rechazar. */
+    private class LimitedGemini(private val clock: () -> Long) {
+        val accepted = mutableListOf<String>()
+        var rejected = 0
+        private val acceptedAtMs = ArrayDeque<Long>()
+
+        suspend fun synthesize(text: String): ByteArray {
+            delay(3_000)
+            val now = clock()
+            while (acceptedAtMs.isNotEmpty() && now - acceptedAtMs.first() >= 60_000) acceptedAtMs.removeFirst()
+            if (acceptedAtMs.size >= 3) {
+                rejected++
+                throw QuotaExhaustedError("Límite por minuto.", acceptedAtMs.first() + 60_000 - now)
+            }
+            acceptedAtMs.addLast(now)
+            accepted += text
+            return ByteArray(8)
+        }
+    }
+
+    private object NoDeviceVoice : LocalSpeechPlayer {
+        override val state = MutableStateFlow(LocalVoiceState.UNAVAILABLE)
+
+        override suspend fun play(text: String, onStart: () -> Unit) = throw IllegalStateException("Sin voz propia")
+    }
+
+    /** Lo que se oye con Gemini: baja el audio y suena 2 s. */
+    private class GeminiVoice(private val audio: SpeechAudioStore) : SpeechPlayer {
+        val heard = mutableListOf<String>()
+
+        override suspend fun play(text: String, onStart: () -> Unit) {
+            audio.get(text)
+            onStart()
+            heard += text
+            delay(2_000)
+        }
+
+        override suspend fun prepare(text: String) = audio.prepare(text)
+    }
+
+    @Test
+    fun withTheRealLimitOfGeminiTheVoiceSurvivesTheWholeWalk() = runTest {
+        val track = readGpx("ruta_parque_narino_a_parque_bolivar.gpx")
+        val startMs = track.first().timeMs
+        val clock = { startMs + testScheduler.currentTime }
+        val gemini = LimitedGemini(clock)
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val cache = Files.createTempDirectory("voz").toFile()
+        val audio = SpeechAudioStore(cache, gemini::synthesize, CoroutineScope(SupervisorJob() + dispatcher), clock, dispatcher)
+        val voice = GeminiVoice(audio)
+        val speech = SpeechOutputImpl(NoDeviceVoice, voice, isEnabled = { true }, scope = backgroundScope, clock = clock)
+        val tracking = TrackNavigation(fixesOf(track, clock), OfflineRoutes(), FakeVibration(), NoEvents, speech, clock)
+
+        tracking.start(route, backgroundScope)
+        advanceTimeBy(track.last().timeMs - startMs + 10_000)
+
+        // Ninguna frase se pidió dos veces: con 3 por minuto no sobra ninguna.
+        assertEquals(gemini.accepted.toString(), gemini.accepted.toSet().size, gemini.accepted.size)
+        // El arranque es lo más denso de la ruta (dos giros en 45 m): ahí se pueden perder frases, pero
+        // la voz vuelve enseguida. Antes un 429 la callaba 30 minutos, más que toda la caminata.
+        assertTrue("Oído: ${voice.heard}", voice.heard.size >= 12)
+        assertEquals(ARRIVED_PHRASE, voice.heard.last())
+        tracking.stop()
+        cache.deleteRecursively()
     }
 
     @Test

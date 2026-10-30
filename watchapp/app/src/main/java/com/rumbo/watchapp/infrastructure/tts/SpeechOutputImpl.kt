@@ -35,8 +35,11 @@ interface LocalSpeechPlayer : SpeechPlayer {
     val state: StateFlow<LocalVoiceState>
 }
 
-/** Tras un QUOTA_EXHAUSTED no se vuelve a pedir voz a Gemini durante este tiempo. */
-internal const val QUOTA_PAUSE_MS = 30 * 60 * 1000L
+/**
+ * Cuánto no pedir voz a Gemini tras un 429 si el backend no dice cuánto esperar. Casi siempre es el
+ * límite por minuto, y si no lo era, insistir solo cuesta una petición rechazada por minuto.
+ */
+internal const val DEFAULT_QUOTA_PAUSE_MS = 60_000L
 private const val LOCAL_START_WAIT_MS = 3_000L
 
 /**
@@ -69,6 +72,9 @@ class SpeechOutputImpl(
 
     @Volatile
     private var remotePausedUntilMs = 0L
+
+    @Volatile
+    private var preparePausedUntilMs = 0L
 
     // Ver [pause]: la frase que se dirá al reanudar.
     private var paused = false
@@ -104,8 +110,9 @@ class SpeechOutputImpl(
     }
 
     // Solo hace falta con Gemini, que tarda en bajar el audio: la voz del reloj empieza al instante.
+    // Precargar es opcional: un rechazo aquí frena solo las precargas, nunca lo que toca decir.
     override fun prepare(text: String) {
-        if (text.isBlank() || !isEnabled() || remotePaused()) return
+        if (text.isBlank() || !isEnabled() || remotePaused() || clock() < preparePausedUntilMs) return
         if (local.state.value == LocalVoiceState.READY) return
         scope.launch {
             try {
@@ -113,7 +120,7 @@ class SpeechOutputImpl(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: QuotaExhaustedError) {
-                pauseRemote()
+                preparePausedUntilMs = clock() + (e.retryAfterMs ?: DEFAULT_QUOTA_PAUSE_MS)
                 onError(e)
             } catch (e: Exception) {
                 onError(e)
@@ -173,16 +180,16 @@ class SpeechOutputImpl(
         try {
             remote.play(text, onStart)
         } catch (e: QuotaExhaustedError) {
-            pauseRemote()
+            pauseRemote(e.retryAfterMs ?: DEFAULT_QUOTA_PAUSE_MS)
             throw e
         }
     }
 
-    private fun pauseRemote() {
-        remotePausedUntilMs = clock() + QUOTA_PAUSE_MS
+    private fun pauseRemote(waitMs: Long) {
+        remotePausedUntilMs = clock() + waitMs
         refreshStatus()
         scope.launch {
-            delay(QUOTA_PAUSE_MS)
+            delay(waitMs)
             refreshStatus()
         }
     }

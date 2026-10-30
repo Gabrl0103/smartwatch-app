@@ -26,7 +26,12 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(DomainError)
     async def domain_error_handler(_: Request, exc: DomainError):
         status = next((s for cls, s in _STATUS.items() if isinstance(exc, cls)), 400)
-        return JSONResponse(status_code=status, content=_body(exc.code, exc.message))
+        body = _body(exc.code, exc.message)
+        retry_after = getattr(exc, "retry_after_s", None)
+        if retry_after is None:
+            return JSONResponse(status_code=status, content=body)
+        body["error"]["retry_after_s"] = retry_after
+        return JSONResponse(status_code=status, content=body, headers={"Retry-After": str(retry_after)})
 
     @app.exception_handler(Exception)
     async def unexpected_error_handler(_: Request, __: Exception):
