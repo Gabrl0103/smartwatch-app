@@ -83,7 +83,7 @@ Requiere el backend con `POST /voice/ask` desplegado en Render.
 
 ### Órdenes de voz
 
-Requieren Render redesplegado con las intenciones nuevas. Cada orden termina con "Hecho" (2 pulsos cortos) o "Error" (1 pulso extra largo) en Logcat `Vibracion`, y la voz dice el resultado.
+Cada orden termina con "Hecho" (2 pulsos cortos) o "Error" (1 pulso extra largo) en Logcat `Vibracion`, y la voz dice el resultado. Probadas el 2026-10-30 con Render y parche del micrófono: C1, C2 (ya guardado), C4 en pantalla, C5, C6, C7 y C8. Faltan C3, C9 y oír cada resultado en voz.
 
 | # | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|

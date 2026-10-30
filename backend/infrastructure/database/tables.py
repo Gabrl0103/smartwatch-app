@@ -1,10 +1,12 @@
 """Tablas para armar consultas con SQLAlchemy Core.
 
 El esquema real lo crean las migraciones de database/migrations/; esto debe coincidir con
-ellas. En los tests se usa metadata.create_all sobre SQLite en memoria.
+ellas. En los tests se usa metadata.create_all sobre SQLite en memoria, así que una restricción
+que falte aquí hace que los tests pasen y falle solo en producción.
 """
 
 from sqlalchemy import (
+    CheckConstraint,
     Column,
     DateTime,
     Float,
@@ -18,7 +20,16 @@ from sqlalchemy import (
     func,
 )
 
+from domain.models.route import Maneuver
+from domain.models.voice import Intent
+
 metadata = MetaData()
+
+
+def _one_of(column: str, values: list[str]) -> CheckConstraint:
+    allowed = ", ".join(f"'{value}'" for value in values)
+    return CheckConstraint(f"{column} IN ({allowed})", name=f"{column}_check")
+
 
 users = Table(
     "users",
@@ -72,6 +83,7 @@ route_steps = Table(
     Column("lat", Float, nullable=False),
     Column("lng", Float, nullable=False),
     UniqueConstraint("route_id", "step_order", name="uq_route_steps_route_order"),
+    _one_of("maneuver", [maneuver.value for maneuver in Maneuver]),
 )
 
 voice_commands = Table(
@@ -83,6 +95,7 @@ voice_commands = Table(
     Column("intent", Text, nullable=False),
     Column("extracted_destination", Text),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    _one_of("intent", [intent.value for intent in Intent] + ["cancel", "repeat"]),
 )
 
 vibration_events = Table(

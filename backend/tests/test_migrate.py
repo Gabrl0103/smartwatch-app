@@ -1,7 +1,11 @@
+import re
+
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 
+from domain.models.route import Maneuver
+from domain.models.voice import Intent
 from scripts.migrate import MIGRATIONS_DIR, applied_versions, apply_migrations, split_statements
 
 
@@ -60,3 +64,17 @@ def test_failed_migration_is_not_recorded(engine, migrations):
 def test_project_migrations_exist_in_order():
     files = sorted(path.name for path in MIGRATIONS_DIR.glob("*.sql"))
     assert files[:2] == ["001_create_tables.sql", "002_seed_default_user.sql"]
+
+
+def last_allowed(column):
+    """Los valores de la restricción más nueva de [column] en las migraciones reales."""
+    sql = "\n".join(path.read_text(encoding="utf-8") for path in sorted(MIGRATIONS_DIR.glob("*.sql")))
+    return set(re.findall(r"'([^']+)'", re.findall(rf"{column} IN \(([^)]*)\)", sql)[-1]))
+
+
+def test_the_real_database_accepts_every_maneuver():
+    assert last_allowed("maneuver") == {maneuver.value for maneuver in Maneuver}
+
+
+def test_the_real_database_accepts_every_intent_and_the_old_ones_in_the_history():
+    assert last_allowed("intent") == {intent.value for intent in Intent} | {"cancel", "repeat"}

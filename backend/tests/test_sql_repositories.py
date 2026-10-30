@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import datetime
 
 import pytest
@@ -99,6 +100,24 @@ def test_find_step_id_by_route_and_order(engine):
     assert repository.find_step_id(route_id, 2) == second_step.id
     assert repository.find_step_id(route_id, 9) is None
     assert repository.find_step_id(route_id + 1, 1) is None
+
+
+@pytest.mark.parametrize("maneuver", list(Maneuver))
+def test_a_route_is_saved_whatever_its_maneuvers(engine, maneuver):
+    route = sample_route()
+    steps = [RouteStep(1, maneuver, "Paso.", 120, CENTER), RouteStep(2, Maneuver.ARRIVE, "Ha llegado.", 0, PARK)]
+
+    route_id = SqlRouteRepository(engine).save(USER_ID, replace(route, steps=steps), RouteStatus.ACTIVE)
+
+    assert route_id is not None
+    assert rows(engine, route_steps)[0].maneuver == maneuver.value
+
+
+@pytest.mark.parametrize("intent", list(Intent))
+def test_a_voice_command_is_saved_whatever_its_intent(engine, intent):
+    SqlVoiceCommandRepository(engine).save(USER_ID, VoiceCommand("orden", intent))
+
+    assert rows(engine, voice_commands)[0].intent == intent.value
 
 
 def test_voice_command_saved(engine):
