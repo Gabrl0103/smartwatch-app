@@ -40,6 +40,8 @@ internal fun routeFromJson(json: JSONObject): Route {
         },
         // null si el backend no pudo guardar la ruta; se navega igual.
         id = if (json.isNull("route_id")) null else json.getLong("route_id"),
+        // Solo existe en la ruta guardada en el reloj: el backend no lo manda.
+        destinationSaved = json.optBoolean("destination_saved"),
     )
 }
 
@@ -67,6 +69,7 @@ internal fun routeToJson(route: Route): JSONObject = JSONObject()
         ),
     )
     .put("polyline", JSONArray(route.polyline.map { JSONArray().put(it.lat).put(it.lng) }))
+    .put("destination_saved", route.destinationSaved)
 
 // Una maniobra nueva no debe pasar por "recto", que no se avisa: se dirá su texto.
 private fun toManeuver(value: String): Maneuver =

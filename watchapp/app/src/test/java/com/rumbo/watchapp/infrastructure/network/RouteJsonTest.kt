@@ -63,6 +63,11 @@ class RouteJsonTest {
     }
 
     @Test
+    fun aRouteFromTheBackendIsNotMarkedAsSaved() {
+        assertEquals(false, routeFromJson(stepJson(""""maneuver": "left"""")).destinationSaved)
+    }
+
+    @Test
     fun aRouteFromAnOlderBackendStillLoads() {
         val step = routeFromJson(stepJson(""""maneuver": "left"""")).steps.single()
 
@@ -90,6 +95,7 @@ class RouteJsonTest {
             ),
             polyline = listOf(Coordinates(1.2, -77.2), Coordinates(1.4, -77.4)),
             id = 7,
+            destinationSaved = true,
         )
 
         assertEquals(route, routeFromJson(JSONObject(routeToJson(route).toString())))

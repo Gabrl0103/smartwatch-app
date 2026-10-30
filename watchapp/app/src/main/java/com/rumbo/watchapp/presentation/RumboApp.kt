@@ -164,11 +164,17 @@ private fun Screen(
             ListeningScreen(
                 level = level,
                 onCancel = viewModel::cancelListening,
-                // En ruta no se pide otro destino: el micrófono es para preguntar, repetir o terminar.
-                hint = if (viewModel.navigating) "¿Qué quieres saber?" else "Di a dónde quieres ir",
+                // En ruta no se pide otro destino: el micrófono es para preguntar, guardar, repetir o terminar.
+                hint = when {
+                    viewModel.navigating -> "Pregunta o da una orden"
+                    viewModel.confirming -> "Di guardar, repetir o cancelar"
+                    else -> "Di a dónde quieres ir"
+                },
             )
         }
-        PlanState.Processing -> ProcessingScreen(waitMessage ?: if (viewModel.navigating) "Entendiendo..." else "Buscando ruta...")
+        PlanState.Processing -> ProcessingScreen(
+            waitMessage ?: if (viewModel.navigating || viewModel.confirming) "Entendiendo..." else "Buscando ruta...",
+        )
         PlanState.LoadingPlaces -> ProcessingScreen(waitMessage ?: "Cargando lugares...")
         PlanState.Answering -> ProcessingScreen(waitMessage ?: "Pensando la respuesta...")
         is PlanState.Assistant -> AssistantScreen(
@@ -177,7 +183,7 @@ private fun Screen(
             speaking = viewModel.speaking.collectAsState().value,
             onAskAgain = onSpeak,
             onBack = viewModel::reset,
-            backLabel = homeLabel(viewModel.navigating),
+            backLabel = homeLabel(viewModel),
         )
         is PlanState.SavedPlaces -> SavedPlacesScreen(
             places = state.places,
@@ -198,6 +204,7 @@ private fun Screen(
             onGo = onGo,
             onChange = viewModel::reset,
             onSave = viewModel::saveDestination,
+            onSpeak = onSpeak,
         )
         is PlanState.Vibrations -> VibrationsScreen(
             patterns = vibrationPatterns,
@@ -226,7 +233,7 @@ private fun Screen(
                 RetryAction.SAVED_PLACES -> viewModel::openSavedPlaces
             },
             onHome = viewModel::reset,
-            homeLabel = homeLabel(viewModel.navigating),
+            homeLabel = homeLabel(viewModel),
         )
         is PlanState.PermissionNeeded -> PermissionScreen(
             permission = state.permission,
@@ -237,5 +244,9 @@ private fun Screen(
     }
 }
 
-// Con una ruta en curso (se fue a preguntar algo), "Inicio" vuelve a ella.
-private fun homeLabel(navigating: Boolean) = if (navigating) "Volver a la ruta" else "Inicio"
+// Con una ruta en curso (se fue a preguntar algo), "Inicio" vuelve a ella; lo mismo con Confirmar.
+private fun homeLabel(viewModel: RoutePlanningViewModel) = when {
+    viewModel.navigating -> "Volver a la ruta"
+    viewModel.confirming -> "Volver a Confirmar"
+    else -> "Inicio"
+}

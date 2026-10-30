@@ -4,6 +4,8 @@ import com.rumbo.watchapp.domain.model.Maneuver
 import com.rumbo.watchapp.domain.navigation.NavigationEvent
 import com.rumbo.watchapp.domain.vibration.VibrationCue.ARRIVED
 import com.rumbo.watchapp.domain.vibration.VibrationCue.ATTENTION
+import com.rumbo.watchapp.domain.vibration.VibrationCue.COMMAND_ERROR
+import com.rumbo.watchapp.domain.vibration.VibrationCue.COMMAND_OK
 import com.rumbo.watchapp.domain.vibration.VibrationCue.LEFT
 import com.rumbo.watchapp.domain.vibration.VibrationCue.NO_SIGNAL
 import com.rumbo.watchapp.domain.vibration.VibrationCue.OFF_ROUTE
@@ -193,6 +195,41 @@ class VibrationPatternsTest {
             assertEquals(listOf(150L, 150L, 150L, 150L), version.getValue(ATTENTION).pulseDurationsMs)
             assertEquals(null, version.getValue(ATTENTION).repeatEveryMs)
         }
+    }
+
+    @Test
+    fun aCommandThatWorkedIsADoubleShortPulseNotATurnWarning() {
+        versions.forEach { version ->
+            val done = version.getValue(COMMAND_OK)
+            assertEquals(listOf(180L, 180L), done.pulseDurationsMs)
+            assertEquals(null, done.repeatEveryMs)
+            // Mismos 2 pulsos que "Giro próximo" e "Izquierda": se distinguen por la duración.
+            assertTrue(distinguishableByRhythm(done, version.getValue(TURN_APPROACHING)))
+            assertTrue(distinguishableByRhythm(done, version.getValue(LEFT)))
+        }
+    }
+
+    @Test
+    fun aCommandThatFailedIsTheLongestSinglePulse() {
+        versions.forEach { version ->
+            val error = version.getValue(COMMAND_ERROR)
+            assertEquals(listOf(1_400L), error.pulseDurationsMs)
+            assertEquals(null, error.repeatEveryMs)
+            assertTrue(distinguishableByRhythm(error, version.getValue(NO_SIGNAL)))
+        }
+    }
+
+    @Test
+    fun theResultOfACommandNeverComesFromTheRoute() = with(VibrationPatterns) {
+        val events = listOf(
+            NavigationEvent.TurnApproaching(Maneuver.LEFT),
+            NavigationEvent.TurnNow(Maneuver.LEFT),
+            NavigationEvent.OffRoute,
+            NavigationEvent.SignalLost,
+            NavigationEvent.Arrived,
+        )
+
+        assertTrue(events.mapNotNull(::forEvent).none { it == COMMAND_OK || it == COMMAND_ERROR })
     }
 
     @Test

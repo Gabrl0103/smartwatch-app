@@ -24,9 +24,22 @@ class VoiceCommandTest {
     }
 
     @Test
-    fun repeatCancelAndUnknownIntents() {
+    fun theCommandsOfTheBackend() {
+        assertEquals(VoiceCommand.Repeat, result("repetir_instruccion").toCommand())
+        assertEquals(VoiceCommand.Cancel, result("cancelar_ruta").toCommand())
+        assertEquals(VoiceCommand.SaveDestination, result("guardar_destino").toCommand())
+        assertEquals(VoiceCommand.HowFar, result("cuanto_falta").toCommand())
+        assertEquals(VoiceCommand.SavedStatus, result("estado_guardado").toCommand())
+    }
+
+    @Test
+    fun theNamesOfAnOlderBackendStillWork() {
         assertEquals(VoiceCommand.Repeat, result("repeat").toCommand())
         assertEquals(VoiceCommand.Cancel, result("cancel").toCommand())
+    }
+
+    @Test
+    fun anUnknownIntentIsNotUnderstood() {
         assertEquals(VoiceCommand.NotUnderstood, result("bailar").toCommand())
     }
 }

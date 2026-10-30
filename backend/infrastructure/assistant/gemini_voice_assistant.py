@@ -14,11 +14,18 @@ INTERPRET_PROMPT = (
     "en Pasto, Colombia. Escucha el audio en español y responde SOLO con JSON con "
     "estos campos: "
     '"text" (transcripción literal), '
-    '"intent" (uno de: navigate, ask, cancel, repeat), '
+    '"intent" (uno de: navigate, guardar_destino, repetir_instruccion, cancelar_ruta, '
+    "cuanto_falta, estado_guardado, ask), "
     '"destination" (nombre del lugar si el intent es navigate, si no null), '
     '"question" (la pregunta si el intent es ask, si no null). '
-    "navigate = quiere ir a un lugar; ask = hace una pregunta; cancel = quiere "
-    "detener la ruta; repeat = pide repetir la última instrucción. "
+    "navigate = quiere ir a un lugar. "
+    'guardar_destino = quiere guardar el destino actual ("guarda este lugar", "guárdalo"). '
+    'repetir_instruccion = pide repetir la última instrucción ("repite", "¿qué dijiste?"). '
+    'cancelar_ruta = quiere detener o terminar la ruta ("cancela", "termina la ruta"). '
+    'cuanto_falta = pregunta cuánto falta para llegar ("¿cuánto falta?", "¿ya casi llego?"). '
+    'estado_guardado = pregunta si el destino actual está guardado ("¿este lugar está '
+    'guardado?", "¿ya lo guardé?"). '
+    "ask = cualquier otra pregunta. "
     "Si no se entiende nada, devuelve text vacío e intent ask."
 )
 

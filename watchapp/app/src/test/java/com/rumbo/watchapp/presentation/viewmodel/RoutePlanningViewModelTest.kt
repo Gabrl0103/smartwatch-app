@@ -1,11 +1,24 @@
 package com.rumbo.watchapp.presentation.viewmodel
 
 import com.rumbo.watchapp.application.location.LocationTracker
+import com.rumbo.watchapp.application.speech.DESTINATION_ALREADY_SAVED_PHRASE
+import com.rumbo.watchapp.application.speech.DESTINATION_DROPPED_PHRASE
+import com.rumbo.watchapp.application.speech.DESTINATION_JUST_SAVED_PHRASE
+import com.rumbo.watchapp.application.speech.DESTINATION_NOT_SAVED_PHRASE
+import com.rumbo.watchapp.application.speech.DESTINATION_SAVED_PHRASE
+import com.rumbo.watchapp.application.speech.FINISH_QUESTION_PHRASE
+import com.rumbo.watchapp.application.speech.confirmPhrase
 import com.rumbo.watchapp.application.usecase.AskAssistant
+import com.rumbo.watchapp.application.usecase.ExecuteVoiceCommand
 import com.rumbo.watchapp.application.usecase.ManageSavedPlaces
+import com.rumbo.watchapp.application.usecase.NOTHING_TO_CANCEL_MESSAGE
+import com.rumbo.watchapp.application.usecase.NOTHING_TO_SAVE_MESSAGE
 import com.rumbo.watchapp.application.usecase.NOT_UNDERSTOOD_MESSAGE
+import com.rumbo.watchapp.application.usecase.NO_DESTINATION_MESSAGE
 import com.rumbo.watchapp.application.usecase.PlanRouteFromVoice
+import com.rumbo.watchapp.application.usecase.SAVE_FAILED_MESSAGE
 import com.rumbo.watchapp.application.usecase.TrackingState
+import com.rumbo.watchapp.domain.error.AppError
 import com.rumbo.watchapp.domain.error.SERVER_WAKING_MESSAGE
 import com.rumbo.watchapp.domain.model.Coordinates
 import com.rumbo.watchapp.domain.model.LocationFix
@@ -68,6 +81,9 @@ class RoutePlanningViewModelTest {
     private val dispatcher = UnconfinedTestDispatcher()
     private val place = SavedPlace(1, "Parque de prueba", 1.2155, -77.2793)
     private val route = lRoute()
+    private val savedRoute = route.copy(destinationSaved = true)
+    private val done = pattern(VibrationCue.COMMAND_OK)
+    private val failed = pattern(VibrationCue.COMMAND_ERROR)
 
     private class FakeRecorder : AudioRecorder {
         var started = false
@@ -104,9 +120,11 @@ class RoutePlanningViewModelTest {
 
         /** Lo que "entendió" el backend; null: falla, para los tests que no deben llegar ahí. */
         var result: VoiceResult? = null
+        var error: AppError? = null
 
         override suspend fun interpret(audioFile: File): VoiceResult {
             calls++
+            error?.let { throw it }
             return result ?: throw IllegalStateException("No debería interpretarse")
         }
     }
@@ -124,6 +142,10 @@ class RoutePlanningViewModelTest {
         override suspend fun search(query: String, near: Coordinates): Place? = null
     }
 
+    private object AnyPlace : PlacesRepository {
+        override suspend fun search(query: String, near: Coordinates) = Place(query, near.lat, near.lng)
+    }
+
     private class FakeRoutes(private val route: Route) : RoutesRepository {
         override suspend fun create(origin: Coordinates, destination: Place) = route
     }
@@ -132,9 +154,16 @@ class RoutePlanningViewModelTest {
         private val places: List<SavedPlace>,
         private val loaded: CompletableDeferred<Unit> = CompletableDeferred(Unit),
     ) : SavedPlacesRepository {
+        val added = mutableListOf<String>()
+        var addError: AppError? = null
+
         override suspend fun list() = places.also { loaded.await() }
 
-        override suspend fun add(name: String, lat: Double, lng: Double) = places.first()
+        override suspend fun add(name: String, lat: Double, lng: Double): SavedPlace {
+            addError?.let { throw it }
+            added += name
+            return SavedPlace(9, name, lat, lng)
+        }
 
         override suspend fun delete(id: Long) = Unit
     }
@@ -149,6 +178,10 @@ class RoutePlanningViewModelTest {
 
         override fun stop() {
             activeRoute = null
+        }
+
+        override fun markDestinationSaved() {
+            activeRoute = activeRoute?.copy(destinationSaved = true)
         }
     }
 
@@ -224,14 +257,24 @@ class RoutePlanningViewModelTest {
         gps: LocationProvider = GoodGps,
         savedPlaces: SavedPlacesRepository = FakeSavedPlaces(listOf(place)),
         vibration: FakeVibration = this.vibration,
+        places: PlacesRepository = NoPlaces,
     ): RoutePlanningViewModel {
         val routes = FakeRoutes(route)
         val tracker = LocationTracker(gps, { 0L }, CoroutineScope(dispatcher))
+        val planRoute = PlanRouteFromVoice(voice, places, routes, tracker::awaitOrigin)
+        val manageSavedPlaces = ManageSavedPlaces(savedPlaces, routes, tracker::awaitOrigin)
         return RoutePlanningViewModel(
             recorder,
-            PlanRouteFromVoice(voice, NoPlaces, routes, tracker::awaitOrigin),
-            AskAssistant(assistant) { navigation.value },
-            ManageSavedPlaces(savedPlaces, routes, tracker::awaitOrigin),
+            planRoute,
+            ExecuteVoiceCommand(
+                planRoute,
+                manageSavedPlaces,
+                AskAssistant(assistant) { navigation.value },
+                runner,
+                tracking = { navigation.value },
+                repeatInstruction = { repeats++ },
+            ),
+            manageSavedPlaces,
             tracker,
             runner,
             navigation,
@@ -289,11 +332,11 @@ class RoutePlanningViewModelTest {
         startRoute()
 
         viewModel.back()
-        assertEquals(PlanState.OnRoute(route, confirmFinish = true), viewModel.state.value)
+        assertEquals(PlanState.OnRoute(savedRoute, confirmFinish = true), viewModel.state.value)
         assertTrue(runner.running)
 
         viewModel.back()
-        assertEquals(PlanState.OnRoute(route, confirmFinish = false), viewModel.state.value)
+        assertEquals(PlanState.OnRoute(savedRoute, confirmFinish = false), viewModel.state.value)
 
         viewModel.back()
         viewModel.finish()
@@ -308,7 +351,7 @@ class RoutePlanningViewModelTest {
 
         viewModel.keepNavigating()
 
-        assertEquals(PlanState.OnRoute(route), viewModel.state.value)
+        assertEquals(PlanState.OnRoute(savedRoute), viewModel.state.value)
         assertTrue(runner.running)
     }
 
@@ -412,7 +455,7 @@ class RoutePlanningViewModelTest {
         assertTrue(assistant.asked.single().second.contains("Parque de prueba"))
         assertTrue(runner.running)
         viewModel.back()
-        assertEquals(PlanState.OnRoute(route), viewModel.state.value)
+        assertEquals(PlanState.OnRoute(savedRoute), viewModel.state.value)
     }
 
     @Test
@@ -420,11 +463,270 @@ class RoutePlanningViewModelTest {
         startRoute()
 
         say(VoiceResult("repite", "repeat", null, null))
-        assertEquals(PlanState.OnRoute(route), viewModel.state.value)
+        assertEquals(PlanState.OnRoute(savedRoute), viewModel.state.value)
         assertEquals(1, repeats)
 
         say(VoiceResult("termina", "cancel", null, null))
-        assertEquals(PlanState.OnRoute(route, confirmFinish = true), viewModel.state.value)
+        assertEquals(PlanState.OnRoute(savedRoute, confirmFinish = true), viewModel.state.value)
+    }
+
+    private fun order(intent: String) = VoiceResult("orden", intent, null, null)
+
+    private fun confirmByVoice(savedPlaces: FakeSavedPlaces = FakeSavedPlaces(emptyList())) {
+        viewModel = build(savedPlaces = savedPlaces, places = AnyPlace)
+        say(VoiceResult("al parque", "navigate", "parque", null))
+        assertEquals(PlanState.Confirming(route), viewModel.state.value)
+    }
+
+    @Test
+    fun aNewDestinationVibratesDoubleShortAndAsksToConfirm() {
+        confirmByVoice()
+
+        assertEquals(listOf(done), vibration.played)
+        assertEquals(confirmPhrase(route), speech.spoken.last())
+    }
+
+    @Test
+    fun aDestinationAlreadySavedArrivesMarkedAsSaved() {
+        viewModel = build(savedPlaces = FakeSavedPlaces(listOf(place)), places = AnyPlace)
+
+        say(VoiceResult("al parque", "navigate", "Parque de prueba", null))
+
+        assertEquals(PlanState.Confirming(savedRoute, SaveStatus.SAVED), viewModel.state.value)
+    }
+
+    @Test
+    fun theMicInConfirmSavesAndComesBackToTheSameRoute() {
+        val saved = FakeSavedPlaces(emptyList())
+        confirmByVoice(saved)
+
+        say(order("guardar_destino"))
+
+        assertEquals(PlanState.Confirming(route, SaveStatus.SAVED), viewModel.state.value)
+        assertEquals(listOf(route.destinationName), saved.added)
+        assertEquals(DESTINATION_JUST_SAVED_PHRASE, speech.spoken.last())
+        assertEquals(done, vibration.played.last())
+
+        viewModel.go()
+        assertEquals(PlanState.OnRoute(savedRoute), viewModel.state.value)
+        assertEquals(savedRoute, runner.activeRoute)
+    }
+
+    @Test
+    fun savingTwiceDoesNotDuplicateThePlace() {
+        val saved = FakeSavedPlaces(emptyList())
+        confirmByVoice(saved)
+
+        say(order("guardar_destino"))
+        say(order("guardar_destino"))
+
+        assertEquals(1, saved.added.size)
+        assertEquals(DESTINATION_ALREADY_SAVED_PHRASE, speech.spoken.last())
+    }
+
+    @Test
+    fun theSaveButtonCountsForVoiceAndForTheRoute() {
+        val saved = FakeSavedPlaces(emptyList())
+        confirmByVoice(saved)
+        viewModel.saveDestination()
+
+        say(order("estado_guardado"))
+        assertEquals(DESTINATION_SAVED_PHRASE, speech.spoken.last())
+
+        viewModel.go()
+        assertEquals(savedRoute, runner.activeRoute)
+    }
+
+    @Test
+    fun aFailedSaveVibratesLongAndStaysInConfirm() {
+        val saved = FakeSavedPlaces(emptyList()).apply { addError = AppError("Sin conexión") }
+        confirmByVoice(saved)
+
+        say(order("guardar_destino"))
+
+        assertEquals(PlanState.Confirming(route), viewModel.state.value)
+        assertEquals(SAVE_FAILED_MESSAGE, speech.spoken.last())
+        assertEquals(failed, vibration.played.last())
+    }
+
+    @Test
+    fun cancellingInConfirmDropsTheDestinationAndSaysSo() {
+        confirmByVoice()
+
+        say(order("cancelar_ruta"))
+
+        assertEquals(PlanState.Start, viewModel.state.value)
+        assertEquals(DESTINATION_DROPPED_PHRASE, speech.spoken.last())
+        assertEquals(done, vibration.played.last())
+    }
+
+    @Test
+    fun repeatingInConfirmSaysTheDestinationAgain() {
+        confirmByVoice()
+
+        say(order("repetir_instruccion"))
+
+        assertEquals(PlanState.Confirming(route), viewModel.state.value)
+        assertEquals(confirmPhrase(route), speech.spoken.last())
+        assertEquals(0, repeats)
+    }
+
+    @Test
+    fun cancelInListeningComesBackToConfirmWithoutSending() {
+        confirmByVoice()
+        val calls = voice.calls
+
+        viewModel.listen()
+        assertTrue(viewModel.confirming)
+        viewModel.cancelListening()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(PlanState.Confirming(route), viewModel.state.value)
+        assertEquals(calls, voice.calls)
+    }
+
+    @Test
+    fun backWhileListeningInConfirmComesBackToConfirm() {
+        confirmByVoice()
+
+        viewModel.listen()
+        viewModel.back()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(PlanState.Confirming(route), viewModel.state.value)
+    }
+
+    @Test
+    fun changeInConfirmStillGoesHome() {
+        confirmByVoice()
+
+        viewModel.reset()
+
+        assertEquals(PlanState.Start, viewModel.state.value)
+        assertFalse(viewModel.confirming)
+    }
+
+    @Test
+    fun aQuestionFromConfirmReturnsToConfirmEvenAfterAskingAgain() {
+        confirmByVoice()
+
+        say(question("¿Hay un baño?"))
+        assertTrue(viewModel.state.value is PlanState.Assistant)
+        assertEquals(done, vibration.played.last())
+        say(question("¿Y una tienda?"))
+        viewModel.back()
+
+        assertEquals(PlanState.Confirming(route), viewModel.state.value)
+    }
+
+    @Test
+    fun anErrorFromConfirmVibratesLongAndReturnsToConfirm() {
+        confirmByVoice()
+
+        say(order("bailar"))
+        assertEquals(PlanState.Error(NOT_UNDERSTOOD_MESSAGE), viewModel.state.value)
+        assertEquals(failed, vibration.played.last())
+        viewModel.reset()
+
+        assertEquals(PlanState.Confirming(route), viewModel.state.value)
+    }
+
+    @Test
+    fun anotherDestinationInConfirmReplacesIt() {
+        confirmByVoice()
+
+        say(VoiceResult("mejor a la plaza", "navigate", "plaza", null))
+
+        assertEquals(PlanState.Confirming(route), viewModel.state.value)
+        assertFalse(viewModel.confirming)
+    }
+
+    @Test
+    fun howFarDuringTheRouteIsAnsweredOnTheWatch() {
+        startRoute()
+        navigation.value = TrackingState(remainingM = 200.0)
+
+        say(order("cuanto_falta"))
+
+        assertEquals(PlanState.OnRoute(savedRoute), viewModel.state.value)
+        assertEquals("Faltan doscientos metros, tres minutos a pie.", speech.spoken.last())
+        assertEquals(done, vibration.played.last())
+        assertTrue(assistant.asked.isEmpty())
+    }
+
+    @Test
+    fun savingDuringTheRouteMarksItAndAskingConfirmsIt() {
+        viewModel = build(savedPlaces = FakeSavedPlaces(emptyList()), places = AnyPlace)
+        say(VoiceResult("al parque", "navigate", "parque", null))
+        viewModel.go()
+        assertEquals(route, runner.activeRoute)
+
+        say(order("estado_guardado"))
+        assertEquals(DESTINATION_NOT_SAVED_PHRASE, speech.spoken.last())
+        say(order("guardar_destino"))
+        assertEquals(PlanState.OnRoute(savedRoute), viewModel.state.value)
+        say(order("estado_guardado"))
+
+        assertEquals(DESTINATION_SAVED_PHRASE, speech.spoken.last())
+    }
+
+    @Test
+    fun cancelOnRouteAsksOutLoudAndNeverEndsTheRouteByItself() {
+        startRoute()
+
+        say(order("cancelar_ruta"))
+
+        assertEquals(PlanState.OnRoute(savedRoute, confirmFinish = true), viewModel.state.value)
+        assertEquals(FINISH_QUESTION_PHRASE, speech.spoken.last())
+        assertTrue(runner.running)
+    }
+
+    @Test
+    fun repeatOnRouteDoesNotVibrateOnTopOfTheInstruction() {
+        startRoute()
+
+        say(order("repetir_instruccion"))
+
+        assertEquals(1, repeats)
+        assertTrue(vibration.played.isEmpty())
+    }
+
+    @Test
+    fun ordersWithoutARouteAreRefusedOutLoud() {
+        listOf(
+            "guardar_destino" to NOTHING_TO_SAVE_MESSAGE,
+            "cancelar_ruta" to NOTHING_TO_CANCEL_MESSAGE,
+            "cuanto_falta" to NO_DESTINATION_MESSAGE,
+            "estado_guardado" to NO_DESTINATION_MESSAGE,
+        ).forEach { (intent, message) ->
+            viewModel.reset()
+            say(order(intent))
+
+            assertEquals(PlanState.Error(message), viewModel.state.value)
+            assertEquals(message, speech.spoken.last())
+            assertEquals(failed, vibration.played.last())
+        }
+    }
+
+    @Test
+    fun aNetworkErrorVibratesLong() {
+        voice.error = AppError("Sin conexión. Revisa el internet del reloj")
+
+        say(order("guardar_destino"))
+
+        assertEquals(PlanState.Error("Sin conexión. Revisa el internet del reloj"), viewModel.state.value)
+        assertEquals(failed, vibration.played.last())
+    }
+
+    @Test
+    fun theOldNamesFromAnOlderBackendStillWork() {
+        startRoute()
+
+        say(order("repeat"))
+        say(order("cancel"))
+
+        assertEquals(1, repeats)
+        assertEquals(PlanState.OnRoute(savedRoute, confirmFinish = true), viewModel.state.value)
     }
 
     @Test
@@ -433,7 +735,7 @@ class RoutePlanningViewModelTest {
 
         say(VoiceResult("llévame a la plaza", "navigate", "plaza", null))
 
-        assertEquals(PlanState.OnRoute(route), viewModel.state.value)
+        assertEquals(PlanState.OnRoute(savedRoute), viewModel.state.value)
         assertTrue(speech.spoken.last().startsWith("Ya vas hacia"))
     }
 
@@ -630,11 +932,11 @@ class RoutePlanningViewModelTest {
         confirmSavedPlace()
 
         viewModel.permissionDenied(Permission.NOTIFICATIONS)
-        assertEquals(PlanState.PermissionNeeded(Permission.NOTIFICATIONS, route), viewModel.state.value)
+        assertEquals(PlanState.PermissionNeeded(Permission.NOTIFICATIONS, savedRoute), viewModel.state.value)
         assertFalse(runner.running)
 
         viewModel.goWithoutNotification()
-        assertEquals(PlanState.OnRoute(route), viewModel.state.value)
+        assertEquals(PlanState.OnRoute(savedRoute), viewModel.state.value)
         assertTrue(runner.running)
     }
 
@@ -645,7 +947,7 @@ class RoutePlanningViewModelTest {
 
         viewModel.permissionGranted()
 
-        assertEquals(PlanState.OnRoute(route), viewModel.state.value)
+        assertEquals(PlanState.OnRoute(savedRoute), viewModel.state.value)
         assertTrue(runner.running)
     }
 

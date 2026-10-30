@@ -54,6 +54,7 @@ data class TrackingState(
     val remainingM: Double = 0.0,
     val pattern: VibrationPattern? = null,
     val recalculating: Boolean = false,
+    val destinationSaved: Boolean = false,
 ) {
     /**
      * Avance hacia el siguiente paso, de 0 (recién pasado el anterior) a 1 (encima del giro): la
@@ -181,6 +182,14 @@ class TrackNavigation(
         say(repeatPhrase(snapshot))
     }
 
+    /** El destino se acaba de guardar: lo muestra y sobrevive a un recálculo o a que muera el proceso. */
+    fun markDestinationSaved() {
+        val saved = route?.copy(destinationSaved = true) ?: return
+        route = saved
+        activeRoutes?.save(saved)
+        publish()
+    }
+
     private fun CoroutineScope.handle(events: List<NavigationEvent>, now: Long) {
         VibrationPatterns.cuesFor(events).takeIf { it.isNotEmpty() }?.let { vibrate(it, now) }
         engine?.let { navigationPhrase(events, it.snapshot) }?.let(::say)
@@ -274,7 +283,7 @@ class TrackNavigation(
             try {
                 val end = current.end
                 val destination = Place(current.destinationName, end.lat, end.lng)
-                val newRoute = routes.create(from, destination)
+                val newRoute = routes.create(from, destination).copy(destinationSaved = current.destinationSaved)
                 useRoute(newRoute, clock(), announceFirstLeg = true)
                 prepareNextStage()
                 logger.info(TAG, "Ruta recalculada: ${describe(newRoute)}")
@@ -313,6 +322,7 @@ class TrackNavigation(
             stepLengthM = snapshot.stepLengthM,
             remainingM = snapshot.remainingM,
             recalculating = recalculating,
+            destinationSaved = route?.destinationSaved == true,
         )
     }
 

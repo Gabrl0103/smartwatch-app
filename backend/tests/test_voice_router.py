@@ -46,6 +46,21 @@ def test_interpret_endpoint_saves_command(monkeypatch):
     assert commands.saved == ["al parque"]
 
 
+def test_interpret_returns_and_saves_each_voice_command(monkeypatch):
+    commands = FakeCommands()
+    use_fakes(monkeypatch, commands)
+    monkeypatch.setattr(
+        FakeAssistant, "interpret_audio", lambda self, audio, mime: VoiceCommand("guárdalo", Intent.SAVE_DESTINATION)
+    )
+    client = TestClient(app)
+
+    response = client.post("/voice/interpret", content=b"abc", headers={"content-type": "audio/aac"})
+
+    assert response.status_code == 200
+    assert response.json() == {"text": "guárdalo", "intent": "guardar_destino", "destination": None, "question": None}
+    assert commands.saved == ["guárdalo"]
+
+
 def test_interpret_answers_even_if_saving_fails(monkeypatch):
     use_fakes(monkeypatch, FakeCommands(RuntimeError("base caída")))
     client = TestClient(app)

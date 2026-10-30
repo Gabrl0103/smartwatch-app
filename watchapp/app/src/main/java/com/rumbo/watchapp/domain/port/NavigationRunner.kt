@@ -11,4 +11,7 @@ interface NavigationRunner {
 
     /** Detiene todo: GPS, vibraciones, voz, servicio y notificación. */
     fun stop()
+
+    /** El destino de la ruta en curso se acaba de guardar. */
+    fun markDestinationSaved()
 }

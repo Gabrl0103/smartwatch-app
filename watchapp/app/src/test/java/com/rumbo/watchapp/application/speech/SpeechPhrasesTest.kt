@@ -104,6 +104,33 @@ class SpeechPhrasesTest {
     }
 
     @Test
+    fun howFarOnRouteScalesTheMinutesWithWhatRemains() {
+        assertEquals("Faltan ochocientos metros, trece minutos a pie.", remainingPhrase(route, 824.5))
+        assertEquals("Faltan diez metros, un minuto a pie.", remainingPhrase(route, 8.0))
+    }
+
+    @Test
+    fun howFarWithoutARouteLengthDoesNotBreak() {
+        assertEquals("Faltan diez metros, un minuto a pie.", remainingPhrase(route.copy(distanceM = 0.0), 8.0))
+    }
+
+    @Test
+    fun howFarInConfirmIsTheWholeRoute() {
+        assertEquals("Son uno coma seis kilómetros, veintiséis minutos a pie.", routeLengthPhrase(route))
+    }
+
+    @Test
+    fun startPhraseLeavesTheSavedDestinationForTheEnd() {
+        val saved = route.copy(destinationSaved = true)
+        val turnFar = snapshot(status = NavigationStatus.ON_ROUTE, distance = 300.0)
+
+        assertEquals(
+            "Iniciando ruta. Camine hacia el norte por la Carrera 24. En trescientos metros, gira a la izquierda. Este destino está guardado.",
+            startPhrase(saved, turnFar, thresholds),
+        )
+    }
+
+    @Test
     fun startPhraseReadsTheFirstInstruction() {
         val turnClose = snapshot(status = NavigationStatus.ON_ROUTE, distance = 60.0)
 

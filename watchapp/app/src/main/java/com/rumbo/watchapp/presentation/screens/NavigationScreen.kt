@@ -168,6 +168,18 @@ private fun RouteScreen(state: TrackingState, onRepeat: () -> Unit, onAsk: () ->
             )
         }
         if (!arrived) Distances(state, look.color, onRepeat)
+        if (state.destinationSaved) {
+            Text(
+                text = "Guardado ✓",
+                modifier = Modifier.clearAndSetSemantics {
+                    contentDescription = "Destino guardado"
+                    repeatOnActivate(onRepeat)
+                },
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
         VibrationIndicator(pattern = state.pattern, color = look.color)
         PillButton("Repetir", onClick = { gate.click(onRepeat) }, style = PillStyle.PRIMARY)
         // Preguntar algo sin dejar la ruta: las vibraciones y la voz de la ruta siguen.

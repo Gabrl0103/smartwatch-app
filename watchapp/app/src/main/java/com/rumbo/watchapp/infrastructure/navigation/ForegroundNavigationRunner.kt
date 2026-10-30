@@ -47,5 +47,10 @@ class ForegroundNavigationRunner(
         context.stopService(serviceIntent())
     }
 
+    override fun markDestinationSaved() {
+        activeRoute = activeRoute?.copy(destinationSaved = true)
+        trackNavigation.markDestinationSaved()
+    }
+
     private fun serviceIntent() = Intent(context, NavigationForegroundService::class.java)
 }

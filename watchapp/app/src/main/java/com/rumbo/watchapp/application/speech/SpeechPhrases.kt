@@ -17,6 +17,12 @@ const val SIGNAL_LOST_PHRASE = "Perdí la señal de GPS."
 const val SIGNAL_RECOVERED_PHRASE = "Señal recuperada."
 const val ARRIVED_PHRASE = "Llegaste a tu destino."
 const val KEEP_GOING_PHRASE = "Sigue la ruta."
+const val DESTINATION_SAVED_PHRASE = "Este destino está guardado."
+const val DESTINATION_NOT_SAVED_PHRASE = "Este destino no está guardado."
+const val DESTINATION_ALREADY_SAVED_PHRASE = "Este destino ya estaba guardado."
+const val DESTINATION_JUST_SAVED_PHRASE = "Destino guardado."
+const val DESTINATION_DROPPED_PHRASE = "Destino cancelado."
+const val FINISH_QUESTION_PHRASE = "¿Terminar la ruta? Toca Terminar o Seguir navegando."
 
 // Lo que en un paso desconocido puede ser un peligro para quien camina sin ver.
 private val ATTENTION_WORDS = setOf(
@@ -53,9 +59,20 @@ fun confirmPhrase(route: Route): String =
     "${route.destinationName}, a ${spokenDistance(route.distanceM)}, " +
         "${spokenMinutes(route.durationS)} a pie. ¿Vamos?"
 
+/** "¿Cuánto falta?" en Confirmar, antes de salir: la ruta completa. */
+fun routeLengthPhrase(route: Route): String =
+    "Son ${spokenDistance(route.distanceM)}, ${spokenMinutes(route.durationS)} a pie."
+
+/** "¿Cuánto falta?" en ruta: los minutos salen del paso medio de la ruta, no del GPS. */
+fun remainingPhrase(route: Route, remainingM: Double): String {
+    val seconds = if (route.distanceM > 0) route.durationS * remainingM / route.distanceM else 0.0
+    return "Faltan ${spokenDistance(remainingM)}, ${spokenMinutes(seconds)} a pie."
+}
+
 /**
  * La frase de inicio orienta con la primera instrucción ("Camine hacia el norte") y hace de aviso
  * lejano del primer giro o de aviso del destino si ya está cerca, porque el motor no los repite.
+ * Que el destino está guardado va al final: si un aviso corta la frase, se pierde eso y no la guía.
  */
 fun startPhrase(route: Route, snapshot: NavigationSnapshot, thresholds: NavigationThresholds): String {
     val first = route.steps.firstOrNull() ?: return "Iniciando ruta."
@@ -68,7 +85,8 @@ fun startPhrase(route: Route, snapshot: NavigationSnapshot, thresholds: Navigati
         next.maneuver.isTurn && distance > thresholds.turnAheadMinM -> " ${inDistance(distance, next)}"
         else -> ""
     }
-    return "Iniciando ruta. ${instructionText(first)}$upcoming"
+    val saved = if (route.destinationSaved) " $DESTINATION_SAVED_PHRASE" else ""
+    return "Iniciando ruta. ${instructionText(first)}$upcoming$saved"
 }
 
 /**

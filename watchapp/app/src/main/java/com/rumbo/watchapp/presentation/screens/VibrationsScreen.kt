@@ -36,9 +36,9 @@ import com.rumbo.watchapp.presentation.viewmodel.DemoStep
 fun VibrationCue.color(): Color = when (this) {
     VibrationCue.ON_ROUTE -> StatusOnRoute
     VibrationCue.TURN_APPROACHING, VibrationCue.LEFT, VibrationCue.RIGHT, VibrationCue.ATTENTION -> StatusTurnSoon
-    VibrationCue.OFF_ROUTE -> StatusOffRoute
+    VibrationCue.OFF_ROUTE, VibrationCue.COMMAND_ERROR -> StatusOffRoute
     VibrationCue.NO_SIGNAL -> StatusNoSignal
-    VibrationCue.ARRIVED -> StatusArrived
+    VibrationCue.ARRIVED, VibrationCue.COMMAND_OK -> StatusArrived
 }
 
 /**

@@ -11,7 +11,7 @@ qué se espera; si algo no coincide, es un error.
 | Backend | `cd backend` y `pytest` | Casos de uso, routers, repositorios (SQLite en memoria), Gemini y Geoapify con dobles, límite de 50 km en `POST /routes` |
 | Reloj (JUnit) | `cd watchapp` y `gradlew testDebugUnitTest` | Geometría, filtro GPS, motor de navegación, vibraciones, frases, voz (prioridades y pausa al grabar), órdenes de voz y contexto del asistente, casos de uso, red (reintento y mensajes), ViewModel |
 | Recorridos GPX | incluidas en el comando anterior | `DemoGpxNavigationTest` y `DemoGpxTrackingTest` recorren los tres GPX de `docs/demo` segundo a segundo |
-| Instrumentados | `gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.package=com.rumbo.watchapp.presentation` (emulador abierto) | `RouteDoubleTapTest`: toques reales sobre "En ruta", repite sin importar dónde caiga, nunca termina la ruta por un doble toque, y la acción que usa TalkBack. `UnknownStepScreenTest`: "Atención" en En ruta y en Probar vibraciones. También corre `ScreenshotsTest` |
+| Instrumentados | `gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.package=com.rumbo.watchapp.presentation` (emulador abierto) | `RouteDoubleTapTest`: toques reales sobre "En ruta", repite sin importar dónde caiga, nunca termina la ruta por un doble toque, y la acción que usa TalkBack. `UnknownStepScreenTest`: "Atención" en En ruta y en Probar vibraciones. `VoiceCommandScreenTest`: micrófono en Confirmar, "Guardado ✓" en la ruta y las vibraciones "Hecho" y "Error". También corre `ScreenshotsTest` |
 | Capturas | `bash tools/capture_screens.sh` (emulador abierto) | Dibuja todas las pantallas en `docs/capturas` |
 
 Las pruebas con GPX usan la ruta real del backend (`docs/demo/ruta_parque_narino_a_parque_bolivar.json`,
@@ -61,7 +61,7 @@ recorridos realistas (una lectura por segundo con ruido de GPS de σ ≈ 3 m, ve
 | V2 | Orden sin sentido | Tocar el micrófono y decir algo que no sea un destino ni una pregunta (p. ej. toser o "eh...") | Error "No te entendí, intenta de nuevo" (en pantalla y en voz) con Reintentar e Inicio |
 | V3 | Lugar inexistente | Decir "llévame a Xyzzy" | Error "No encontré «Xyzzy», intenta con otro nombre" |
 | V4 | Voz apagada | Inicio → "Voz: sí" → pasa a "Voz: no" → hacer V1 e Ir | No se oye nada; las vibraciones siguen. El estado queda guardado al reabrir la app |
-| V5 | Volver mientras escucha | Tocar el micrófono y hacer el gesto de volver (o tocar "Cancelar") | Vuelve a Inicio, la grabación se cancela y no se pide ruta |
+| V5 | Volver mientras escucha | Tocar el micrófono y hacer el gesto de volver (o tocar "Cancelar") | Vuelve a donde estaba (Inicio, Confirmar o la ruta), la grabación se cancela y no se pide nada |
 | V6 | No decir nada | Tocar el micrófono y quedarse callado | A los 8 s deja de grabar solo y avisa que no entendió |
 
 ### Asistente
@@ -71,13 +71,29 @@ Requiere el backend con `POST /voice/ask` desplegado en Render.
 | # | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|
 | A1 | Pregunta sin ruta | Inicio → micrófono → "¿qué puedes hacer?" | "Procesando" → "Pensando la respuesta..." → pantalla Asistente con «¿qué puedes hacer?» y la respuesta (máximo 2 frases), que también se dice en voz alta; mientras suena, el badge se vuelve barras. "Inicio" vuelve a Inicio |
-| A2 | Pregunta en ruta | En ruta (R1) → "Preguntar" → "¿cuánto falta?" | Escuchando dice "¿Qué quieres saber?" y Procesando "Entendiendo..."; la respuesta usa los metros que faltan de verdad. Las vibraciones y los avisos de la ruta siguen (Logcat `Nav`, `Vibracion`). "Volver a la ruta" regresa a "En ruta" |
+| A2 | Pregunta en ruta | En ruta (R1) → "Preguntar" → "¿qué sigue?" | Escuchando dice "Pregunta o da una orden" y Procesando "Entendiendo..."; la respuesta usa los metros que faltan de verdad. Las vibraciones y los avisos de la ruta siguen (Logcat `Nav`, `Vibracion`). "Volver a la ruta" regresa a "En ruta" |
 | A3 | Preguntar otra vez | En Asistente, tocar "Preguntar otra vez" mientras aún habla | La voz se calla al empezar a grabar (no se cuela en la pregunta nueva) y se puede preguntar de nuevo |
-| A4 | "Repite" y "cancela" | En ruta → "Preguntar" → "repite"; luego "Preguntar" → "termina la ruta" | "Repite" vuelve a la ruta, vibra y dice la indicación; "termina" pregunta "¿Terminar la ruta?" |
+| A4 | "Repite" y "cancela" | En ruta → "Preguntar" → "repite"; luego "Preguntar" → "termina la ruta" | "Repite" vuelve a la ruta, vibra y dice la indicación; "termina" pregunta "¿Terminar la ruta?" en pantalla y en voz, sin terminarla |
 | A5 | Otro destino en ruta | En ruta → "Preguntar" → "llévame a la Universidad" | Sigue en la misma ruta y dice "Ya vas hacia Parque Bolívar. Para ir a otro lugar, termina esta ruta." |
 | A6 | Aviso mientras graba | Con el GPX corriendo, tocar "Preguntar" justo antes de un giro y hablar | La voz no dice el aviso mientras graba (la vibración sí suena); al terminar de grabar se dice el aviso más importante que llegó |
 | A8 | Lo que Rumbo no hace | Preguntar "¿qué puedes hacer?" y "¿hay obstáculos adelante?" | Describe solo lo que hace (ruta a pie, avisos por vibración y voz, repetir, preguntas sobre la ruta) y dice que no detecta obstáculos; nunca promete ver el entorno |
 | A7 | Cuota agotada | Con la cuota gratis de Gemini agotada, hacer una pregunta | Error "Se agotó la cuota gratuita del asistente de Gemini. Intenta más tarde."; en ruta, "Volver a la ruta" sigue navegando |
+
+### Órdenes de voz
+
+Requieren Render redesplegado con las intenciones nuevas. Cada orden termina con "Hecho" (2 pulsos cortos) o "Error" (1 pulso extra largo) en Logcat `Vibracion`, y la voz dice el resultado.
+
+| # | Prueba | Pasos | Resultado esperado |
+|---|---|---|---|
+| C1 | Micrófono en Confirmar | Confirmar → "Hablar" | Escuchando dice "Di guardar, repetir o cancelar"; "Cancelar" vuelve a Confirmar con la misma ruta y sin llamar a `/voice/interpret` |
+| C2 | Guardar en Confirmar | Confirmar → "Hablar" → "guarda este lugar" | "Destino guardado.", vibra "Hecho" y el botón dice "Guardado ✓". Otra vez: "Este destino ya estaba guardado." y no se duplica en la lista |
+| C3 | Guardar en ruta | En ruta hacia un destino sin guardar → "Preguntar" → "guarda este lugar" | "Destino guardado." y "En ruta" muestra "Guardado ✓"; sigue tras un recálculo y tras `am force-stop` y "Continuar ruta anterior" |
+| C4 | Aviso al iniciar | Elegir un lugar guardado → "Ir" | La frase de inicio termina con "Este destino está guardado." y "En ruta" muestra "Guardado ✓" |
+| C5 | Cuánto falta | En ruta → "¿cuánto falta?"; en Confirmar → lo mismo | "Faltan ..., ... a pie." sin Gemini (Logcat `Red` solo muestra `/voice/interpret`); en Confirmar, "Son ..., ... a pie." |
+| C6 | Está guardado | "¿este lugar está guardado?" en Confirmar y en ruta | "Este destino está guardado." o "Este destino no está guardado.", según corresponda |
+| C7 | Cancelar en Confirmar | Confirmar → "Hablar" → "cancela" | "Destino cancelado.", vibra "Hecho" y va a Inicio |
+| C8 | Órdenes sin ruta | Inicio → "guarda este lugar", "cancela" o "¿cuánto falta?" | Vibra "Error", pantalla de error y la voz dice por qué |
+| C9 | Sin internet | Sin red, dar una orden | Vibra "Error" y dice "Sin conexión. Revisa el internet del reloj" |
 
 ### Ruta y navegación
 
@@ -103,8 +119,8 @@ Requiere el backend con `POST /voice/ask` desplegado en Render.
 
 | # | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|
-| L1 | Guardar | En Confirmar tocar "Guardar" | "Guardando..." → "Guardado". Sin internet: "No pude guardar el lugar" en pantalla y voz |
-| L2 | Elegir | Inicio → "Lugares guardados" → tocar un lugar | Pide ubicación si falta, "Procesando" y luego Confirmar con el lugar ya marcado "Guardado" |
+| L1 | Guardar | En Confirmar tocar "Guardar" | "Guardando..." → "Guardado ✓". Sin internet: "No pude guardar el lugar" en pantalla y voz |
+| L2 | Elegir | Inicio → "Lugares guardados" → tocar un lugar | Pide ubicación si falta, "Procesando" y luego Confirmar con el lugar ya marcado "Guardado ✓" |
 | L3 | Borrar | Mantener pulsado un lugar → "Borrar" | Pregunta "¿Borrar «X»?" (Cancelar / Borrar); al borrar, la lista se actualiza. Volver desde la pregunta regresa a la lista |
 | L4 | Lista vacía | Borrar todos | "Aún no tienes lugares guardados" |
 
@@ -112,11 +128,11 @@ Requiere el backend con `POST /voice/ask` desplegado en Render.
 
 | # | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|
-| B1 | Guía | Inicio → "Vibraciones" → tocar cada patrón | Recto: 1 pulso suave cada 6 s; Giro próximo: 2 pulsos muy cortos; Izquierda: 2 pulsos medios; Derecha: 1 pulso largo; Atención: 4 pulsos cortos seguidos; Desviado: 3 pulsos largos con pausas cortas; Sin señal: 1 pulso muy largo cada 5 s; Llegada: 5 pulsos crecientes. Cada uno se nota distinto (en el reloj) y en el emulador se ve en Logcat y en las barras animadas |
+| B1 | Guía | Inicio → "Vibraciones" → tocar cada patrón | Recto: 1 pulso suave cada 6 s; Giro próximo: 2 pulsos muy cortos; Izquierda: 2 pulsos medios; Derecha: 1 pulso largo; Atención: 4 pulsos cortos seguidos; Desviado: 3 pulsos largos con pausas cortas; Sin señal: 1 pulso muy largo cada 5 s; Llegada: 5 pulsos crecientes; Hecho: 2 pulsos cortos; Error: 1 pulso extra largo. Cada uno se nota distinto (en el reloj) y en el emulador se ve en Logcat y en las barras animadas |
 | B3 | Reloj sin control de intensidad | Abrir la app y mirar `adb logcat -s Vibracion` | Al arrancar: `Motor de vibración: ...; control de intensidad: sí/no → patrones con amplitud / solo con ritmo y duración`. Sin control, la guía muestra "Recto: 1 pulso corto cada 6 s" y "Llegada: 5 pulsos cada vez más largos", y cada patrón se distingue solo por cuántos pulsos tiene y cuánto duran |
 | B4 | Soporte de intensidad | Abrir "Vibraciones" | Arriba "Intensidad: sí" con "El reloj varía la fuerza" (emulador) o "Intensidad: no" con "Se distinguen por ritmo y duración". Coincide con la línea `control de intensidad` de Logcat |
 | B5 | Barras con nombre | Tocar "Izquierda" | Vibra 2 pulsos medios; debajo del botón aparecen "Izquierda" y 2 barras que se encienden al ritmo del patrón. Logcat `Vibracion: Izquierda: 2 pulsos medios tiempos=[0, 300, 200, 300] ...` |
-| B6 | Secuencia de demostración | Tocar "Secuencia de demostración" | Suenan los 8 patrones en orden (Recto, Giro próximo, Izquierda, Derecha, Atención, Desviado, Sin señal, Llegada); cada uno muestra "n de 7", su nombre en grande y sus barras; entre uno y otro, 2 s de pausa tras terminar (en Logcat, duración del patrón + 2 s entre líneas). Al final vuelve a la lista |
+| B6 | Secuencia de demostración | Tocar "Secuencia de demostración" | Suenan los 10 patrones en orden (Recto, Giro próximo, Izquierda, Derecha, Atención, Desviado, Sin señal, Llegada, Hecho, Error); cada uno muestra "n de 10", su nombre en grande y sus barras; entre uno y otro, 2 s de pausa tras terminar (en Logcat, duración del patrón + 2 s entre líneas). Al final vuelve a la lista |
 | B7 | Detener la demostración | Durante la demo, tocar "Detener" (o gesto de volver) | La vibración se corta (`Vibracion: Detenida`), no suena ningún patrón más y se vuelve a la lista; volver otra vez va a Inicio |
 | B8 | Ajustes de vibración | Tocar "Intensidad: normal" y luego "Duración: normal" | Pasan a "Intensidad: fuerte" y "Duración: larga" ("Pulsos 30 % más largos"); cada toque vibra "Izquierda" con el ajuste nuevo (Logcat `tiempos=[0, 390, 200, 390] amplitudes=[0, 200, 0, 200]`). Otro toque en Intensidad pasa a "suave" y luego a "normal". Sin control de intensidad el botón dice "Este reloj no la controla" |
 | B9 | Ajustes guardados | Cambiar los ajustes, `adb shell am force-stop com.rumbo.watchapp` y volver a abrir "Vibraciones" | Los ajustes siguen como se dejaron; en ruta las vibraciones salen con ellos (Logcat `Vibracion`) |

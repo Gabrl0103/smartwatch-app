@@ -14,18 +14,31 @@ sealed interface VoiceCommand {
     /** "Cancela" o "termina la ruta". */
     data object Cancel : VoiceCommand
 
+    /** "Guarda este lugar": guardar el destino que se confirma o se navega. */
+    data object SaveDestination : VoiceCommand
+
+    /** "¿Cuánto falta?": se responde en el reloj, sin red ni asistente. */
+    data object HowFar : VoiceCommand
+
+    /** "¿Este lugar está guardado?". */
+    data object SavedStatus : VoiceCommand
+
     /** No se entendió nada útil. */
     data object NotUnderstood : VoiceCommand
 }
 
 /**
  * Clasifica la respuesta de `POST /voice/interpret`. Un destino o una pregunta vacíos no sirven:
- * el backend devuelve `ask` con texto vacío cuando no entendió nada.
+ * el backend devuelve `ask` con texto vacío cuando no entendió nada. "repeat" y "cancel" son los
+ * nombres que usa un backend anterior: el reloj puede quedar más nuevo que el servidor.
  */
 fun VoiceResult.toCommand(): VoiceCommand = when (intent) {
     "navigate" -> destination?.trim()?.takeIf { it.isNotEmpty() }?.let { VoiceCommand.Navigate(it) }
     "ask" -> (question ?: text).trim().takeIf { it.isNotEmpty() }?.let { VoiceCommand.Ask(it) }
-    "repeat" -> VoiceCommand.Repeat
-    "cancel" -> VoiceCommand.Cancel
+    "repetir_instruccion", "repeat" -> VoiceCommand.Repeat
+    "cancelar_ruta", "cancel" -> VoiceCommand.Cancel
+    "guardar_destino" -> VoiceCommand.SaveDestination
+    "cuanto_falta" -> VoiceCommand.HowFar
+    "estado_guardado" -> VoiceCommand.SavedStatus
     else -> null
 } ?: VoiceCommand.NotUnderstood

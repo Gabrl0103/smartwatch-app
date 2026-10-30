@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.Text
+import com.rumbo.watchapp.application.usecase.SAVE_FAILED_MESSAGE
 import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.presentation.components.PillButton
 import com.rumbo.watchapp.presentation.components.PillStyle
@@ -31,7 +32,6 @@ import com.rumbo.watchapp.presentation.format.formatWalkingMinutes
 import com.rumbo.watchapp.presentation.theme.Primary
 import com.rumbo.watchapp.presentation.theme.StatusNoSignal
 import com.rumbo.watchapp.presentation.theme.StatusOffRoute
-import com.rumbo.watchapp.presentation.viewmodel.SAVE_FAILED_MESSAGE
 import com.rumbo.watchapp.presentation.viewmodel.SaveStatus
 
 @Composable
@@ -43,6 +43,7 @@ fun ConfirmScreen(
     onChange: () -> Unit,
     onSave: () -> Unit,
     speaking: Boolean = false,
+    onSpeak: () -> Unit = {},
 ) {
     RumboScreen(paneTitle = "Confirmar destino") {
         // Mientras dice el destino en voz alta, las barras ocupan el lugar del badge (con un
@@ -80,6 +81,8 @@ fun ConfirmScreen(
             )
         }
         PillButton("Ir", onClick = onGo, style = PillStyle.PRIMARY)
+        // El micrófono: guardar, repetir, cancelar o pedir otro destino sin tocar nada más.
+        PillButton("Hablar", onClick = onSpeak, style = PillStyle.ASSISTANT, secondaryLabel = "Micrófono")
         PillButton("Cambiar", onClick = onChange)
         // Secundario: no compite con "Ir". Siempre activo para que el texto mantenga contraste.
         PillButton(saveLabel(save), onClick = onSave)
@@ -98,5 +101,5 @@ fun ConfirmScreen(
 private fun saveLabel(save: SaveStatus) = when (save) {
     SaveStatus.IDLE, SaveStatus.FAILED -> "Guardar"
     SaveStatus.SAVING -> "Guardando..."
-    SaveStatus.SAVED -> "Guardado"
+    SaveStatus.SAVED -> "Guardado ✓"
 }

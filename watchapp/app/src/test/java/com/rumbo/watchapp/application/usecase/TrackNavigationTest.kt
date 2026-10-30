@@ -393,6 +393,81 @@ class TrackNavigationTest {
         }
     }
 
+    @Test
+    fun aSavedDestinationIsSaidAtTheStartAfterTheGuidance() = runBlocking {
+        val speech = FakeSpeech()
+        val tracking = TrackNavigation(
+            MutableSharedFlow(),
+            FakeRoutes(detour),
+            FakeVibration(),
+            FakeVibrationEvents(),
+            speech,
+            clock = { 0L },
+        )
+
+        tracking.start(lRoute().copy(destinationSaved = true), this)
+        val state = tracking.state.value
+        tracking.stop()
+
+        assertEquals(
+            "Iniciando ruta. Camine hacia el norte. En doscientos metros, gira a la derecha. Este destino está guardado.",
+            speech.spoken.single().first,
+        )
+        assertTrue(state.destinationSaved)
+    }
+
+    @Test
+    fun savingDuringTheRouteShowsItAndKeepsItIfTheProcessDies() = runBlocking {
+        val store = FakeStore()
+        val tracking = TrackNavigation(
+            MutableSharedFlow(),
+            FakeRoutes(detour),
+            FakeVibration(),
+            FakeVibrationEvents(),
+            FakeSpeech(),
+            clock = { 0L },
+            activeRoutes = store,
+        )
+
+        tracking.start(lRoute(), this)
+        assertTrue(!tracking.state.value.destinationSaved)
+        tracking.markDestinationSaved()
+
+        assertTrue(tracking.state.value.destinationSaved)
+        assertEquals(lRoute().copy(destinationSaved = true), store.saved)
+        tracking.stop()
+    }
+
+    @Test
+    fun aRecalculatedRouteStaysSaved() = runBlocking {
+        val fixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 16)
+        var now = 0L
+        val tracking = TrackNavigation(
+            fixes,
+            FakeRoutes(detour),
+            FakeVibration(),
+            FakeVibrationEvents(),
+            FakeSpeech(),
+            clock = { now },
+            tickMs = 600_000,
+        )
+
+        tracking.start(lRoute().copy(destinationSaved = true), this)
+        try {
+            delay(20)
+            listOf(0L, 1_000L, 2_000L, 12_000L).forEach { t ->
+                now = t
+                fixes.emit(fixAt(40.0, 100.0, t))
+                delay(20)
+            }
+
+            assertEquals("Ha llegado.", tracking.state.value.nextInstruction)
+            assertTrue(tracking.state.value.destinationSaved)
+        } finally {
+            tracking.stop()
+        }
+    }
+
     /** Recorre la ruta en L, con [text] en el paso del medio, y deja la voz y la vibración en los fakes. */
     private fun walkPastAnUnknownStep(text: String, check: (FakeSpeech, FakeVibration, TrackingState) -> Unit) = runBlocking {
         val fixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 64)

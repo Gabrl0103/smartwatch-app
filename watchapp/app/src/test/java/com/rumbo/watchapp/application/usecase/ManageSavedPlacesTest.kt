@@ -47,6 +47,38 @@ class ManageSavedPlacesTest {
         }
     }
 
+    @Test
+    fun aDestinationIsSavedByNameWhateverTheCase() = runBlocking {
+        val manage = ManageSavedPlaces(FakeSavedPlaces(listOf(park.copy(name = "PARQUE BOLÍVAR", lat = 0.0, lng = 0.0))), FakeRoutes(route)) { BASE }
+
+        assertEquals(true, manage.isSaved(route))
+    }
+
+    @Test
+    fun aDestinationIsSavedIfItEndsAtTheSamePointWithAnotherName() = runBlocking {
+        // La ruta termina en 1.2055, -77.2702: a unos 16 m del lugar guardado.
+        val manage = ManageSavedPlaces(FakeSavedPlaces(listOf(park.copy(name = "El parque"))), FakeRoutes(route)) { BASE }
+
+        assertEquals(true, manage.isSaved(route))
+    }
+
+    @Test
+    fun anotherPlaceIsNotTheDestination() = runBlocking {
+        val manage = ManageSavedPlaces(FakeSavedPlaces(listOf(home)), FakeRoutes(route)) { BASE }
+
+        assertEquals(false, manage.isSaved(route))
+    }
+
+    @Test
+    fun withoutNetworkItCountsAsNotSaved() = runBlocking {
+        val failing = object : SavedPlacesRepository by FakeSavedPlaces() {
+            override suspend fun list(): List<SavedPlace> = throw AppError("Sin conexión")
+        }
+        val manage = ManageSavedPlaces(failing, FakeRoutes(route)) { BASE }
+
+        assertEquals(false, manage.isSaved(route))
+    }
+
     private class FakeRoutes(private val route: Route) : RoutesRepository {
         var origin: Coordinates? = null
         var destination: Place? = null

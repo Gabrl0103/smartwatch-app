@@ -6,8 +6,8 @@ import com.rumbo.watchapp.domain.port.AssistantRepository
 
 /**
  * Responde una pregunta hecha por voz. Si se está navegando, le pasa al asistente el estado de la
- * ruta ([routeContext]) para que pueda responder "¿cuánto falta?" o "¿qué sigue?". Solo van el
- * destino, la indicación y las distancias: nunca la posición, que es un dato personal.
+ * ruta ([routeContext]) para que pueda responder "¿qué sigue?". Solo van el destino, la indicación
+ * y las distancias: nunca la posición, que es un dato personal.
  */
 class AskAssistant(
     private val assistant: AssistantRepository,

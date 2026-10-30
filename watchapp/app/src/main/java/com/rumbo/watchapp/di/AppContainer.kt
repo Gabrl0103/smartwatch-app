@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.rumbo.watchapp.application.location.LocationTracker
 import com.rumbo.watchapp.application.usecase.AskAssistant
+import com.rumbo.watchapp.application.usecase.ExecuteVoiceCommand
 import com.rumbo.watchapp.application.usecase.ManageSavedPlaces
 import com.rumbo.watchapp.application.usecase.PlanRouteFromVoice
 import com.rumbo.watchapp.application.usecase.RegisterDevice
@@ -95,7 +96,15 @@ class AppContainer(context: Context) {
     )
     val navigationRunner = ForegroundNavigationRunner(appContext, trackNavigation, locationTracker, appScope)
     // El asistente conoce la ruta en curso (destino, indicación, distancias) para responder.
-    val askAssistant = AskAssistant(AssistantApiClient) { trackNavigation.state.value }
+    private val askAssistant = AskAssistant(AssistantApiClient) { trackNavigation.state.value }
+    val executeVoiceCommand = ExecuteVoiceCommand(
+        planRouteFromVoice,
+        manageSavedPlaces,
+        askAssistant,
+        navigationRunner,
+        tracking = { trackNavigation.state.value },
+        repeatInstruction = trackNavigation::repeat,
+    )
 
     /**
      * Despierta el servidor de Render apenas se abre la app, para que al pedir la ruta ya esté

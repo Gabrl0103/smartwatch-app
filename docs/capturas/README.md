@@ -10,7 +10,7 @@ misma pantalla desplazada hasta el final.
 | `01_inicio.png`, `02_inicio_abajo.png` | Inicio: "Listo para navegar", micrófono, Lugares guardados, Vibraciones, Voz: sí/no |
 | `03_escuchando.png`, `26_escuchando_abajo.png` | Escuchando (diseño A2): anillo, badge relleno, barras con el nivel de la voz, "Te escucho"; abajo "Di a dónde quieres ir" (en ruta, "¿Qué quieres saber?") y Cancelar |
 | `04_procesando.png` | Procesando (el indicador gira en la app; en la captura queda quieto) |
-| `05_confirmar.png`, `06_confirmar_abajo.png` | Confirmar destino: Ir / Cambiar / Guardar |
+| `05_confirmar.png`, `06_confirmar_abajo.png` | Confirmar destino: Ir / Hablar / Cambiar / Guardar |
 | `27_confirmar_hablando.png` | Confirmar mientras la app dice el destino: el badge se funde en barras que se mueven |
 | `07_error.png` | Error: Reintentar / Inicio |
 | `08_en_ruta.png`, `09_en_ruta_abajo.png` | En ruta, con distancias, vibración, Repetir, Preguntar (asistente) y Terminar |
@@ -27,7 +27,7 @@ misma pantalla desplazada hasta el final.
 | `21_buscando_gps.png` | Procesando mientras espera una lectura GPS buena |
 | `22_continuar_ruta.png` | Inicio con "Continuar ruta anterior" tras cerrarse la app a mitad de ruta |
 | `23_vibraciones_sin_intensidad.png` | Probar vibraciones en un reloj sin control de intensidad ("Intensidad: no", patrones solo por ritmo) |
-| `24_demostracion_vibraciones.png` | Secuencia de demostración: "3 de 8", el nombre en grande y sus barras |
+| `24_demostracion_vibraciones.png` | Secuencia de demostración: "3 de 10", el nombre en grande y sus barras |
 | `25_indicacion_larga.png` | Giro próximo con la indicación real más larga de la demo: baja a 16 sp para leerse entera en el círculo |
 | `28_asistente.png`, `30_asistente_abajo.png` | Asistente en ruta: badge, la pregunta, la respuesta; abajo "Preguntar otra vez" y "Volver a la ruta" |
 | `29_asistente_hablando.png` | Asistente mientras dice la respuesta: el badge se funde en barras |

@@ -34,7 +34,10 @@ data class RouteStep(
     val destinationSide: Side? = null,
 )
 
-/** Ruta a pie calculada por el backend. [id] es null si el backend no pudo guardarla. */
+/**
+ * Ruta a pie calculada por el backend. [id] es null si el backend no pudo guardarla.
+ * [destinationSaved] dice si su destino está en los lugares guardados.
+ */
 data class Route(
     val destinationName: String,
     val distanceM: Double,
@@ -42,6 +45,7 @@ data class Route(
     val steps: List<RouteStep>,
     val polyline: List<Coordinates>,
     val id: Long? = null,
+    val destinationSaved: Boolean = false,
 ) {
     /** Punto final de la ruta: último de la polilínea o, si no hay, el del último paso. */
     val end: Coordinates

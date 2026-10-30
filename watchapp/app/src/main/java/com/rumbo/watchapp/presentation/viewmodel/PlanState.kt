@@ -4,8 +4,6 @@ import com.rumbo.watchapp.domain.model.Route
 import com.rumbo.watchapp.domain.model.SavedPlace
 import com.rumbo.watchapp.domain.vibration.VibrationCue
 
-const val SAVE_FAILED_MESSAGE = "No pude guardar el lugar"
-
 /** Estado del botón "Guardar" en la pantalla Confirmar. */
 enum class SaveStatus { IDLE, SAVING, SAVED, FAILED }
 

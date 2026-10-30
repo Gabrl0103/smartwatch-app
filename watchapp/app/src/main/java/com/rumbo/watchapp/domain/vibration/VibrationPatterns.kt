@@ -4,6 +4,8 @@ import com.rumbo.watchapp.domain.model.Maneuver
 import com.rumbo.watchapp.domain.navigation.NavigationEvent
 import com.rumbo.watchapp.domain.vibration.VibrationCue.ARRIVED
 import com.rumbo.watchapp.domain.vibration.VibrationCue.ATTENTION
+import com.rumbo.watchapp.domain.vibration.VibrationCue.COMMAND_ERROR
+import com.rumbo.watchapp.domain.vibration.VibrationCue.COMMAND_OK
 import com.rumbo.watchapp.domain.vibration.VibrationCue.LEFT
 import com.rumbo.watchapp.domain.vibration.VibrationCue.NO_SIGNAL
 import com.rumbo.watchapp.domain.vibration.VibrationCue.OFF_ROUTE
@@ -69,6 +71,16 @@ object VibrationPatterns {
             timingsMs = listOf(0, 100, 150, 200, 150, 300, 150, 400, 150, 500),
             amplitudes = listOf(0, 60, 0, 95, 0, 130, 0, 165, 0, 200),
         ),
+        COMMAND_OK to VibrationPattern(
+            COMMAND_OK.title, "2 pulsos cortos",
+            timingsMs = listOf(0, 180, 120, 180),
+            amplitudes = listOf(0, 160, 0, 160),
+        ),
+        COMMAND_ERROR to VibrationPattern(
+            COMMAND_ERROR.title, "1 pulso extra largo",
+            timingsMs = listOf(0, 1_400),
+            amplitudes = listOf(0, 200),
+        ),
     )
 
     val WITHOUT_AMPLITUDE: Map<VibrationCue, VibrationPattern> = mapOf(
@@ -113,6 +125,16 @@ object VibrationPatterns {
             ARRIVED.title, "5 pulsos cada vez más largos",
             timingsMs = listOf(0, 100, 150, 200, 150, 300, 150, 400, 150, 500),
             amplitudes = listOf(0, ON, 0, ON, 0, ON, 0, ON, 0, ON),
+        ),
+        COMMAND_OK to VibrationPattern(
+            COMMAND_OK.title, "2 pulsos cortos",
+            timingsMs = listOf(0, 180, 120, 180),
+            amplitudes = listOf(0, ON, 0, ON),
+        ),
+        COMMAND_ERROR to VibrationPattern(
+            COMMAND_ERROR.title, "1 pulso extra largo",
+            timingsMs = listOf(0, 1_400),
+            amplitudes = listOf(0, ON),
         ),
     )
 

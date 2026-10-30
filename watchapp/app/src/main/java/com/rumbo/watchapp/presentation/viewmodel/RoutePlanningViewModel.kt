@@ -3,12 +3,16 @@ package com.rumbo.watchapp.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rumbo.watchapp.application.location.LocationTracker
+import com.rumbo.watchapp.application.speech.DESTINATION_DROPPED_PHRASE
+import com.rumbo.watchapp.application.speech.FINISH_QUESTION_PHRASE
 import com.rumbo.watchapp.application.speech.confirmPhrase
-import com.rumbo.watchapp.application.usecase.AskAssistant
+import com.rumbo.watchapp.application.usecase.ExecuteVoiceCommand
 import com.rumbo.watchapp.application.usecase.ManageSavedPlaces
 import com.rumbo.watchapp.application.usecase.NOT_UNDERSTOOD_MESSAGE
 import com.rumbo.watchapp.application.usecase.PlanRouteFromVoice
+import com.rumbo.watchapp.application.usecase.SAVE_FAILED_MESSAGE
 import com.rumbo.watchapp.application.usecase.TrackingState
+import com.rumbo.watchapp.application.usecase.VoiceOutcome
 import com.rumbo.watchapp.domain.error.AppError
 import com.rumbo.watchapp.domain.error.SERVER_WAKING_MESSAGE
 import com.rumbo.watchapp.domain.model.Route
@@ -57,12 +61,11 @@ const val DEMO_PAUSE_MS = 2_000L
 val SETTINGS_SAMPLE = VibrationCue.LEFT
 private const val GENERIC_ERROR = "Algo salió mal, intenta de nuevo"
 const val GPS_SEARCHING_MESSAGE = "Buscando señal GPS"
-const val NOTHING_TO_REPEAT_MESSAGE = "No hay ninguna ruta en curso para repetir"
 
 class RoutePlanningViewModel(
     private val recorder: AudioRecorder,
     private val planRoute: PlanRouteFromVoice,
-    private val askAssistant: AskAssistant,
+    private val executeCommand: ExecuteVoiceCommand,
     private val savedPlaces: ManageSavedPlaces,
     private val locationTracker: LocationTracker,
     private val navigationRunner: NavigationRunner,
@@ -118,6 +121,10 @@ class RoutePlanningViewModel(
     // Grabación o carga en curso; volver al inicio la cancela.
     private var job: Job? = null
 
+    // La pantalla Confirmar desde la que se abrió el micrófono: al terminar se vuelve a ella, con su
+    // ruta. Sigue viva en Asistente y Error, que pueden volver a abrirlo.
+    private var pendingConfirm: PlanState.Confirming? = null
+
     private val busy get() = _state.value.let {
         it is PlanState.Listening || it is PlanState.Processing || it is PlanState.LoadingPlaces ||
             it is PlanState.Answering
@@ -163,70 +170,108 @@ class RoutePlanningViewModel(
     /** Si hay una ruta en curso: entonces "volver" o "Inicio" regresan a ella, no a Inicio. */
     val navigating: Boolean get() = navigationRunner.activeRoute != null
 
+    /** Si el micrófono se abrió en Confirmar: "volver" regresa ahí, con la misma ruta. */
+    val confirming: Boolean get() = pendingConfirm != null
+
     /**
      * Graba la orden hasta que la persona termina de hablar (ver [SpeechEndDetector]: 1,2 s de
-     * silencio tras la voz, como mucho 8 s) y hace lo que pidió (ver [handle]): buscar la ruta a
-     * un lugar o responder una pregunta con el asistente. Mientras graba, [voiceLevel] mueve las
-     * barras de "Escuchando". El permiso de micrófono ya debe estar dado.
+     * silencio tras la voz, como mucho 8 s) y hace lo que pidió con [ExecuteVoiceCommand]. Mientras
+     * graba, [voiceLevel] mueve las barras de "Escuchando". El permiso de micrófono ya debe estar dado.
      */
     fun listen() {
         if (busy) return
+        when (val current = _state.value) {
+            is PlanState.Confirming -> pendingConfirm = current
+            PlanState.Start, is PlanState.OnRoute -> pendingConfirm = null
+            else -> Unit
+        }
         job = viewModelScope.launch {
             try {
                 _state.value = PlanState.Listening
                 val audio = record()
                 _state.value = PlanState.Processing
-                handle(planRoute.interpret(audio))
+                val command = planRoute.interpret(audio)
+                if (command is VoiceCommand.Ask) _state.value = PlanState.Answering
+                show(executeCommand(command, pendingConfirm?.routeToGo()))
             } catch (e: CancellationException) {
                 recorder.release()
                 throw e
             } catch (e: AppError) {
                 recorder.release()
-                showError(e.message ?: GENERIC_ERROR)
+                commandFailed(e.message ?: GENERIC_ERROR)
             } catch (e: Exception) {
                 recorder.release()
-                showError(GENERIC_ERROR)
+                commandFailed(GENERIC_ERROR)
             } finally {
                 _voiceLevel.value = 0f
             }
         }
     }
 
-    /**
-     * Lo que se pidió por voz. En ruta, la ruta sigue mandando: una pregunta se responde y se
-     * vuelve a ella, "repite" dice la indicación, "cancela" pregunta si terminar y pedir otro
-     * destino solo recuerda que primero hay que terminar la ruta.
-     */
-    private suspend fun handle(command: VoiceCommand) {
-        val active = navigationRunner.activeRoute
-        when (command) {
-            is VoiceCommand.Ask -> answer(command.question)
-            is VoiceCommand.Navigate -> if (active == null) {
-                confirm(planRoute.routeTo(command.destination))
-            } else {
-                _state.value = PlanState.OnRoute(active)
-                speech.speak("Ya vas hacia ${active.destinationName}. Para ir a otro lugar, termina esta ruta.")
+    /** Muestra en qué terminó la orden: vibra el resultado y lo dice, porque quizá no se ve la pantalla. */
+    private fun show(outcome: VoiceOutcome) {
+        when (outcome) {
+            is VoiceOutcome.Confirm -> {
+                pendingConfirm = null
+                vibrateResult(VibrationCue.COMMAND_OK)
+                confirm(outcome.route)
             }
-            VoiceCommand.Repeat -> if (active == null) {
-                showError(NOTHING_TO_REPEAT_MESSAGE)
-            } else {
-                _state.value = PlanState.OnRoute(active)
-                repeatNavigation()
+            is VoiceOutcome.Answer -> {
+                _state.value = PlanState.Assistant(outcome.question, outcome.answer)
+                commandDone(outcome.answer)
             }
-            VoiceCommand.Cancel -> _state.value = active?.let { PlanState.OnRoute(it, confirmFinish = true) } ?: PlanState.Start
-            VoiceCommand.NotUnderstood -> showError(NOT_UNDERSTOOD_MESSAGE)
+            is VoiceOutcome.Done -> {
+                returnToOrigin()
+                commandDone(outcome.text)
+            }
+            is VoiceOutcome.Saved -> {
+                pendingConfirm = pendingConfirm?.copy(save = SaveStatus.SAVED)
+                returnToOrigin()
+                commandDone(outcome.text)
+            }
+            // La indicación ya vibró y habló: otra vibración encima la taparía.
+            VoiceOutcome.Repeated -> returnToOrigin()
+            VoiceOutcome.AskToFinish -> {
+                returnToOrigin()
+                _state.update { if (it is PlanState.OnRoute) it.copy(confirmFinish = true) else it }
+                commandDone(FINISH_QUESTION_PHRASE)
+            }
+            VoiceOutcome.DestinationDropped -> {
+                pendingConfirm = null
+                returnToOrigin()
+                commandDone(DESTINATION_DROPPED_PHRASE)
+            }
+            is VoiceOutcome.Refused -> if (pendingConfirm == null && !navigating) {
+                commandFailed(outcome.text)
+            } else {
+                returnToOrigin()
+                vibrateResult(VibrationCue.COMMAND_ERROR)
+                speech.speak(outcome.text, SpeechPriority.HIGH)
+            }
+            VoiceOutcome.NotUnderstood -> commandFailed(NOT_UNDERSTOOD_MESSAGE)
         }
     }
 
-    /** Pregunta al asistente; la respuesta se muestra y se dice con prioridad alta. */
-    private suspend fun answer(question: String) {
-        _state.value = PlanState.Answering
-        val answer = askAssistant(question)
-        _state.value = PlanState.Assistant(question, answer)
-        speech.speak(answer, SpeechPriority.HIGH)
+    private fun commandDone(text: String) {
+        vibrateResult(VibrationCue.COMMAND_OK)
+        speech.speak(text, SpeechPriority.HIGH)
     }
 
-    /** "Cancelar" en Escuchando: deja de grabar sin enviar nada y vuelve atrás (Inicio o la ruta). */
+    private fun commandFailed(message: String) {
+        vibrateResult(VibrationCue.COMMAND_ERROR)
+        showError(message)
+    }
+
+    private fun vibrateResult(cue: VibrationCue) = vibration.play(patternFor(cue))
+
+    // Vuelve a donde se abrió el micrófono: Confirmar con su ruta, la ruta en curso o Inicio.
+    private fun returnToOrigin() {
+        val confirming = pendingConfirm
+        pendingConfirm = null
+        _state.value = confirming ?: navigationRunner.activeRoute?.let { PlanState.OnRoute(it) } ?: PlanState.Start
+    }
+
+    /** "Cancelar" en Escuchando: deja de grabar sin enviar nada y vuelve atrás. */
     fun cancelListening() {
         if (_state.value == PlanState.Listening) reset()
     }
@@ -272,7 +317,7 @@ class RoutePlanningViewModel(
         if (_state.value !is PlanState.SavedPlaces) return
         launchSavedPlaces {
             _state.value = PlanState.Processing
-            confirm(savedPlaces.planRoute(place), SaveStatus.SAVED)
+            confirm(savedPlaces.planRoute(place).copy(destinationSaved = true))
         }
     }
 
@@ -371,7 +416,7 @@ class RoutePlanningViewModel(
     /** Arranca la navegación en el servicio en primer plano para que siga con la pantalla apagada. */
     fun go() {
         val current = _state.value
-        if (current is PlanState.Confirming) startNavigation(current.route)
+        if (current is PlanState.Confirming) startNavigation(current.routeToGo())
     }
 
     /** "Continuar ruta anterior" en Inicio: retoma la ruta guardada desde donde esté el usuario. */
@@ -389,7 +434,7 @@ class RoutePlanningViewModel(
         val current = _state.value
         val route = when {
             permission != Permission.NOTIFICATIONS -> null
-            current is PlanState.Confirming -> current.route
+            current is PlanState.Confirming -> current.routeToGo()
             else -> _previousRoute.value
         }
         _state.value = PlanState.PermissionNeeded(permission, route)
@@ -452,8 +497,10 @@ class RoutePlanningViewModel(
         if (_state.value is PlanState.Vibrations) vibration.stop()
         speech.stop()
         _previousRoute.value = if (navigationRunner.activeRoute == null) activeRoutes.load() else null
-        // Con una ruta en curso (se fue a preguntar algo), "Inicio" es volver a ella.
-        _state.value = navigationRunner.activeRoute?.let { PlanState.OnRoute(it) } ?: PlanState.Start
+        // "Cambiar" en Confirmar descarta la ruta; desde el micrófono se vuelve a ella. Con una ruta
+        // en curso (se fue a preguntar algo), "Inicio" es volver a ella.
+        if (_state.value is PlanState.Confirming) pendingConfirm = null
+        returnToOrigin()
     }
 
     /** Muestra el error y también lo lee. */
@@ -479,10 +526,13 @@ class RoutePlanningViewModel(
         _state.value = PlanState.OnRoute(route)
     }
 
-    private fun confirm(route: Route, save: SaveStatus = SaveStatus.IDLE) {
-        _state.value = PlanState.Confirming(route, save)
+    private fun confirm(route: Route) {
+        _state.value = PlanState.Confirming(route, if (route.destinationSaved) SaveStatus.SAVED else SaveStatus.IDLE)
         speech.speak(confirmPhrase(route))
     }
+
+    // La ruta tal como se saldría a caminarla: el botón "Guardar" pudo cambiar el estado.
+    private fun PlanState.Confirming.routeToGo() = route.copy(destinationSaved = save == SaveStatus.SAVED)
 
     // Solo cambia el botón si el usuario sigue confirmando esa misma ruta.
     private fun setSaveStatus(route: Route, status: SaveStatus) {
