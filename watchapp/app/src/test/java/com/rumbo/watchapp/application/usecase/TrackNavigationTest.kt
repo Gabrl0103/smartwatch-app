@@ -444,7 +444,7 @@ class TrackNavigationTest {
             tracking.repeat()
 
             assertEquals(listOf(pattern(VibrationCue.ON_ROUTE), pattern(VibrationCue.ON_ROUTE)), vibration.played)
-            assertEquals("En doscientos metros, gira a la derecha." to SpeechPriority.HIGH, speech.spoken.last())
+            assertEquals("Sigue recto. En doscientos metros, gira a la derecha." to SpeechPriority.HIGH, speech.spoken.last())
         } finally {
             tracking.stop()
         }

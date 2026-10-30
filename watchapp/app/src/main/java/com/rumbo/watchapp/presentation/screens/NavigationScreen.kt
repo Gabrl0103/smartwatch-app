@@ -6,15 +6,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.SemanticsPropertyReceiver
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -24,6 +29,7 @@ import androidx.wear.compose.material3.Text
 import com.rumbo.watchapp.application.usecase.TrackingState
 import com.rumbo.watchapp.domain.model.Maneuver
 import com.rumbo.watchapp.domain.navigation.NavigationStatus
+import com.rumbo.watchapp.presentation.components.DoubleTapGate
 import com.rumbo.watchapp.presentation.components.PillButton
 import com.rumbo.watchapp.presentation.components.PillStyle
 import com.rumbo.watchapp.presentation.components.ProgressRing
@@ -31,6 +37,7 @@ import com.rumbo.watchapp.presentation.components.StateBadge
 import com.rumbo.watchapp.presentation.components.StateIcon
 import com.rumbo.watchapp.presentation.components.StateIconKind
 import com.rumbo.watchapp.presentation.components.VibrationIndicator
+import com.rumbo.watchapp.presentation.components.doubleTapAnywhere
 import com.rumbo.watchapp.presentation.format.describeDistance
 import com.rumbo.watchapp.presentation.format.formatDistance
 import com.rumbo.watchapp.presentation.theme.StatusArrived
@@ -80,7 +87,7 @@ private fun maneuverIcon(maneuver: Maneuver?) = when (maneuver) {
 /**
  * Pantalla "En ruta" sin mapa. Arriba lo que hay que hacer (estado, ícono de la maniobra e
  * indicación); debajo las distancias, la vibración y los botones. El anillo del borde muestra el
- * avance hacia el siguiente giro.
+ * avance hacia el siguiente giro. Un doble toque en cualquier parte repite la indicación.
  */
 @Composable
 fun NavigationScreen(
@@ -104,19 +111,27 @@ fun NavigationScreen(
 private fun RouteScreen(state: TrackingState, onRepeat: () -> Unit, onAsk: () -> Unit, onFinish: () -> Unit) {
     val look = lookOf(state)
     val arrived = state.status == NavigationStatus.ARRIVED
+    val scope = rememberCoroutineScope()
+    val doubleTapMs = LocalViewConfiguration.current.doubleTapTimeoutMillis
+    val repeat by rememberUpdatedState(onRepeat)
+    val gate = remember(scope, doubleTapMs) { DoubleTapGate(scope, doubleTapMs) { repeat() } }
+    // Con TalkBack el doble toque activa lo que esté enfocado: la información también repite.
+    val repeatsOnActivate = Modifier.semantics { repeatOnActivate(onRepeat) }
     RumboScreen(
         paneTitle = "En ruta",
+        modifier = Modifier.doubleTapAnywhere(gate),
         edgeRing = {
             ProgressRing(
                 progress = state.stepProgress,
                 color = look.color,
                 contentDescription = if (arrived) "Ruta completa" else "Avance hacia el siguiente paso",
+                modifier = repeatsOnActivate,
             )
         },
     ) {
         // TalkBack anuncia el estado y la indicación cuando cambian; las distancias no, para no
         // hablar en cada lectura del GPS.
-        StateBadge(look.label, look.color, announce = true)
+        StateBadge(look.label, look.color, modifier = repeatsOnActivate, announce = true)
         // Se decide midiendo el texto, no contando letras: el corte de línea depende de las palabras
         // ("Gire a la derecha hacia Avenida Bolívar." ya ocupa cuatro).
         var compact by remember(look.headline) { mutableStateOf(false) }
@@ -125,10 +140,10 @@ private fun RouteScreen(state: TrackingState, onRepeat: () -> Unit, onAsk: () ->
             look.headline.length > VERY_LONG_INSTRUCTION -> 60.dp
             else -> 72.dp
         }
-        StateIcon(look.icon, look.color, size = iconSize)
+        StateIcon(look.icon, look.color, modifier = repeatsOnActivate, size = iconSize)
         Text(
             text = look.headline,
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            modifier = repeatsOnActivate.semantics { liveRegion = LiveRegionMode.Polite },
             style = when {
                 compact -> MaterialTheme.typography.titleSmall
                 look.headline.length > LONG_INSTRUCTION -> MaterialTheme.typography.titleMedium
@@ -147,18 +162,30 @@ private fun RouteScreen(state: TrackingState, onRepeat: () -> Unit, onAsk: () ->
                 textAlign = TextAlign.Center,
             )
         }
-        if (!arrived) Distances(state, look.color)
+        if (!arrived) Distances(state, look.color, onRepeat)
         VibrationIndicator(pattern = state.pattern, color = look.color)
-        PillButton("Repetir", onClick = onRepeat, style = PillStyle.PRIMARY)
+        PillButton("Repetir", onClick = { gate.click(onRepeat) }, style = PillStyle.PRIMARY)
         // Preguntar algo sin dejar la ruta: las vibraciones y la voz de la ruta siguen.
-        PillButton("Preguntar", onClick = onAsk, style = PillStyle.ASSISTANT, secondaryLabel = "Asistente")
-        PillButton("Terminar", onClick = onFinish)
+        PillButton(
+            "Preguntar",
+            onClick = { gate.click(onAsk) },
+            style = PillStyle.ASSISTANT,
+            secondaryLabel = "Asistente",
+        )
+        PillButton("Terminar", onClick = { gate.click(onFinish) })
+    }
+}
+
+private fun SemanticsPropertyReceiver.repeatOnActivate(onRepeat: () -> Unit) {
+    onClick(label = "repetir la indicación") {
+        onRepeat()
+        true
     }
 }
 
 /** "En 30 m" (hasta el siguiente paso) y "Faltan 1,2 km" (hasta el destino). */
 @Composable
-private fun Distances(state: TrackingState, color: Color) {
+private fun Distances(state: TrackingState, color: Color, onRepeat: () -> Unit) {
     val toNext = state.distanceToNextStepM?.takeIf {
         state.status != NavigationStatus.OFF_ROUTE && state.status != NavigationStatus.NO_SIGNAL
     }
@@ -167,7 +194,10 @@ private fun Distances(state: TrackingState, color: Color) {
         "Faltan ${describeDistance(state.remainingM)}",
     ).joinToString(". ")
     Column(
-        modifier = Modifier.clearAndSetSemantics { contentDescription = spoken },
+        modifier = Modifier.clearAndSetSemantics {
+            contentDescription = spoken
+            repeatOnActivate(onRepeat)
+        },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {

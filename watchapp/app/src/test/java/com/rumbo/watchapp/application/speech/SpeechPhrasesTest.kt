@@ -34,7 +34,8 @@ class SpeechPhrasesTest {
         distance: Double? = 34.0,
         status: NavigationStatus = NavigationStatus.TURN_APPROACHING,
         currentStreet: String = "Carrera 25",
-    ) = NavigationSnapshot(status, nextStep, distance, 120.0, 500.0, 100.0, 2.0, currentStreet)
+        then: Maneuver? = null,
+    ) = NavigationSnapshot(status, nextStep, distance, 120.0, 500.0, 100.0, 2.0, currentStreet, then)
 
     @Test
     fun numbersInWords() {
@@ -361,12 +362,56 @@ class SpeechPhrasesTest {
     }
 
     @Test
-    fun repeatSaysTheWholeCurrentInstructionWithHighPriority() {
+    fun repeatSaysTheStageOfNowWithTodaysDistanceAndHighPriority() {
+        assertEquals(
+            Phrase("Sigue recto por Carrera 25. En cuatrocientos metros, gira a la izquierda.", SpeechPriority.HIGH),
+            repeatPhrase(snapshot(distance = 400.0, status = NavigationStatus.ON_ROUTE)),
+        )
         assertEquals(
             Phrase("En treinta metros, gira a la izquierda en Calle 18.", SpeechPriority.HIGH),
-            repeatPhrase(snapshot(status = NavigationStatus.ON_ROUTE)),
+            repeatPhrase(snapshot(status = NavigationStatus.TURN_APPROACHING)),
         )
-        assertEquals("Tu destino está en cincuenta metros.", repeatPhrase(snapshot(arrive, 48.0)).text)
+        assertEquals(
+            Phrase("Gira ahora a la izquierda.", SpeechPriority.HIGH),
+            repeatPhrase(snapshot(distance = 9.0, status = NavigationStatus.MANEUVER)),
+        )
+    }
+
+    @Test
+    fun repeatKeepsTheNuancesOfTheManeuver() {
+        val roundabout = turn.copy(maneuver = Maneuver.ROUNDABOUT, roundaboutExit = 2)
+
+        assertEquals(
+            "Ahora, en la rotonda toma la segunda salida.",
+            repeatPhrase(snapshot(roundabout, 9.0, NavigationStatus.MANEUVER)).text,
+        )
+        assertEquals(
+            "Gira ahora a la izquierda. Luego, gira a la derecha.",
+            repeatPhrase(snapshot(distance = 9.0, status = NavigationStatus.MANEUVER, then = Maneuver.RIGHT)).text,
+        )
+    }
+
+    @Test
+    fun repeatAfterTurningNeverSaysTurnAgain() {
+        // Ya dobló: el tramo es corto y no tiene aviso lejano, pero Repetir dice lo que viene.
+        assertEquals(
+            "Sigue recto por Carrera 25. En sesenta metros, gira a la izquierda.",
+            repeatPhrase(snapshot(distance = 60.0, status = NavigationStatus.ON_ROUTE)).text,
+        )
+    }
+
+    @Test
+    fun repeatOnAStretchWithoutTurnsSaysToKeepGoing() {
+        val straight = turn.copy(maneuver = Maneuver.STRAIGHT)
+
+        assertEquals("Sigue recto por Carrera 25.", repeatPhrase(snapshot(straight, 200.0, NavigationStatus.ON_ROUTE)).text)
+    }
+
+    @Test
+    fun repeatDescribesTheDestinationAndTheEnd() {
+        val side = arrive.copy(destinationSide = Side.RIGHT)
+
+        assertEquals("Tu destino está en cincuenta metros, a la derecha.", repeatPhrase(snapshot(side, 48.0)).text)
         assertEquals(KEEP_GOING_PHRASE, repeatPhrase(snapshot(nextStep = null, distance = null)).text)
     }
 

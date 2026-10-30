@@ -94,11 +94,12 @@ private fun turnAction(maneuver: Maneuver, roundaboutExit: Int?): String = when 
 
 private fun turnAction(step: RouteStep) = turnAction(step.maneuver, step.roundaboutExit)
 
+private fun straightPhrase(currentStreet: String) =
+    if (currentStreet.isBlank()) "Sigue recto." else "Sigue recto por $currentStreet."
+
 /** Etapa lejana, al empezar el tramo: "Sigue recto por Carrera 25. En cien metros, gira a la derecha." */
-fun turnAheadPhrase(distanceM: Double, step: RouteStep, currentStreet: String): String {
-    val straight = if (currentStreet.isBlank()) "Sigue recto." else "Sigue recto por $currentStreet."
-    return "$straight En ${spokenDistance(distanceM)}, ${turnAction(step)}."
-}
+fun turnAheadPhrase(distanceM: Double, step: RouteStep, currentStreet: String): String =
+    "${straightPhrase(currentStreet)} En ${spokenDistance(distanceM)}, ${turnAction(step)}."
 
 /**
  * Etapa de preparación: "En cincuenta metros, gira a la derecha en Calle 18." En una rotonda no
@@ -159,7 +160,11 @@ fun navigationPhrase(events: List<NavigationEvent>, snapshot: NavigationSnapshot
     return null
 }
 
-/** Lo que dice "Repetir": la situación actual completa, aunque ya se haya dicho antes. */
+/**
+ * Lo que dice "Repetir": la indicación de la etapa en la que se va, con la distancia de este
+ * momento. No se guarda la última frase tal cual porque envejece: un "Gira ahora" repetido después
+ * de doblar haría girar otra vez, y un "En cincuenta metros" puede estar ya a veinte.
+ */
 fun repeatPhrase(snapshot: NavigationSnapshot): Phrase {
     val step = snapshot.nextStep
     val distance = snapshot.distanceToNextStepM
@@ -169,7 +174,11 @@ fun repeatPhrase(snapshot: NavigationSnapshot): Phrase {
         snapshot.status == NavigationStatus.NO_SIGNAL -> SIGNAL_LOST_PHRASE
         step == null || distance == null -> KEEP_GOING_PHRASE
         step.maneuver == Maneuver.ARRIVE -> destinationNearPhrase(distance, step.destinationSide)
-        else -> turnApproachingPhrase(distance, step)
+        !step.maneuver.isTurn -> straightPhrase(snapshot.currentStreet)
+        snapshot.status == NavigationStatus.MANEUVER ->
+            turnNowPhrase(step.maneuver, step.roundaboutExit, snapshot.thenManeuver)
+        snapshot.status == NavigationStatus.TURN_APPROACHING -> turnApproachingPhrase(distance, step)
+        else -> turnAheadPhrase(distance, step, snapshot.currentStreet)
     }
     return Phrase(text, SpeechPriority.HIGH)
 }
