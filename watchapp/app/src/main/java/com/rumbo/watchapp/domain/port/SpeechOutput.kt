@@ -26,5 +26,14 @@ interface SpeechOutput {
 
     fun speak(text: String, priority: SpeechPriority = SpeechPriority.NORMAL)
 
+    /** Calla lo que suena y descarta lo que esperaba por [pause]. */
     fun stop()
+
+    /**
+     * Mientras se graba una orden: calla lo que suena y lo que se pida decir espera (solo la
+     * frase más importante, la última entre las de igual prioridad) hasta [resume].
+     */
+    fun pause()
+
+    fun resume()
 }

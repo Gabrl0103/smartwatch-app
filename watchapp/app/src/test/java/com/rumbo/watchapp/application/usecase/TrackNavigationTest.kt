@@ -63,6 +63,9 @@ class TrackNavigationTest {
         override fun stop() {
             stops++
         }
+
+        override fun pause() = Unit
+        override fun resume() = Unit
     }
 
     private class FakeRoutes(private val route: Route) : RoutesRepository {

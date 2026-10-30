@@ -31,6 +31,7 @@ import com.rumbo.watchapp.domain.vibration.VibrationSettings
 import com.rumbo.watchapp.domain.vibration.next
 import com.rumbo.watchapp.domain.voice.MAX_RECORDING_MS
 import com.rumbo.watchapp.domain.voice.SpeechEndDetector
+import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -173,9 +174,7 @@ class RoutePlanningViewModel(
         job = viewModelScope.launch {
             try {
                 _state.value = PlanState.Listening
-                recorder.start()
-                awaitEndOfSpeech()
-                val audio = recorder.stop()
+                val audio = record()
                 _state.value = PlanState.Processing
                 handle(planRoute.interpret(audio))
             } catch (e: CancellationException) {
@@ -230,6 +229,22 @@ class RoutePlanningViewModel(
     /** "Cancelar" en Escuchando: deja de grabar sin enviar nada y vuelve atrás (Inicio o la ruta). */
     fun cancelListening() {
         if (_state.value == PlanState.Listening) reset()
+    }
+
+    /**
+     * Graba hasta que la persona termina de hablar. Mientras tanto la voz de la app espera: si
+     * no, un aviso de la ruta (o la respuesta anterior) se colaría en la grabación. Las
+     * vibraciones siguen.
+     */
+    private suspend fun record(): File {
+        speech.pause()
+        try {
+            recorder.start()
+            awaitEndOfSpeech()
+            return recorder.stop()
+        } finally {
+            speech.resume()
+        }
     }
 
     private suspend fun awaitEndOfSpeech() {

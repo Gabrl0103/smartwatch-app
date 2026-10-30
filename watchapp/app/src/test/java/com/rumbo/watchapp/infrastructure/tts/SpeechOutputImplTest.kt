@@ -228,6 +228,49 @@ class SpeechOutputImplTest {
     }
 
     @Test
+    fun pauseSilencesAndKeepsTheMostImportantPhraseUntilResume() = speechTest {
+        speech.speak("Parque Bolívar, a un kilómetro. ¿Vamos?", SpeechPriority.NORMAL)
+        settle()
+        speech.pause()
+        settle()
+        assertEquals(listOf("Parque Bolívar, a un kilómetro. ¿Vamos?"), remote.cancelled)
+
+        speech.speak("En treinta metros, gire a la izquierda.", SpeechPriority.HIGH)
+        speech.speak("Gira a la izquierda.", SpeechPriority.HIGH)
+        speech.speak("Señal recuperada.", SpeechPriority.NORMAL)
+        settle()
+        assertEquals(listOf("Parque Bolívar, a un kilómetro. ¿Vamos?"), remote.started)
+
+        speech.resume()
+        settle()
+        assertEquals("Gira a la izquierda.", remote.started.last())
+        assertEquals(2, remote.started.size)
+    }
+
+    @Test
+    fun resumeWithNothingPendingSaysNothingAndSpeechWorksAgain() = speechTest {
+        speech.pause()
+        speech.resume()
+        settle()
+        assertEquals(emptyList<String>(), remote.started)
+
+        speech.speak("Uno", SpeechPriority.NORMAL)
+        settle()
+        assertEquals(listOf("Uno"), remote.started)
+    }
+
+    @Test
+    fun stopWhilePausedDropsThePendingPhrase() = speechTest {
+        speech.pause()
+        speech.speak("Gira a la derecha.", SpeechPriority.HIGH)
+        speech.stop()
+        speech.resume()
+        settle()
+
+        assertEquals(emptyList<String>(), remote.started)
+    }
+
+    @Test
     fun playerErrorIsReportedAndNextPhraseStillPlays() = speechTest {
         remote.error = IllegalStateException("sin audio")
 

@@ -177,6 +177,16 @@ class RoutePlanningViewModelTest {
         }
 
         override fun stop() = Unit
+
+        var paused = false
+
+        override fun pause() {
+            paused = true
+        }
+
+        override fun resume() {
+            paused = false
+        }
     }
 
     /** GPS que da una lectura buena en cuanto se enciende. */
@@ -324,6 +334,8 @@ class RoutePlanningViewModelTest {
         dispatcher.scheduler.advanceTimeBy(1_000)
         assertEquals(PlanState.Listening, viewModel.state.value)
         assertEquals(0.8f, viewModel.voiceLevel.value)
+        // La voz de la app no habla mientras se graba.
+        assertTrue(speech.paused)
 
         dispatcher.scheduler.advanceTimeBy(3_119 - 1_000)
         assertEquals(PlanState.Listening, viewModel.state.value)
@@ -333,6 +345,7 @@ class RoutePlanningViewModelTest {
         assertTrue(recorder.stopped)
         assertEquals(1, voice.calls)
         assertEquals(0f, viewModel.voiceLevel.value)
+        assertFalse(speech.paused)
     }
 
     @Test
@@ -363,6 +376,7 @@ class RoutePlanningViewModelTest {
         assertFalse(recorder.stopped)
         assertEquals(0, voice.calls)
         assertEquals(0f, viewModel.voiceLevel.value)
+        assertFalse(speech.paused)
     }
 
     /** Dice algo al micrófono y espera a que termine de grabar (8 s sin voz). */

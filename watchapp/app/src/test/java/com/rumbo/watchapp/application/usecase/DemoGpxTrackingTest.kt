@@ -59,6 +59,8 @@ class DemoGpxTrackingTest {
         }
 
         override fun stop() = Unit
+        override fun pause() = Unit
+        override fun resume() = Unit
     }
 
     /** Sin internet: cada recálculo falla. */

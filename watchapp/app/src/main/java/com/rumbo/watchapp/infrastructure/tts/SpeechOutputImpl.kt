@@ -67,6 +67,10 @@ class SpeechOutputImpl(
     @Volatile
     private var remotePausedUntilMs = 0L
 
+    // Ver [pause]: la frase que se dirá al reanudar.
+    private var paused = false
+    private var pending: Pair<String, SpeechPriority>? = null
+
     init {
         scope.launch { local.state.collect { refreshStatus() } }
     }
@@ -74,6 +78,10 @@ class SpeechOutputImpl(
     @Synchronized
     override fun speak(text: String, priority: SpeechPriority) {
         if (text.isBlank() || !isEnabled()) return
+        if (paused) {
+            if (pending?.second != SpeechPriority.HIGH || priority == SpeechPriority.HIGH) pending = text to priority
+            return
+        }
         val playing = current?.isActive == true
         if (playing && currentPriority == SpeechPriority.HIGH && priority == SpeechPriority.NORMAL) return
         current?.cancel()
@@ -96,6 +104,22 @@ class SpeechOutputImpl(
     override fun stop() {
         current?.cancel()
         current = null
+        pending = null
+    }
+
+    @Synchronized
+    override fun pause() {
+        stop()
+        paused = true
+    }
+
+    @Synchronized
+    override fun resume() {
+        if (!paused) return
+        paused = false
+        val next = pending ?: return
+        pending = null
+        speak(next.first, next.second)
     }
 
     @Synchronized
