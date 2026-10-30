@@ -44,4 +44,7 @@ data class NavigationSnapshot(
     val currentStreet: String = "",
     /** El giro que sigue a [nextStep], si está tan cerca que se avisa junto con él. */
     val thenManeuver: Maneuver? = null,
+    /** El paso después de [nextStep] y cuánto hay hasta él: lo que se avisará al pasarlo. */
+    val followingStep: RouteStep? = null,
+    val followingLegM: Double? = null,
 )

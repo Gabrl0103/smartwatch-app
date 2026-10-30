@@ -16,6 +16,9 @@ internal fun speechCacheFileName(text: String): String {
     return "$SPEECH_CACHE_VERSION-$hash.wav"
 }
 
-/** true si el archivo es de otra versión y hay que borrarlo. */
+/** Sufijo de un audio a medio escribir. */
+internal const val SPEECH_PARTIAL_SUFFIX = ".part"
+
+/** true si el archivo es de otra versión o quedó a medias, y hay que borrarlo. */
 internal fun isStaleSpeechFile(fileName: String): Boolean =
-    !fileName.startsWith("$SPEECH_CACHE_VERSION-")
+    !fileName.startsWith("$SPEECH_CACHE_VERSION-") || fileName.endsWith(SPEECH_PARTIAL_SUFFIX)

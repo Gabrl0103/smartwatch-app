@@ -4,6 +4,7 @@ import com.rumbo.watchapp.application.speech.Phrase
 import com.rumbo.watchapp.application.speech.navigationPhrase
 import com.rumbo.watchapp.application.speech.repeatPhrase
 import com.rumbo.watchapp.application.speech.startPhrase
+import com.rumbo.watchapp.application.speech.upcomingPhrase
 import com.rumbo.watchapp.domain.model.Coordinates
 import com.rumbo.watchapp.domain.model.LocationFix
 import com.rumbo.watchapp.domain.model.Maneuver
@@ -76,7 +77,8 @@ data class TrackingState(
  * Cada vibración se anota en [vibrationEvents] en segundo plano; si falla, se sigue navegando.
  * La voz ([speech]) solo acompaña: dice el inicio y los avisos importantes sin esperar a que
  * terminen, y si falla las vibraciones siguen igual. Cada giro se dice en tres etapas: la lejana
- * al empezar el tramo, si es largo, y las dos que también vibran.
+ * al empezar el tramo, si es largo, y las dos que también vibran. Al avanzar de etapa se pide
+ * precargar la frase de la siguiente, para que suene sin retraso.
  *
  * Fuera de ruta pide una ruta nueva como mucho cada [NavigationThresholds.recalculateAfterMs] y
  * hasta [NavigationThresholds.maxRecalculations] veces seguidas; si falla, sigue con la anterior
@@ -106,6 +108,7 @@ class TrackNavigation(
     private var lastPosition: Coordinates? = null
     private var lastVibrationMs = 0L
     private var lastCues: List<VibrationCue> = emptyList()
+    private var lastPrepared: String? = null
     private var lastStatus: NavigationStatus? = null
     private var recalculating = false
     private var recalculations = 0
@@ -118,11 +121,13 @@ class TrackNavigation(
         recalculations = 0
         lastRecalculationMs = null
         lastStatus = null
+        lastPrepared = null
         val now = clock()
         logger.info(TAG, "Navegación iniciada hacia «${route.destinationName}»: ${describe(route)}")
         useRoute(route, now)
         vibrate(VibrationCue.ON_ROUTE, now)
         engine?.let { say(Phrase(startPhrase(route, it.snapshot, thresholds))) }
+        prepareNextStage()
         job = scope.launch {
             launch {
                 val filter = LocationFilter(thresholds)
@@ -185,6 +190,7 @@ class TrackNavigation(
         if (NavigationEvent.Arrived in events) activeRoutes?.clear()
         if (NavigationEvent.RecalculateRequested in events) recalculate(now)
         publish()
+        if (events.isNotEmpty()) prepareNextStage()
     }
 
     private fun say(phrase: Phrase) {
@@ -192,6 +198,18 @@ class TrackNavigation(
             speech.speak(phrase.text, phrase.priority)
         } catch (e: Exception) {
             // La voz nunca debe detener la navegación.
+        }
+    }
+
+    // Una sola vez por frase: se llama con cada evento, pero la etapa siguiente cambia menos.
+    private fun prepareNextStage() {
+        val text = engine?.let { upcomingPhrase(it.snapshot, thresholds) } ?: return
+        if (text == lastPrepared) return
+        lastPrepared = text
+        try {
+            speech.prepare(text)
+        } catch (e: Exception) {
+            // Sin precarga la frase solo tarda más en sonar.
         }
     }
 
@@ -257,6 +275,7 @@ class TrackNavigation(
                 val destination = Place(current.destinationName, end.lat, end.lng)
                 val newRoute = routes.create(from, destination)
                 useRoute(newRoute, clock(), announceFirstLeg = true)
+                prepareNextStage()
                 logger.info(TAG, "Ruta recalculada: ${describe(newRoute)}")
             } catch (e: CancellationException) {
                 throw e

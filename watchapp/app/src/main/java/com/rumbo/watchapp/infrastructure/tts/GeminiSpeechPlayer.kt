@@ -32,17 +32,24 @@ class GeminiSpeechPlayer(context: Context) : SpeechPlayer {
         }
     }
 
+    override suspend fun prepare(text: String) {
+        audioFile(text)
+    }
+
     // Reutiliza el WAV si la frase ya se pidió en esta versión; se escribe aparte y se renombra
-    // para no dejar archivos a medias si se cancela.
+    // para no dejar archivos a medias si se cancela. El archivo temporal es propio de cada petición
+    // porque la precarga y la reproducción pueden pedir la misma frase a la vez.
     private suspend fun audioFile(text: String): File = withContext(Dispatchers.IO) {
         removeStaleFiles()
         val file = File(cacheDir, speechCacheFileName(text))
         if (file.length() > 0) return@withContext file
         val audio = SpeechApiClient.synthesize(text)
         cacheDir.mkdirs()
-        val partial = File(cacheDir, "${file.name}.part")
+        val partial = File.createTempFile(file.name, SPEECH_PARTIAL_SUFFIX, cacheDir)
         partial.writeBytes(audio)
-        if (!partial.renameTo(file)) throw IOException("No pude guardar el audio")
+        val saved = partial.renameTo(file)
+        partial.delete()
+        if (!saved && file.length() == 0L) throw IOException("No pude guardar el audio")
         file
     }
 

@@ -75,6 +75,8 @@ class NavigationEngine(
                 distanceToRouteM = distanceToRouteM,
                 currentStreet = steps.getOrNull(nextIndex - 1)?.street.orEmpty(),
                 thenManeuver = next?.let { turnNow(nextIndex).then },
+                followingStep = steps.getOrNull(nextIndex + 1),
+                followingLegM = steps.getOrNull(nextIndex + 1)?.let { stepAlong[nextIndex + 1] - stepAlong[nextIndex] },
             )
         }
 

@@ -26,6 +26,12 @@ interface SpeechOutput {
 
     fun speak(text: String, priority: SpeechPriority = SpeechPriority.NORMAL)
 
+    /**
+     * Deja lista una frase que se dirá pronto para que suene sin espera. No suena ni interrumpe
+     * nada; si no se puede, no pasa nada: se pedirá al decirla.
+     */
+    fun prepare(text: String) = Unit
+
     /** Calla lo que suena y descarta lo que esperaba por [pause]. */
     fun stop()
 

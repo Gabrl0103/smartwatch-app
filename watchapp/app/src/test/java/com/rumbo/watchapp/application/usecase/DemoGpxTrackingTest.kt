@@ -51,11 +51,18 @@ class DemoGpxTrackingTest {
 
     private class FakeSpeech : SpeechOutput {
         val spoken = mutableListOf<String>()
+        val prepared = mutableListOf<String>()
+        val notPreparedInTime = mutableListOf<String>()
         override val status = MutableStateFlow(SpeechStatus())
         override val speaking = MutableStateFlow(false)
 
         override fun speak(text: String, priority: SpeechPriority) {
+            if (text !in prepared) notPreparedInTime += text
             spoken += text
+        }
+
+        override fun prepare(text: String) {
+            prepared += text
         }
 
         override fun stop() = Unit
@@ -119,6 +126,39 @@ class DemoGpxTrackingTest {
         val notices = speech.spoken.filter { it.startsWith("Tu destino está en") }
         assertEquals(notices.toString(), 1, notices.size)
         assertTrue(notices.single(), notices.single().endsWith(", a la derecha."))
+        tracking.stop()
+    }
+
+    @Test
+    fun theWholeWalkSoundsLikeThisAndEveryStageWasPreparedInTime() = runTest {
+        val speech = FakeSpeech()
+
+        val tracking = walk("ruta_parque_narino_a_parque_bolivar.gpx", OfflineRoutes(), FakeVibration(), speech)
+
+        assertEquals(
+            listOf(
+                "Iniciando ruta. Gire a la derecha hacia Carrera 25.",
+                "Gira ahora a la derecha. Luego, gira a la derecha.",
+                "En cuarenta metros, gira a la derecha en Calle 19.",
+                "Gira ahora a la derecha.",
+                "Sigue recto por Calle 19. En uno coma tres kilómetros, gira a la izquierda.",
+                "En cincuenta metros, gira a la izquierda en Carrera 14.",
+                "Gira ahora a la izquierda.",
+                "Sigue recto por Carrera 14. En doscientos metros, gira a la izquierda.",
+                "En cincuenta metros, gira a la izquierda en Carrera 14.",
+                "Gira ahora a la izquierda.",
+                "Sigue recto por Carrera 14. En ciento cincuenta metros, gira a la derecha.",
+                "En cincuenta metros, gira a la derecha en Avenida Bolívar.",
+                "Gira ahora a la derecha.",
+                "Tu destino está en ochenta metros, a la derecha.",
+                "Llegaste a tu destino.",
+            ),
+            speech.spoken,
+        )
+        // Solo la frase de inicio no se precarga: no hay etapa antes de ella.
+        assertEquals(listOf(speech.spoken.first()), speech.notPreparedInTime)
+        // Lo precargado se dijo: una frase que no suena gastaría cuota de Gemini para nada.
+        assertTrue(speech.prepared.toString(), speech.spoken.containsAll(speech.prepared))
         tracking.stop()
     }
 

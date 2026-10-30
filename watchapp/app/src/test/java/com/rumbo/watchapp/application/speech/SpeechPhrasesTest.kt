@@ -35,7 +35,9 @@ class SpeechPhrasesTest {
         status: NavigationStatus = NavigationStatus.TURN_APPROACHING,
         currentStreet: String = "Carrera 25",
         then: Maneuver? = null,
-    ) = NavigationSnapshot(status, nextStep, distance, 120.0, 500.0, 100.0, 2.0, currentStreet, then)
+        following: RouteStep? = null,
+        followingLegM: Double? = null,
+    ) = NavigationSnapshot(status, nextStep, distance, 120.0, 500.0, 100.0, 2.0, currentStreet, then, following, followingLegM)
 
     @Test
     fun numbersInWords() {
@@ -359,6 +361,82 @@ class SpeechPhrasesTest {
         assertNull(navigationPhrase(listOf(NavigationEvent.BackOnRoute), snapshot()))
         assertNull(navigationPhrase(listOf(NavigationEvent.NextStepChanged(turn)), snapshot()))
         assertNull(navigationPhrase(emptyList(), snapshot()))
+    }
+
+    @Test
+    fun beforeTheApproachStageItsPhraseIsPreparedWithTheDistanceItWillSay() {
+        val snapshot = snapshot(distance = 300.0, status = NavigationStatus.ON_ROUTE)
+
+        assertEquals("En cincuenta metros, gira a la izquierda en Calle 18.", upcomingPhrase(snapshot, thresholds))
+    }
+
+    @Test
+    fun aShortLegPreparesTheDistanceItReallyHas() {
+        val snapshot = snapshot(distance = 40.0, status = NavigationStatus.ON_ROUTE)
+
+        assertEquals("En cuarenta metros, gira a la izquierda en Calle 18.", upcomingPhrase(snapshot, thresholds))
+    }
+
+    @Test
+    fun aTurnRightAtTheStartPreparesTheNowStageBecauseTheApproachWillNotSound() {
+        val snapshot = snapshot(distance = 4.0, status = NavigationStatus.ON_ROUTE)
+
+        assertEquals("Gira ahora a la izquierda.", upcomingPhrase(snapshot, thresholds))
+    }
+
+    @Test
+    fun duringTheApproachTheNowStageIsPrepared() {
+        assertEquals("Gira ahora a la izquierda.", upcomingPhrase(snapshot(), thresholds))
+        assertEquals(
+            "Gira ahora a la izquierda. Luego, gira a la derecha.",
+            upcomingPhrase(snapshot(then = Maneuver.RIGHT), thresholds),
+        )
+    }
+
+    @Test
+    fun atTheTurnTheFarStageOfTheNextLegIsPrepared() {
+        val next = turn.copy(maneuver = Maneuver.RIGHT, street = "Calle 20")
+        val snapshot = snapshot(status = NavigationStatus.MANEUVER, following = next, followingLegM = 300.0)
+
+        assertEquals(
+            "Sigue recto por Calle 18. En trescientos metros, gira a la derecha.",
+            upcomingPhrase(snapshot, thresholds),
+        )
+    }
+
+    @Test
+    fun atTheTurnAShortNextLegPreparesItsApproach() {
+        val next = turn.copy(maneuver = Maneuver.RIGHT, street = "Calle 20")
+        val snapshot = snapshot(status = NavigationStatus.MANEUVER, following = next, followingLegM = 70.0)
+
+        assertEquals("En cincuenta metros, gira a la derecha en Calle 20.", upcomingPhrase(snapshot, thresholds))
+    }
+
+    @Test
+    fun theLastStagesAreTheDestinationAndTheArrival() {
+        val side = arrive.copy(destinationSide = Side.LEFT)
+
+        assertEquals(
+            "Tu destino está en cien metros, a la izquierda.",
+            upcomingPhrase(snapshot(side, 300.0, NavigationStatus.ON_ROUTE), thresholds),
+        )
+        assertEquals(
+            "Tu destino está en sesenta metros, a la izquierda.",
+            upcomingPhrase(snapshot(status = NavigationStatus.MANEUVER, following = side, followingLegM = 60.0), thresholds),
+        )
+        assertEquals(ARRIVED_PHRASE, upcomingPhrase(snapshot(side, 80.0, NavigationStatus.ON_ROUTE), thresholds))
+    }
+
+    @Test
+    fun nothingIsPreparedWhenTheNextPhraseCannotBeKnown() {
+        assertNull(upcomingPhrase(snapshot(status = NavigationStatus.OFF_ROUTE), thresholds))
+        assertNull(upcomingPhrase(snapshot(status = NavigationStatus.NO_SIGNAL), thresholds))
+        assertNull(upcomingPhrase(snapshot(status = NavigationStatus.ARRIVED), thresholds))
+        assertNull(upcomingPhrase(snapshot(nextStep = null, distance = null), thresholds))
+        assertNull(upcomingPhrase(snapshot(status = NavigationStatus.MANEUVER), thresholds))
+        assertNull(
+            upcomingPhrase(snapshot(turn.copy(maneuver = Maneuver.STRAIGHT), 200.0, NavigationStatus.ON_ROUTE), thresholds),
+        )
     }
 
     @Test

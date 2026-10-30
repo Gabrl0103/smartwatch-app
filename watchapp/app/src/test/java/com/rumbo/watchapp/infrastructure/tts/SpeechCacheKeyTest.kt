@@ -36,4 +36,11 @@ class SpeechCacheKeyTest {
         assertTrue(isStaleSpeechFile("${oldName(text)}.part"))
         assertFalse(isStaleSpeechFile(speechCacheFileName(text)))
     }
+
+    @Test
+    fun audiosLeftHalfWrittenGetDeleted() {
+        val name = speechCacheFileName("Gira a la izquierda.")
+
+        assertTrue(isStaleSpeechFile("${name}1234567890$SPEECH_PARTIAL_SUFFIX"))
+    }
 }

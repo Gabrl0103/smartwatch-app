@@ -27,6 +27,7 @@ class SpeechOutputImplTest {
         val started = mutableListOf<String>()
         val cancelled = mutableListOf<String>()
         val finished = mutableListOf<String>()
+        val prepared = mutableListOf<String>()
         var error: Exception? = null
         var holdAudio = false
         private val playing = mutableMapOf<String, CompletableDeferred<Unit>>()
@@ -44,6 +45,11 @@ class SpeechOutputImplTest {
                 throw e
             }
             finished += text
+        }
+
+        override suspend fun prepare(text: String) {
+            prepared += text
+            error?.let { throw it }
         }
 
         fun finish(text: String) {
@@ -356,6 +362,83 @@ class SpeechOutputImplTest {
         settle()
         assertEquals(listOf("Uno", "Tres"), remote.started)
         assertEquals(SpeechEngine.GEMINI, speech.status.value.engine)
+    }
+
+    @Test
+    fun geminiPreparesThePhraseWithoutPlayingIt() = speechTest {
+        speech.prepare("Gira ahora a la derecha.")
+        settle()
+
+        assertEquals(listOf("Gira ahora a la derecha."), remote.prepared)
+        assertEquals(emptyList<String>(), remote.started)
+        assertFalse(speech.speaking.value)
+    }
+
+    @Test
+    fun preparingDoesNotInterruptWhatIsPlaying() = speechTest {
+        speech.speak("En cincuenta metros, gira a la derecha.", SpeechPriority.HIGH)
+        settle()
+
+        speech.prepare("Gira ahora a la derecha.")
+        settle()
+
+        assertEquals(emptyList<String>(), remote.cancelled)
+        assertTrue(speech.speaking.value)
+    }
+
+    @Test
+    fun theDeviceVoiceNeedsNoPreparing() = speechTest(local = LocalVoiceState.READY) {
+        speech.prepare("Gira ahora a la derecha.")
+        settle()
+
+        assertEquals(emptyList<String>(), remote.prepared)
+        assertEquals(emptyList<String>(), local.prepared)
+    }
+
+    @Test
+    fun disabledVoicePreparesNothing() = speechTest(enabled = false) {
+        speech.prepare("Gira ahora a la derecha.")
+        settle()
+
+        assertEquals(emptyList<String>(), remote.prepared)
+    }
+
+    @Test
+    fun blankTextPreparesNothing() = speechTest {
+        speech.prepare("  ")
+        settle()
+
+        assertEquals(emptyList<String>(), remote.prepared)
+    }
+
+    @Test
+    fun preparingFailsQuietly() = speechTest {
+        remote.error = IllegalStateException("sin red")
+
+        speech.prepare("Uno")
+        settle()
+        remote.error = null
+        speech.speak("Dos", SpeechPriority.NORMAL)
+        settle()
+
+        assertEquals(listOf("sin red"), errors.map { it.message })
+        assertEquals(listOf("Dos"), remote.started)
+    }
+
+    @Test
+    fun exhaustedQuotaWhilePreparingAlsoPausesGemini() = speechTest {
+        remote.error = QuotaExhaustedError("Se agotó la cuota gratuita de voz de Gemini.")
+
+        speech.prepare("Uno")
+        settle()
+        assertEquals(SpeechEngine.NONE, speech.status.value.engine)
+
+        remote.error = null
+        speech.prepare("Dos")
+        speech.speak("Tres", SpeechPriority.HIGH)
+        settle()
+        assertEquals(listOf("Uno"), remote.prepared)
+        assertEquals(emptyList<String>(), remote.started)
     }
 
     @Test

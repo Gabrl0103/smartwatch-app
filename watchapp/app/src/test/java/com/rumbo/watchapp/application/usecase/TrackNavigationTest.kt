@@ -52,6 +52,7 @@ class TrackNavigationTest {
 
     private class FakeSpeech(private val error: Exception? = null) : SpeechOutput {
         val spoken = mutableListOf<Pair<String, SpeechPriority>>()
+        val prepared = mutableListOf<String>()
         var stops = 0
         override val status = MutableStateFlow(SpeechStatus())
         override val speaking = MutableStateFlow(false)
@@ -59,6 +60,11 @@ class TrackNavigationTest {
         override fun speak(text: String, priority: SpeechPriority) {
             error?.let { throw it }
             spoken += text to priority
+        }
+
+        override fun prepare(text: String) {
+            error?.let { throw it }
+            prepared += text
         }
 
         override fun stop() {
@@ -382,6 +388,116 @@ class TrackNavigationTest {
                 ),
                 speech.spoken.map { it.first },
             )
+        } finally {
+            tracking.stop()
+        }
+    }
+
+    @Test
+    fun everyStageIsPreparedOnceAndBeforeItIsSaid() = runBlocking {
+        val fixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 64)
+        val speech = FakeSpeech()
+        var now = 0L
+        val tracking = TrackNavigation(
+            fixes,
+            FakeRoutes(detour),
+            FakeVibration(),
+            FakeVibrationEvents(),
+            speech,
+            clock = { now },
+            tickMs = 600_000,
+        )
+        val track = (0..200 step 5).map { 0.0 to it.toDouble() } +
+            (5..400 step 5).map { it.toDouble() to 200.0 } +
+            (205..400 step 5).map { 400.0 to it.toDouble() }
+
+        tracking.start(uRoute(), this)
+        try {
+            delay(20)
+            track.forEach { (east, north) ->
+                now += 1_000
+                val preparedBefore = speech.prepared.toList()
+                val spokenBefore = speech.spoken.size
+                fixes.emit(fixAt(east, north, now))
+                delay(2)
+                // Lo que suena ahora tenía que estar listo desde antes de esta lectura.
+                speech.spoken.drop(spokenBefore).forEach { (text, _) ->
+                    assertTrue("«$text» sonó sin precargar", text in preparedBefore)
+                }
+            }
+            delay(20)
+
+            assertEquals(
+                listOf(
+                    "En cincuenta metros, gira a la derecha en Carrera 2.",
+                    "Gira ahora a la derecha.",
+                    "Sigue recto por Carrera 2. En cuatrocientos metros, gira a la izquierda.",
+                    "En cincuenta metros, gira a la izquierda en Calle 3.",
+                    "Gira ahora a la izquierda.",
+                    "Tu destino está en cien metros.",
+                    "Llegaste a tu destino.",
+                ),
+                speech.prepared,
+            )
+            assertEquals("Llegaste a tu destino." to SpeechPriority.HIGH, speech.spoken.last())
+        } finally {
+            tracking.stop()
+        }
+    }
+
+    @Test
+    fun failingToPrepareDoesNotStopTheNavigation() = runBlocking {
+        val failing = object : SpeechOutput by FakeSpeech() {
+            val spoken = mutableListOf<String>()
+
+            override fun speak(text: String, priority: SpeechPriority) {
+                spoken += text
+            }
+
+            override fun prepare(text: String) {
+                throw IllegalStateException("sin red")
+            }
+        }
+        val tracking = TrackNavigation(
+            MutableSharedFlow(),
+            FakeRoutes(detour),
+            FakeVibration(),
+            FakeVibrationEvents(),
+            failing,
+            clock = { 0L },
+        )
+
+        tracking.start(lRoute(), this)
+        tracking.stop()
+
+        assertEquals(1, failing.spoken.size)
+    }
+
+    @Test
+    fun aRecalculatedRouteIsPreparedToo() = runBlocking {
+        val fixes = MutableSharedFlow<LocationFix>(extraBufferCapacity = 16)
+        val speech = FakeSpeech()
+        var now = 0L
+        val tracking = TrackNavigation(
+            fixes,
+            FakeRoutes(uRoute()),
+            FakeVibration(),
+            FakeVibrationEvents(),
+            speech,
+            clock = { now },
+            tickMs = 600_000,
+        )
+
+        tracking.start(lRoute(), this)
+        try {
+            delay(20)
+            listOf(0L, 1_000L, 2_000L, 12_000L).forEach { t ->
+                now = t
+                fixes.emit(fixAt(40.0, 100.0, t))
+                delay(20)
+            }
+
+            assertEquals("En cincuenta metros, gira a la derecha en Carrera 2.", speech.prepared.last())
         } finally {
             tracking.stop()
         }

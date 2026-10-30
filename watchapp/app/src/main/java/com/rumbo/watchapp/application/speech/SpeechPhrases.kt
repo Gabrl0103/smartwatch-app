@@ -161,6 +161,44 @@ fun navigationPhrase(events: List<NavigationEvent>, snapshot: NavigationSnapshot
 }
 
 /**
+ * La frase de la etapa que viene después de la actual, para tener su audio listo cuando toque.
+ * Lleva la distancia a la que se dirá: si un salto del GPS hace que suene otra, esa se pide al
+ * decirla, como si no hubiera precarga. Devuelve null si no hay nada previsible que preparar.
+ */
+fun upcomingPhrase(snapshot: NavigationSnapshot, thresholds: NavigationThresholds): String? {
+    val step = snapshot.nextStep ?: return null
+    val distance = snapshot.distanceToNextStepM ?: return null
+    val turnNow = turnNowPhrase(step.maneuver, step.roundaboutExit, snapshot.thenManeuver)
+    return when (snapshot.status) {
+        NavigationStatus.ON_ROUTE -> when {
+            step.maneuver == Maneuver.ARRIVE && distance <= thresholds.destinationNearM -> ARRIVED_PHRASE
+            // Un giro a pocos metros del inicio pasa directo a "Gira ahora".
+            step.maneuver.isTurn && distance <= thresholds.maneuverM -> turnNow
+            else -> firstNoticeOf(step, distance, thresholds)
+        }
+        NavigationStatus.TURN_APPROACHING -> turnNow
+        NavigationStatus.MANEUVER -> {
+            val following = snapshot.followingStep ?: return null
+            val legM = snapshot.followingLegM ?: return null
+            if (following.maneuver.isTurn && legM > thresholds.turnAheadMinM) {
+                turnAheadPhrase(legM, following, step.street)
+            } else {
+                firstNoticeOf(following, legM, thresholds)
+            }
+        }
+        NavigationStatus.OFF_ROUTE, NavigationStatus.NO_SIGNAL, NavigationStatus.ARRIVED -> null
+    }
+}
+
+// El primer aviso que sonará de [step] al acercarse a él, sin el lejano.
+private fun firstNoticeOf(step: RouteStep, distanceM: Double, thresholds: NavigationThresholds): String? = when {
+    step.maneuver == Maneuver.ARRIVE ->
+        destinationNearPhrase(minOf(distanceM, thresholds.destinationNearM), step.destinationSide)
+    step.maneuver.isTurn -> turnApproachingPhrase(minOf(distanceM, thresholds.turnApproachMinM), step)
+    else -> null
+}
+
+/**
  * Lo que dice "Repetir": la indicación de la etapa en la que se va, con la distancia de este
  * momento. No se guarda la última frase tal cual porque envejece: un "Gira ahora" repetido después
  * de doblar haría girar otra vez, y un "En cincuenta metros" puede estar ya a veinte.

@@ -23,6 +23,9 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 interface SpeechPlayer {
     suspend fun play(text: String, onStart: () -> Unit)
+
+    /** Deja listo el audio de [text] para que [play] empiece sin esperar. */
+    suspend fun prepare(text: String) = Unit
 }
 
 enum class LocalVoiceState { STARTING, READY, MISSING_DATA, UNAVAILABLE }
@@ -100,6 +103,24 @@ class SpeechOutputImpl(
         }
     }
 
+    // Solo hace falta con Gemini, que tarda en bajar el audio: la voz del reloj empieza al instante.
+    override fun prepare(text: String) {
+        if (text.isBlank() || !isEnabled() || remotePaused()) return
+        if (local.state.value == LocalVoiceState.READY) return
+        scope.launch {
+            try {
+                remote.prepare(text)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: QuotaExhaustedError) {
+                pauseRemote()
+                onError(e)
+            } catch (e: Exception) {
+                onError(e)
+            }
+        }
+    }
+
     @Synchronized
     override fun stop() {
         current?.cancel()
@@ -152,13 +173,17 @@ class SpeechOutputImpl(
         try {
             remote.play(text, onStart)
         } catch (e: QuotaExhaustedError) {
-            remotePausedUntilMs = clock() + QUOTA_PAUSE_MS
-            refreshStatus()
-            scope.launch {
-                delay(QUOTA_PAUSE_MS)
-                refreshStatus()
-            }
+            pauseRemote()
             throw e
+        }
+    }
+
+    private fun pauseRemote() {
+        remotePausedUntilMs = clock() + QUOTA_PAUSE_MS
+        refreshStatus()
+        scope.launch {
+            delay(QUOTA_PAUSE_MS)
+            refreshStatus()
         }
     }
 
