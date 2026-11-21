@@ -26,3 +26,34 @@ val StatusTurnSoon = Accent
 val StatusOffRoute = Color(0xFFFF8A3D)
 val StatusNoSignal = Color(0xFF8A93A6)
 val StatusArrived = Color(0xFF3DDC84)
+
+// Fondo radial de las pantallas: un brillo arriba del centro que se apaga hacia el borde. En
+// Desviado y Llegada el brillo toma el tinte del estado (además del texto, nunca en su lugar).
+val BackgroundGlow = Color(0xFF141A27)
+val BackgroundEdge = Color(0xFF06080C)
+val BackgroundGlowOffRoute = Color(0xFF24160F)
+val BackgroundGlowArrived = Color(0xFF0F2219)
+
+// Dial: pista del anillo y marcas del bisel apagadas (decorativos, no llevan texto).
+val RingTrack = Color(0xFF1B2030)
+val TickMajor = Color(0xFF5A6378)
+val TickMinor = Color(0xFF2F3544)
+val TickMinorOffRoute = Color(0xFF3A2F2A)
+val TickMajorNoSignal = Color(0xFF4A5266)
+val TickMinorNoSignal = Color(0xFF2A2F3A)
+val TickMajorAssistant = Color(0xFF5A5678)
+val TickMinorAssistant = Color(0xFF2F2E48)
+
+// Disco de vidrio: degradado radial con un borde blanco al 9 %.
+val GlassTop = Color(0xFF242C3C)
+val GlassBottom = Color(0xFF131824)
+val GlassEdge = Color(0x17FFFFFF)
+
+// Versiones claras para el degradado de los discos y botones de color (arriba más claro).
+val PrimaryLight = Color(0xFF7DAEFF)
+val ArrivedLight = Color(0xFF6BEBA0)
+val AssistantLight = Color(0xFFB7A5FF)
+
+// Burbuja de la respuesta del asistente (el texto va en TextPrimary encima).
+val AssistantBubbleTop = Color(0xFF221E3D)
+val AssistantBubbleBottom = Color(0xFF181630)

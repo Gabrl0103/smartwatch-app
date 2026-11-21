@@ -45,13 +45,13 @@ private fun StateIconsPreview() = PreviewSurface {
 
 @WearPreviewLargeRound
 @Composable
-private fun BadgesPreview() = PreviewSurface {
+private fun StatusPillsPreview() = PreviewSurface {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        StateBadge("En ruta", StatusOnRoute)
-        StateBadge("Giro próximo", StatusTurnSoon)
-        StateBadge("Fuera de ruta", StatusOffRoute)
-        StateBadge("Sin señal GPS", StatusNoSignal)
-        StateBadge("Llegaste", StatusArrived)
+        StatusPill("En ruta", StatusOnRoute, icon = StateIconKind.STRAIGHT)
+        StatusPill("Giro próximo", StatusTurnSoon, icon = StateIconKind.TURN_SOON)
+        StatusPill("Fuera de ruta", StatusOffRoute, icon = StateIconKind.WARNING)
+        StatusPill("Sin señal GPS", StatusNoSignal, icon = StateIconKind.NO_SIGNAL)
+        StatusPill("Llegaste", StatusArrived, icon = StateIconKind.ARRIVED)
     }
 }
 
@@ -71,7 +71,11 @@ private fun ButtonsPreview() = PreviewSurface {
 
 @WearPreviewLargeRound
 @Composable
-private fun RingAndVibrationPreview() = PreviewSurface {
-    ProgressRing(progress = 0.6f, color = StatusTurnSoon, contentDescription = "Progreso hacia el giro")
-    VibrationIndicator(VibrationPatterns.of(VibrationCue.ARRIVED, supportsAmplitude = true), StatusArrived)
+private fun DialPreview() = PreviewSurface {
+    Dial(StatusTurnSoon, RingStyle.PROGRESS, progress = 0.6f, contentDescription = "Progreso hacia el giro")
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        GlassDisc(56.dp, halo = StatusTurnSoon) { StateIcon(StateIconKind.RIGHT, StatusTurnSoon, size = 32.dp) }
+        VibrationPill(VibrationPatterns.of(VibrationCue.RIGHT, supportsAmplitude = true), StatusTurnSoon)
+        RoundAction(StateIconKind.REPEAT, "Repetir", onClick = {}, style = RoundActionStyle.PRIMARY)
+    }
 }

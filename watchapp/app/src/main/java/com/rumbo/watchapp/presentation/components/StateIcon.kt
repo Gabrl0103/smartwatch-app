@@ -42,7 +42,26 @@ enum class StateIconKind(val description: String, vararg paths: String) {
         "M10 10a2 2 0 1 0 4 0a2 2 0 1 0-4 0",
         "M3 3l18 18",
     ),
-    ARRIVED("Llegaste", "M4.5 12.5l5 5L19.5 7");
+    ARRIVED("Llegaste", "M4.5 12.5l5 5L19.5 7"),
+    TURN_SOON("Giro próximo", "M12 4l8.5 15h-17z"),
+    REPEAT("Repetir", "M3 12a9 9 0 1 0 3-6.7L3 8", "M3 3v5h5"),
+    MAP("Mapa", "M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z", "M9 4v14", "M15 6v14"),
+    CLOSE("Terminar", "M6 6l12 12", "M18 6L6 18"),
+    PIN(
+        "Destino",
+        "M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z",
+        "M9.5 9.5a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0",
+    ),
+    WALK(
+        "A pie",
+        "M11 4.5a2 2 0 1 0 4 0a2 2 0 1 0-4 0",
+        "M9 21l2-7 3 3v5",
+        "M11 14l-1-5 5-1 2 4",
+        "M8 11l2-3",
+    ),
+    CLOCK("Tiempo", "M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0", "M12 7v5l3 2"),
+    STAR("Lugares guardados", "M12 3l2.7 5.8 6.3.7-4.7 4.3 1.3 6.2L12 17l-5.6 3 1.3-6.2L3 9.5l6.3-.7z"),
+    SPARKLE("Asistente", "M12 2l2.2 6.3L21 10l-6.8 1.7L12 18l-2.2-6.3L3 10l6.8-1.7z");
 
     val vector: ImageVector by lazy { strokeIcon(name, paths) }
 }

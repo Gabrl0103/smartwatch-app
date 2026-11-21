@@ -57,6 +57,54 @@ class ColorContrastTest {
     }
 
     @Test
+    fun textOnTheRadialBackgroundIsReadableEvenWhereItIsLightest() {
+        // El centro del degradado es lo más claro del fondo; con tinte en Desviado y Llegada.
+        val backgrounds = mapOf(
+            "fondo radial" to BackgroundGlow,
+            "fondo desviado" to BackgroundGlowOffRoute,
+            "fondo llegada" to BackgroundGlowArrived,
+            "borde del fondo" to BackgroundEdge,
+        )
+        val texts = mapOf("texto" to TextPrimary, "texto secundario" to TextSecondary) + filled
+        backgrounds.forEach { (bgName, behind) ->
+            texts.forEach { (name, color) ->
+                val ratio = contrast(color, behind)
+                assertTrue("$name sobre $bgName: $ratio", ratio >= MIN_TEXT_CONTRAST)
+            }
+        }
+    }
+
+    @Test
+    fun textInsideTheAssistantBubbleAndOverTheGlassIsReadable() {
+        listOf(AssistantBubbleTop, AssistantBubbleBottom, GlassTop, GlassBottom).forEach { behind ->
+            listOf(TextPrimary, TextSecondary).forEach { color ->
+                val ratio = contrast(color, behind)
+                assertTrue("$color sobre $behind: $ratio", ratio >= MIN_TEXT_CONTRAST)
+            }
+        }
+    }
+
+    @Test
+    fun stateColorsOnTheGlassDiscStandOut() {
+        // Los íconos van en el color del estado sobre el vidrio: 3:1 para gráficos (WCAG 1.4.11).
+        filled.forEach { (name, color) ->
+            listOf(GlassTop, GlassBottom).forEach { behind ->
+                val ratio = contrast(color, behind)
+                assertTrue("$name sobre el vidrio: $ratio", ratio >= 3.0)
+            }
+        }
+    }
+
+    @Test
+    fun darkIconsOnTheLightDiscTopsAreReadable() {
+        // Micrófono, llegada y asistente: el ícono oscuro sobre la parte más clara del degradado.
+        listOf(PrimaryLight, ArrivedLight, AssistantLight).forEach { light ->
+            val ratio = contrast(OnColor, light)
+            assertTrue("Oscuro sobre $light: $ratio", ratio >= MIN_TEXT_CONTRAST)
+        }
+    }
+
+    @Test
     fun whiteOnPrimaryWouldNotBeEnoughAndAssistantPurpleNeedsTheChipTone() {
         assertEquals(2.9, contrast(TextPrimary, Primary), 0.05)
         assertTrue(contrast(OnColor, Assistant) < MIN_TEXT_CONTRAST)
@@ -77,5 +125,10 @@ class ColorContrastTest {
         assertEquals(Color(0xFF3DDC84), StatusArrived)
         assertEquals(Color(0xFF7C5CFC), Assistant)
         assertEquals(Color(0xFF9B82FF), AssistantChip)
+        assertEquals(Color(0xFF141A27), BackgroundGlow)
+        assertEquals(Color(0xFF06080C), BackgroundEdge)
+        assertEquals(Color(0xFF242C3C), GlassTop)
+        assertEquals(Color(0xFF131824), GlassBottom)
+        assertEquals(0.09f, GlassEdge.alpha, 0.005f)
     }
 }

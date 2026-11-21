@@ -63,8 +63,9 @@ fun voiceBarHeights(
 }
 
 /**
- * Nueve barras redondeadas de 8 dp que se mueven con [level] (0 a 1), entre [minHeight] y
- * [maxHeight]. Son decorativas: TalkBack no las lee (la pantalla ya dice qué pasa).
+ * Nueve barras redondeadas (de [barWidth], 8 dp por defecto) que se mueven con [level] (0 a 1),
+ * entre [minHeight] y [maxHeight], con un resplandor suave del mismo color. Son la única
+ * animación continua de la app. Son decorativas: TalkBack no las lee (la pantalla ya dice qué pasa).
  */
 @Composable
 fun VoiceBars(
@@ -73,6 +74,8 @@ fun VoiceBars(
     modifier: Modifier = Modifier,
     minHeight: Dp = 16.dp,
     maxHeight: Dp = 76.dp,
+    barWidth: Dp = BarWidth,
+    barGap: Dp = BarGap,
 ) {
     // Entre lectura y lectura del micrófono el nivel se mueve de a poco, no a saltos.
     val smoothLevel by animateFloatAsState(level, tween(LEVEL_SAMPLE_MS.toInt(), easing = LinearEasing), label = "nivel")
@@ -84,15 +87,22 @@ fun VoiceBars(
     )
     Canvas(
         modifier
-            .size(BarWidth * VOICE_BAR_COUNT + BarGap * (VOICE_BAR_COUNT - 1), maxHeight)
+            .size(barWidth * VOICE_BAR_COUNT + barGap * (VOICE_BAR_COUNT - 1), maxHeight)
             .clearAndSetSemantics {},
     ) {
-        val width = BarWidth.toPx()
-        val gap = BarGap.toPx()
+        val width = barWidth.toPx()
+        val gap = barGap.toPx()
         // La fase se lee al dibujar: la onda solo redibuja, no recompone.
         val heights = voiceBarHeights(smoothLevel, phase.value, minDp = minHeight.value, maxDp = maxHeight.value)
         heights.forEachIndexed { i, heightDp ->
             val height = heightDp.dp.toPx()
+            val glow = width * 0.5f
+            drawRoundRect(
+                color = color.copy(alpha = 0.18f),
+                topLeft = Offset(i * (width + gap) - glow / 2, (size.height - height) / 2 - glow / 2),
+                size = Size(width + glow, height + glow),
+                cornerRadius = CornerRadius((width + glow) / 2),
+            )
             drawRoundRect(
                 color = color,
                 topLeft = Offset(i * (width + gap), (size.height - height) / 2),
@@ -111,12 +121,26 @@ private const val SPEAKING_PERIOD_MS = 700
  * está hablando (voz del reloj o Gemini). Decorativas, como [VoiceBars].
  */
 @Composable
-fun SpeakingBars(color: Color, modifier: Modifier = Modifier, maxHeight: Dp = 24.dp) {
+fun SpeakingBars(
+    color: Color,
+    modifier: Modifier = Modifier,
+    maxHeight: Dp = 24.dp,
+    barWidth: Dp = BarWidth,
+    barGap: Dp = BarGap,
+) {
     val breath = rememberInfiniteTransition(label = "habla").animateFloat(
         initialValue = 0.35f,
         targetValue = 0.9f,
         animationSpec = infiniteRepeatable(tween(SPEAKING_PERIOD_MS), RepeatMode.Reverse),
         label = "nivel",
     )
-    VoiceBars(level = breath.value, color = color, modifier = modifier, minHeight = 6.dp, maxHeight = maxHeight)
+    VoiceBars(
+        level = breath.value,
+        color = color,
+        modifier = modifier,
+        minHeight = (maxHeight * 0.25f).coerceAtMost(6.dp),
+        maxHeight = maxHeight,
+        barWidth = barWidth,
+        barGap = barGap,
+    )
 }

@@ -4,28 +4,23 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.ButtonDefaults
-import androidx.wear.compose.material3.FilledIconButton
-import androidx.wear.compose.material3.Icon
-import androidx.wear.compose.material3.IconButtonDefaults
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.SwitchButton
 import androidx.wear.compose.material3.SwitchButtonDefaults
 import androidx.wear.compose.material3.Text
-import com.rumbo.watchapp.R
 import com.rumbo.watchapp.presentation.theme.AssistantChip
 import com.rumbo.watchapp.presentation.theme.Border
 import com.rumbo.watchapp.presentation.theme.OnColor
 import com.rumbo.watchapp.presentation.theme.Primary
+import com.rumbo.watchapp.presentation.theme.StatusArrived
 import com.rumbo.watchapp.presentation.theme.StatusOffRoute
 import com.rumbo.watchapp.presentation.theme.Surface
 import com.rumbo.watchapp.presentation.theme.TextPrimary
@@ -37,15 +32,16 @@ val TouchMinHeight = 52.dp
 private val PillBorder = BorderStroke(1.dp, Border)
 
 /**
- * PRIMARY: la acción principal de la pantalla; DANGER: borrar; ASSISTANT: hablar con el
- * asistente (en el tono del chip, que da contraste con texto oscuro). El texto sobre color va
- * oscuro.
+ * PRIMARY: la acción principal de la pantalla; DANGER: borrar; ARRIVED: terminar al llegar;
+ * ASSISTANT: hablar con el asistente (en el tono del chip, que da contraste con texto oscuro).
+ * El texto sobre color va oscuro.
  */
 enum class PillStyle(val container: Color, val content: Color, val secondaryContent: Color) {
     PRIMARY(Primary, OnColor, OnColor),
     SECONDARY(Surface, TextPrimary, TextSecondary),
     DANGER(StatusOffRoute, OnColor, OnColor),
     ASSISTANT(AssistantChip, OnColor, OnColor),
+    ARRIVED(StatusArrived, OnColor, OnColor),
 }
 
 /** Botón grande en píldora: a lo ancho, mínimo 52 dp de alto, borde de 1 dp y sin sombra. */
@@ -87,24 +83,6 @@ fun PillButton(
             modifier = Modifier.fillMaxWidth(),
             style = MaterialTheme.typography.labelMedium,
             textAlign = TextAlign.Center,
-        )
-    }
-}
-
-/** Botón redondo del micrófono (≈ 108 dp), la acción principal de Inicio. */
-@Composable
-fun MicButton(onClick: () -> Unit, contentDescription: String, modifier: Modifier = Modifier) {
-    FilledIconButton(
-        onClick = onClick,
-        modifier = modifier.size(108.dp),
-        shapes = IconButtonDefaults.shapes(CircleShape),
-        colors = IconButtonDefaults.filledIconButtonColors(containerColor = Primary, contentColor = OnColor),
-        border = PillBorder,
-    ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_mic),
-            contentDescription = contentDescription,
-            modifier = Modifier.size(52.dp),
         )
     }
 }

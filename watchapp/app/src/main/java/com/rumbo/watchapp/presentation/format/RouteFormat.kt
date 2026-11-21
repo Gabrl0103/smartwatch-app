@@ -27,3 +27,16 @@ fun formatWalkingMinutes(seconds: Double): String {
     val minutes = ceil(seconds / 60).toInt().coerceAtLeast(1)
     return "$minutes min a pie"
 }
+
+/**
+ * Minutos a pie que faltan, al ritmo de la ruta: [remainingM] por lo que tarda cada metro
+ * ([durationS] / [distanceM]), redondeado hacia arriba y nunca menos de 1. Null si la ruta no
+ * trae distancia o tiempo.
+ */
+fun remainingWalkingMinutes(remainingM: Double, distanceM: Double, durationS: Double): Int? {
+    if (distanceM <= 0 || durationS <= 0) return null
+    return ceil(remainingM.coerceAtLeast(0.0) * durationS / distanceM / 60).toInt().coerceAtLeast(1)
+}
+
+/** "24 min": el tiempo corto para mostrar junto a la distancia. */
+fun formatMinutes(minutes: Int): String = "$minutes min"

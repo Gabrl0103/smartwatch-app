@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -41,13 +42,15 @@ import com.rumbo.watchapp.domain.vibration.VibrationCue
 import com.rumbo.watchapp.domain.vibration.VibrationPattern
 import com.rumbo.watchapp.domain.vibration.VibrationPatterns
 import com.rumbo.watchapp.domain.vibration.VibrationSettings
-import com.rumbo.watchapp.presentation.components.PillButton
-import com.rumbo.watchapp.presentation.components.PillStyle
-import com.rumbo.watchapp.presentation.components.ProgressRing
-import com.rumbo.watchapp.presentation.components.StateBadge
+import com.rumbo.watchapp.presentation.components.Dial
+import com.rumbo.watchapp.presentation.components.GlassDisc
+import com.rumbo.watchapp.presentation.components.RingStyle
+import com.rumbo.watchapp.presentation.components.RoundAction
+import com.rumbo.watchapp.presentation.components.RoundActionStyle
 import com.rumbo.watchapp.presentation.components.StateIcon
 import com.rumbo.watchapp.presentation.components.StateIconKind
-import com.rumbo.watchapp.presentation.components.VibrationIndicator
+import com.rumbo.watchapp.presentation.components.StatusPill
+import com.rumbo.watchapp.presentation.components.VibrationPill
 import com.rumbo.watchapp.presentation.screens.AssistantScreen
 import com.rumbo.watchapp.presentation.screens.ConfirmDeleteScreen
 import com.rumbo.watchapp.presentation.screens.ConfirmScreen
@@ -56,13 +59,13 @@ import com.rumbo.watchapp.presentation.screens.ListeningScreen
 import com.rumbo.watchapp.presentation.screens.NavigationScreen
 import com.rumbo.watchapp.presentation.screens.PermissionScreen
 import com.rumbo.watchapp.presentation.screens.ProcessingScreen
+import com.rumbo.watchapp.presentation.screens.RumboBackground
 import com.rumbo.watchapp.presentation.screens.RouteMapScreen
 import com.rumbo.watchapp.presentation.screens.SavedPlacesScreen
 import com.rumbo.watchapp.presentation.screens.StartScreen
 import com.rumbo.watchapp.presentation.screens.VibrationsScreen
 import com.rumbo.watchapp.presentation.theme.Accent
-import com.rumbo.watchapp.presentation.theme.StatusArrived
-import com.rumbo.watchapp.presentation.theme.StatusTurnSoon
+import com.rumbo.watchapp.presentation.theme.StatusOnRoute
 import com.rumbo.watchapp.presentation.theme.WatchappTheme
 import com.rumbo.watchapp.presentation.viewmodel.DemoStep
 import com.rumbo.watchapp.presentation.viewmodel.GPS_SEARCHING_MESSAGE
@@ -140,6 +143,7 @@ private fun tracking(
     remainingM = 466.0,
     pattern = pattern,
     recalculating = recalculating,
+    route = ROUTE,
 )
 
 private fun onTheMap(status: NavigationStatus, east: Double, north: Double, heading: Double, progress: Double) =
@@ -339,21 +343,27 @@ private fun Bitmap.roundCrop(): Bitmap {
     return out
 }
 
+// Los componentes compartidos del rediseño: fondo, bisel y anillo al 60 %, insignia, disco de
+// vidrio, píldora de vibración, botón redondo y todos los íconos.
 @Composable
 private fun ComponentsGallery() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        ProgressRing(progress = 0.6f, color = StatusTurnSoon, contentDescription = "Progreso")
+        RumboBackground()
+        Dial(StatusOnRoute, RingStyle.PROGRESS, progress = 0.6f, contentDescription = "Progreso")
         Column(
-            modifier = Modifier.padding(horizontal = 36.dp, vertical = 40.dp),
+            modifier = Modifier.padding(horizontal = 52.dp, vertical = 44.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            StateBadge("Giro próximo", StatusTurnSoon)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally)) {
-                StateIconKind.entries.forEach { StateIcon(it, Accent, size = 32.dp) }
+            StatusPill("En ruta", StatusOnRoute, icon = StateIconKind.STRAIGHT)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                GlassDisc(40.dp, halo = StatusOnRoute) { StateIcon(StateIconKind.RIGHT, StatusOnRoute, size = 24.dp) }
+                RoundAction(StateIconKind.REPEAT, "Repetir", onClick = {}, style = RoundActionStyle.PRIMARY, size = 40.dp)
             }
-            VibrationIndicator(pattern(VibrationCue.ARRIVED), StatusArrived)
-            PillButton("Ir", onClick = {}, style = PillStyle.PRIMARY)
+            VibrationPill(pattern(VibrationCue.RIGHT), StatusOnRoute)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally)) {
+                StateIconKind.entries.forEach { StateIcon(it, Accent, size = 18.dp) }
+            }
         }
     }
 }
