@@ -172,17 +172,27 @@ private fun RoundColumn(
         val radius = min(screenWidth, screenHeight) / 2 - edgeInset.toPx()
         val centerY = screenHeight / 2
         val paddingTop = contentPadding.calculateTopPadding().toPx()
+        val paddingBottom = contentPadding.calculateBottomPadding().toPx()
         // Lo primero (la insignia de estado) nunca queda cortado: si arriba del todo no cabe en el
         // círculo ni achicado, todo baja lo justo para que entre.
         val first = placeables.firstOrNull()
         val drop = if (round && first != null) {
-            firstItemDrop(first.width / 2f * MIN_EDGE_SCALE, first.height / 2f, radius, centerY - paddingTop).toInt()
+            edgeItemShift(first.width / 2f * MIN_EDGE_SCALE, first.height / 2f, radius, centerY - paddingTop).toInt()
+        } else {
+            0
+        }
+        // Y lo último (los botones) puede subir, al desplazar hasta el final, hasta caber entero:
+        // sin este espacio quedaba siempre achicado contra el borde de abajo (y performScrollTo
+        // nunca lo daba por visible y desplazaba sin fin).
+        val last = placeables.lastOrNull()
+        val tail = if (round && last != null) {
+            edgeItemShift(last.width / 2f, last.height / 2f, radius, screenHeight - paddingBottom - centerY).toInt()
         } else {
             0
         }
         // Con fillMaxSize antes del scroll, minHeight es el alto visible: si sobra, se centra.
         val startY = max((constraints.minHeight - itemsHeight) / 2, drop).coerceAtLeast(0)
-        val height = max(startY + itemsHeight, constraints.minHeight)
+        val height = max(startY + itemsHeight + tail, constraints.minHeight)
         layout(width, height) {
             var y = startY
             placeables.forEach { placeable ->
@@ -213,18 +223,19 @@ private fun RoundColumn(
 }
 
 /**
- * Cuánto bajar un elemento de mitades [halfWidth] × [halfHeight] puesto arriba del todo, con su
- * borde de arriba a [topToCenter] px sobre el centro, para que quepa entero (sin achicarse) en el
- * círculo de radio [radius]. Si es tan ancho que no cabe en ninguna altura, lo lleva al centro.
+ * Cuánto acercar al centro un elemento de mitades [halfWidth] × [halfHeight] pegado a un extremo
+ * (arriba o abajo), con su borde exterior a [edgeToCenter] px del centro, para que quepa entero
+ * (sin achicarse) en el círculo de radio [radius]. Si es tan ancho que no cabe a ninguna altura,
+ * lo lleva al centro.
  */
-private fun firstItemDrop(halfWidth: Float, halfHeight: Float, radius: Float, topToCenter: Float): Float {
+private fun edgeItemShift(halfWidth: Float, halfHeight: Float, radius: Float, edgeToCenter: Float): Float {
     val corner = min(halfWidth, halfHeight)
     val reach = radius - corner
     val side = halfWidth - corner
-    // Lo más arriba que puede estar su centro (medido hacia arriba desde el centro de la pantalla).
-    val highestCenter = if (side > reach) 0f else sqrt(reach * reach - side * side) - halfHeight + corner
-    val centerNow = topToCenter - halfHeight
-    return (centerNow - highestCenter).coerceAtLeast(0f)
+    // Lo más lejos del centro que puede estar su centro.
+    val farthestCenter = if (side > reach) 0f else sqrt(reach * reach - side * side) - halfHeight + corner
+    val centerNow = edgeToCenter - halfHeight
+    return (centerNow - farthestCenter).coerceAtLeast(0f)
 }
 
 /**
