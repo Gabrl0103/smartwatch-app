@@ -4,6 +4,7 @@ from presentation.middleware.error_handler import register_error_handlers
 from presentation.routers import (
     devices,
     health,
+    map_tiles,
     places,
     routes,
     saved_places,
@@ -24,4 +25,5 @@ def create_app() -> FastAPI:
     app.include_router(devices.router)
     app.include_router(vibration_events.router)
     app.include_router(speech.router)
+    app.include_router(map_tiles.router)
     return app

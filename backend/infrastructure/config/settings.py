@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from dotenv import load_dotenv
 
+from infrastructure.maps.geoapify_tiles import DEFAULT_MAP_STYLE
 from infrastructure.routing.geoapify_routing import DEFAULT_ROUTE_TYPE
 
 load_dotenv()
@@ -18,6 +19,7 @@ class Settings:
     gemini_model: str
     gemini_tts_model: str = DEFAULT_GEMINI_TTS_MODEL
     geoapify_route_type: str = DEFAULT_ROUTE_TYPE
+    geoapify_map_style: str = DEFAULT_MAP_STYLE
 
 
 def load_settings() -> Settings:
@@ -28,4 +30,5 @@ def load_settings() -> Settings:
         gemini_model=os.getenv("GEMINI_MODEL", ""),
         gemini_tts_model=os.getenv("GEMINI_TTS_MODEL") or DEFAULT_GEMINI_TTS_MODEL,
         geoapify_route_type=os.getenv("GEOAPIFY_ROUTE_TYPE") or DEFAULT_ROUTE_TYPE,
+        geoapify_map_style=os.getenv("GEOAPIFY_MAP_STYLE") or DEFAULT_MAP_STYLE,
     )

@@ -5,10 +5,12 @@ from functools import lru_cache
 from sqlalchemy.engine import Engine
 
 from application.speech_cache import SpeechCache
+from application.tile_cache import TileCache
 from domain.errors import ExternalServiceError
 from domain.ports.database_health import DatabaseHealthPort
 from domain.ports.device_repository import DeviceRepositoryPort
 from domain.ports.geocoding import GeocodingPort
+from domain.ports.map_tiles import MapTileProviderPort
 from domain.ports.route_repository import RouteRepositoryPort
 from domain.ports.routing_provider import RoutingProviderPort
 from domain.ports.saved_place_repository import SavedPlaceRepositoryPort
@@ -26,6 +28,7 @@ from infrastructure.database.sql_saved_place_repository import SqlSavedPlaceRepo
 from infrastructure.database.sql_vibration_event_repository import SqlVibrationEventRepository
 from infrastructure.database.sql_voice_command_repository import SqlVoiceCommandRepository
 from infrastructure.geocoding.geoapify_geocoder import GeoapifyGeocoder
+from infrastructure.maps.geoapify_tiles import GeoapifyTiles
 from infrastructure.routing.geoapify_routing import GeoapifyRouting
 from infrastructure.speech.gemini_speech_synthesizer import GeminiSpeechSynthesizer
 
@@ -100,3 +103,13 @@ def get_geocoder() -> GeocodingPort:
 @lru_cache
 def get_routing_provider() -> RoutingProviderPort:
     return GeoapifyRouting(_geoapify_api_key(), route_type=load_settings().geoapify_route_type)
+
+
+@lru_cache
+def get_map_tile_provider() -> MapTileProviderPort:
+    return GeoapifyTiles(_geoapify_api_key(), style=load_settings().geoapify_map_style)
+
+
+@lru_cache
+def get_tile_cache() -> TileCache:
+    return TileCache()
