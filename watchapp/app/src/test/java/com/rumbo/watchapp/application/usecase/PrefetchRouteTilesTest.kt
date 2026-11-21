@@ -3,6 +3,7 @@ package com.rumbo.watchapp.application.usecase
 import com.rumbo.watchapp.application.map.RequestPacer
 import com.rumbo.watchapp.domain.map.MAP_TILE_ZOOM
 import com.rumbo.watchapp.domain.map.RouteGeometry
+import com.rumbo.watchapp.domain.map.StreetLine
 import com.rumbo.watchapp.domain.map.TileId
 import com.rumbo.watchapp.domain.map.TileRouteGeometry
 import com.rumbo.watchapp.domain.map.tileScene
@@ -25,19 +26,29 @@ class PrefetchRouteTilesTest {
             asked += tile
             return if (tile in failing) null else byteArrayOf(1)
         }
+
+        val askedStreets = mutableListOf<TileId>()
+
+        override suspend fun streets(tile: TileId): List<StreetLine>? {
+            askedStreets += tile
+            return emptyList()
+        }
     }
 
     @Test
     fun theDemoRouteCorridorIsPrefetchedOnceUnderTheCap() = runTest {
         val tiles = FakeTiles()
 
-        val loaded = PrefetchRouteTiles(tiles, NoLogger)(readDemoRoute())
+        val result = PrefetchRouteTiles(tiles, NoLogger)(readDemoRoute())
+        val loaded = result.tiles
 
         assertEquals(tiles.asked.toSet().size, tiles.asked.size)
+        // Los nombres de calle van por tile de zoom 14: pocos para toda la ruta.
+        assertTrue(result.streetTiles in 1..4)
         assertEquals(tiles.asked.size, loaded)
         assertTrue(loaded in 1..PREFETCH_MAX_TILES)
         // Para estimar créditos de Geoapify (0,25 por tile); se ve en el informe de la prueba.
-        println("Ruta demo: $loaded tiles a zoom $MAP_TILE_ZOOM")
+        println("Ruta demo: $loaded tiles a zoom $MAP_TILE_ZOOM y ${result.streetTiles} de nombres")
     }
 
     @Test
@@ -45,9 +56,9 @@ class PrefetchRouteTilesTest {
         val route = readDemoRoute()
         val first = TileRouteGeometry(RouteGeometry(route)).corridor(MAP_VIEW_RADIUS_PX, 1).first()
 
-        val loaded = PrefetchRouteTiles(FakeTiles(failing = setOf(first)), NoLogger, maxTiles = 5)(route)
+        val result = PrefetchRouteTiles(FakeTiles(failing = setOf(first)), NoLogger, maxTiles = 5)(route)
 
-        assertEquals(4, loaded)
+        assertEquals(4, result.tiles)
     }
 
     @Test

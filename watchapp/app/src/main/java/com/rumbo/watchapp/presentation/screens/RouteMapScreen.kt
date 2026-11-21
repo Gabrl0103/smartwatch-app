@@ -2,6 +2,7 @@ package com.rumbo.watchapp.presentation.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -16,6 +18,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -45,16 +50,23 @@ import com.rumbo.watchapp.presentation.theme.TextSecondary
 // RumboScreen centra; nada se desplaza.
 private val BadgeArea = 24.dp
 private val DistanceArea = 26.dp
-private val AttributionArea = 14.dp
+private val AttributionArea = 30.dp
 private val ButtonsArea = 52.dp
 private val ItemGap = 8.dp
 private val ButtonsInset = 4.dp
 
+// La atribución va abajo a la derecha, fuera del camino de la flecha (al centro) y a 24 dp o más del
+// borde redondo.
+private val AttributionInset = 8.dp
+
 // El margen de arriba y abajo de RumboScreen en pantalla redonda.
 private const val VERTICAL_MARGIN = 0.14f
 
-/** Atribución que piden OpenStreetMap y el plan gratis de Geoapify, visible sobre el mapa con calles. */
-const val MAP_ATTRIBUTION = "© OpenStreetMap · Geoapify"
+/**
+ * Atribución que piden OpenStreetMap, OpenMapTiles (los datos de los tiles) y el plan gratis de
+ * Geoapify. En tres líneas cortas: en una no cabe en el círculo a un tamaño legible.
+ */
+const val MAP_ATTRIBUTION = "© OpenStreetMap\n© OpenMapTiles\nGeoapify"
 
 /** Lo que dice la etiqueta. Sin señal va más corto que en En ruta: aquí cabe sobre el mapa. */
 private fun mapLabel(state: TrackingState) =
@@ -98,6 +110,9 @@ fun RouteMapScreen(state: TrackingState, onBack: () -> Unit, initialZoom: MapZoo
     val margin = screenHeight * VERTICAL_MARGIN
     val top = BadgeArea + if (distance != null) DistanceArea else 0.dp
     val bottom = ButtonsArea + if (nearby) AttributionArea else 0.dp
+    // Lo que hay encima del mapa, medido: los nombres de calle no se escriben debajo.
+    var blockers by remember { mutableStateOf(mapOf<String, Rect>()) }
+    fun Modifier.blocksStreetNames(key: String) = onGloballyPositioned { blockers = blockers + (key to it.boundsInRoot()) }
     ScreenOnWhileNavigating(wakeKey = state.status) {
         RumboScreen(
             paneTitle = "Mapa",
@@ -109,18 +124,23 @@ fun RouteMapScreen(state: TrackingState, onBack: () -> Unit, initialZoom: MapZoo
                     description = describeMap(state, label, zoom),
                     topInset = margin + top,
                     bottomInset = margin + bottom,
+                    labelBlockers = blockers.values.toList(),
                 )
             },
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(
+                modifier = Modifier.blocksStreetNames("arriba"),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 StateBadge(label, lookOf(state).color, announce = true, filled = true, compact = true)
                 distance?.let { (text, spoken) -> DistanceChip(text, spoken) }
             }
             Spacer(Modifier.height(freeHeight(screenHeight, margin, top, bottom)))
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                if (nearby) Attribution()
+                if (nearby) Attribution(Modifier.blocksStreetNames("atribución"))
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = ButtonsInset),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = ButtonsInset).blocksStreetNames("botones"),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     PillButton("Atrás", onClick = onBack, modifier = Modifier.weight(1f))
@@ -151,17 +171,21 @@ private fun DistanceChip(text: String, spoken: String) {
 
 // Pequeña pero legible: gris secundario sobre el fondo de la app (más de 4,5:1), no sobre las calles.
 @Composable
-private fun Attribution() {
-    Text(
-        text = MAP_ATTRIBUTION,
-        modifier = Modifier
-            .background(Background.copy(alpha = 0.85f), CircleShape)
-            .padding(horizontal = 8.dp, vertical = 1.dp),
-        style = MaterialTheme.typography.labelSmall,
-        fontSize = 9.sp,
-        color = TextSecondary,
-        maxLines = 1,
-    )
+private fun Attribution(textModifier: Modifier) {
+    Box(Modifier.fillMaxWidth().padding(end = AttributionInset), contentAlignment = Alignment.CenterEnd) {
+        Text(
+            text = MAP_ATTRIBUTION,
+            modifier = textModifier
+                .background(Background.copy(alpha = 0.85f), RoundedCornerShape(6.dp))
+                .padding(horizontal = 5.dp, vertical = 1.dp),
+            style = MaterialTheme.typography.labelSmall,
+            fontSize = 8.sp,
+            lineHeight = 9.5.sp,
+            color = TextSecondary,
+            textAlign = TextAlign.End,
+            maxLines = 3,
+        )
+    }
 }
 
 @Composable

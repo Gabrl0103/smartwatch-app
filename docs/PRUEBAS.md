@@ -122,7 +122,7 @@ Cada orden termina con "Hecho" (2 pulsos cortos) o "Error" (1 pulso extra largo)
 | # | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|
 | M1 | Abrir y volver | En ruta, bajar hasta "Ver mapa" y tocarlo; luego "Atrás" o el gesto de volver | Abre "Mapa" y vuelve a En ruta sin preguntar "¿Terminar la ruta?"; la voz y las vibraciones no se cortan (`adb logcat -s Nav Vibracion`) |
-| M2 | Recorrido | Con el mapa abierto, Play route en el GPX | Calles reales (oscuras, con nombres) que giran con el rumbo; la flecha fija un poco abajo del centro; lo que falta azul con borde claro, lo recorrido azul tenue, el próximo giro con un aro amarillo, "Giro en … m" arriba y "© OpenStreetMap · Geoapify" abajo |
+| M2 | Recorrido | Con el mapa abierto, Play route en el GPX | Calles reales (oscuras) que giran con el rumbo y nombres de calle siempre derechos, también caminando hacia el sur; la flecha fija un poco abajo del centro; lo que falta azul con borde claro, lo recorrido azul tenue, el próximo giro con un aro amarillo, "Giro en … m" arriba y la atribución en tres líneas abajo a la derecha |
 | M3 | Vistas | Tocar "Ruta" y luego "Cerca" | Toda la ruta con el norte arriba, destino en verde y la flecha con su rumbo; vuelve a la vista de cerca. TalkBack lee "Ver toda la ruta" y "Ver de cerca" |
 | M4 | Desviado | Con `ruta_con_desvio.gpx` y el mapa abierto | Persona naranja, ruta con borde naranja y "Fuera de ruta"; al recalcular aparece la ruta nueva |
 | M5 | Sin señal | Con el mapa abierto, apagar la ubicación 15 s | Persona gris en la última posición y "Sin señal"; al volver la señal sigue normal |

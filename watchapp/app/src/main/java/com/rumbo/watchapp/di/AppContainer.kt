@@ -114,9 +114,9 @@ class AppContainer(context: Context) {
         repeatInstruction = trackNavigation::repeat,
     )
 
-    // Mapa de cerca: tiles del backend (ritmo de 4 por segundo, 2 a la vez) con caché en disco.
+    // Mapa de cerca: tiles y nombres de calle del backend (ritmo de 4 por segundo, 2 a la vez) con caché en disco.
     private val mapTileSource = BackendMapTileSource(
-        dir = File(appContext.cacheDir, "map_tiles"),
+        dir = File(appContext.cacheDir, "map"),
         pacer = RequestPacer(maxPerSecond = 4, maxConcurrent = 2, clock = clock),
         clock = clock,
         logger = AndroidLogger,
