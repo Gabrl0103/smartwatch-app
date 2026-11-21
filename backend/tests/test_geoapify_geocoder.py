@@ -112,3 +112,20 @@ def test_nearest_without_name_uses_the_kind_and_street():
 def test_nearest_without_results_returns_none():
     geocoder = make_geocoder(lambda r: httpx.Response(200, json={"features": []}))
     assert geocoder.nearest(PlaceKind.ATM, None, 2_000) is None
+
+
+@pytest.mark.parametrize(
+    "query, found, confidence, accepted",
+    [
+        ("Droguería Alemana", "Droguería Belalcazar", 0, False),
+        ("Iglesia de San Juan", "Iglesia de Santa Mónica", 0, False),
+        ("Parque Nariño", "Plaza de Nariño", 0, True),
+        ("Calle 18 # 25-40", "Calle 18", 0.5, True),
+        ("Parque Bolívar", "Parque Bolívar", 1, True),
+    ],
+)
+def test_a_low_confidence_result_needs_the_distinctive_words(query, found, confidence, accepted):
+    result = {"name": found, "lat": 1.0, "lon": 2.0, "rank": {"confidence": confidence}}
+    geocoder = make_geocoder(lambda r: httpx.Response(200, json={"results": [result]}))
+
+    assert (geocoder.search(query) is not None) == accepted

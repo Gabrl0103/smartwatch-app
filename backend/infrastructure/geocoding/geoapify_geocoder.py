@@ -3,12 +3,27 @@ import httpx
 from domain.errors import ExternalServiceError
 from domain.models.place_kind import PLACE_KIND_LABELS, PlaceKind
 from domain.models.route import Coordinates, Place
+from domain.text import plain_words
 
 SEARCH_URL = "https://api.geoapify.com/v1/geocode/search"
 PLACES_URL = "https://api.geoapify.com/v2/places"
 
 # Centro de Pasto: sesga la búsqueda cuando no llega la ubicación del usuario.
 PASTO_CENTER = Coordinates(lat=1.2136, lng=-77.2811)
+
+# Con menos confianza que esto, Geoapify puede devolver otro lugar del mismo tipo ("Droguería
+# Alemana" → "Droguería Belalcazar"): solo se acepta si su nombre tiene las palabras propias de lo
+# pedido. "Parque Nariño" → "Plaza de Nariño" (confianza 0) sí es el mismo lugar.
+MIN_CONFIDENCE = 0.5
+
+# Palabras que no distinguen un lugar de otro de su tipo.
+_GENERIC_WORDS = {
+    "de", "del", "la", "el", "los", "las", "y", "en", "san", "santa",
+    "parque", "plaza", "plazoleta", "iglesia", "drogueria", "farmacia", "hospital", "clinica",
+    "banco", "universidad", "colegio", "escuela", "tienda", "restaurante", "centro", "comercial",
+    "calle", "carrera", "avenida", "barrio", "edificio", "hotel", "supermercado", "panaderia",
+    "cafe", "cafeteria", "estacion", "terminal",
+}
 
 # Categorías de la Places API de Geoapify (apidocs.geoapify.com/docs/places, "Supported categories").
 PLACE_CATEGORIES: dict[PlaceKind, str] = {
@@ -56,6 +71,8 @@ class GeoapifyGeocoder:
                 return None
             first = results[0]
             name = first.get("name") or first.get("address_line1") or first["formatted"]
+            if not _matches(query, name, first.get("rank") or {}):
+                return None
             return Place(name=name, coordinates=Coordinates(first["lat"], first["lon"]))
         except (KeyError, TypeError, ValueError) as error:
             raise ExternalServiceError("Geoapify devolvió una respuesta inesperada.") from error
@@ -94,6 +111,16 @@ class GeoapifyGeocoder:
             return response.json()
         except ValueError as error:
             raise ExternalServiceError("Geoapify devolvió una respuesta inesperada.") from error
+
+
+def _matches(query: str, name: str, rank: dict) -> bool:
+    """Si el resultado es el lugar pedido: con confianza alta, sí; si no, solo si su nombre tiene
+    todas las palabras propias de [query] (las que no son genéricas como "droguería" o "de")."""
+    if rank.get("confidence", 1) >= MIN_CONFIDENCE:
+        return True
+    distinctive = [word for word in plain_words(query) if word not in _GENERIC_WORDS]
+    found = set(plain_words(name))
+    return bool(distinctive) and all(word in found for word in distinctive)
 
 
 def _place_name(kind: PlaceKind, properties: dict) -> str:

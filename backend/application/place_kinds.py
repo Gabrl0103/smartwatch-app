@@ -1,13 +1,12 @@
 """Reconoce cuándo el destino es un tipo de lugar y no un lugar con nombre."""
 
-import re
-import unicodedata
-
 from domain.models.place_kind import PlaceKind
+from domain.text import plain_words
 
 # Palabras de cada tipo (sin tildes, en singular y plural). Varias palabras se buscan juntas.
 _KEYWORDS: dict[PlaceKind, tuple[str, ...]] = {
-    PlaceKind.PHARMACY: ("drogueria", "droguerias", "farmacia", "farmacias", "botica"),
+    # "drogería": así la transcribe a veces Gemini.
+    PlaceKind.PHARMACY: ("drogueria", "droguerias", "drogeria", "drogerias", "farmacia", "farmacias", "botica"),
     PlaceKind.HOSPITAL: ("hospital", "hospitales", "urgencias"),
     PlaceKind.CLINIC: ("clinica", "clinicas", "centro de salud", "consultorio"),
     PlaceKind.ATM: ("cajero", "cajeros", "cajero automatico", "cajeros automaticos"),
@@ -32,16 +31,10 @@ _FILLER = {
 }
 
 
-def _words(text: str) -> list[str]:
-    plain = unicodedata.normalize("NFD", text.lower())
-    plain = "".join(c for c in plain if unicodedata.category(c) != "Mn")
-    return re.findall(r"[a-z0-9]+", plain)
-
-
 def place_kind_of(query: str) -> PlaceKind | None:
     """El tipo de lugar si [query] es solo eso ("droguería más cercana", "un cajero"); None si
     lleva un nombre ("Parque Bolívar", "Banco de Bogotá"), que se busca como lugar."""
-    words = _words(query)
+    words = plain_words(query)
     for kind, keywords in _KEYWORDS.items():
         for keyword in sorted(keywords, key=len, reverse=True):
             key = keyword.split()

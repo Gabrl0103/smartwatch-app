@@ -63,6 +63,7 @@ def test_no_place_of_that_kind_nearby_says_so():
         ("Banco de Bogotá", None),
         ("Plazoleta de comidas Unicentro", None),
         ("Droguería Alemana", None),
+        ("Drogería", PlaceKind.PHARMACY),
     ],
 )
 def test_kinds_are_recognized_only_without_a_name(query, kind):
