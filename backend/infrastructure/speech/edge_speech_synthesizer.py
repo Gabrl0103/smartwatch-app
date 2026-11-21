@@ -8,8 +8,11 @@ from domain.errors import ExternalServiceError
 
 # Voz neural colombiana de Microsoft Edge, masculina como la de Gemini. Gratis y sin clave.
 VOICE_NAME = "es-CO-GonzaloNeural"
-CONNECT_TIMEOUT_S = 5
-RECEIVE_TIMEOUT_S = 15
+# Edge responde en ~1 s, pero a veces se cuelga: mejor cortar pronto y pedir otra vez.
+# Dos intentos caben en los 20 s que el reloj espera una frase.
+CONNECT_TIMEOUT_S = 4
+RECEIVE_TIMEOUT_S = 5
+ATTEMPTS = 2
 
 Stream = Callable[[str, str], AsyncIterator[dict]]
 
@@ -30,10 +33,13 @@ class EdgeSpeechSynthesizer:
         self._stream = stream
 
     def synthesize(self, text: str) -> bytes:
-        try:
-            audio = asyncio.run(self._collect(text))
-        except (edge_tts.exceptions.EdgeTTSException, aiohttp.ClientError, TimeoutError, OSError) as error:
-            raise ExternalServiceError("No pude generar la voz de respaldo.") from error
+        for attempt in range(ATTEMPTS):
+            try:
+                audio = asyncio.run(self._collect(text))
+                break
+            except (edge_tts.exceptions.EdgeTTSException, aiohttp.ClientError, TimeoutError, OSError) as error:
+                if attempt == ATTEMPTS - 1:
+                    raise ExternalServiceError("No pude generar la voz de respaldo.") from error
         if not audio:
             raise ExternalServiceError("La voz de respaldo llegó vacía.")
         return audio

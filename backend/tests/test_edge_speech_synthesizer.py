@@ -3,7 +3,13 @@ import edge_tts
 import pytest
 
 from domain.errors import ExternalServiceError
-from infrastructure.speech.edge_speech_synthesizer import VOICE_NAME, EdgeSpeechSynthesizer
+from infrastructure.speech.edge_speech_synthesizer import (
+    ATTEMPTS,
+    CONNECT_TIMEOUT_S,
+    RECEIVE_TIMEOUT_S,
+    VOICE_NAME,
+    EdgeSpeechSynthesizer,
+)
 
 
 def fake_stream(chunks, seen=None):
@@ -40,6 +46,24 @@ def test_empty_audio_is_an_error():
 
     with pytest.raises(ExternalServiceError, match="vacía"):
         synthesizer.synthesize("Hola")
+
+
+def test_hang_is_retried_once():
+    attempts = []
+
+    async def stream(text, voice):
+        attempts.append(text)
+        if len(attempts) == 1:
+            raise TimeoutError()
+        yield {"type": "audio", "data": b"mp3"}
+
+    assert EdgeSpeechSynthesizer(stream=stream).synthesize("Llegaste a tu destino.") == b"mp3"
+    assert len(attempts) == ATTEMPTS == 2
+
+
+def test_two_attempts_fit_in_the_watch_wait():
+    # El reloj espera 20 s una frase con el backend despierto.
+    assert ATTEMPTS * (CONNECT_TIMEOUT_S + RECEIVE_TIMEOUT_S) < 20
 
 
 @pytest.mark.parametrize(
