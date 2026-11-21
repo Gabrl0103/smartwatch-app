@@ -15,7 +15,7 @@ internal fun quotaError(response: HttpResponse) = QuotaExhaustedError(
     response.errorNumber("retry_after_s")?.let { it * 1_000 },
 )
 
-/** Pide a POST /speech la frase hablada y devuelve el WAV. Cuota agotada → [QuotaExhaustedError]. */
+/** Pide a POST /speech la frase hablada y devuelve el audio (WAV de Gemini o MP3 de Edge). Cuota agotada → [QuotaExhaustedError]. */
 object SpeechApiClient {
 
     suspend fun synthesize(text: String): ByteArray {

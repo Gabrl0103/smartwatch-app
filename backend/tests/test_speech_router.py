@@ -8,13 +8,14 @@ client = TestClient(app)
 
 
 class FakeSynthesizer:
-    def __init__(self, error=None):
+    def __init__(self, error=None, header=b"RIFF"):
         self.error = error
+        self.header = header
 
     def synthesize(self, text):
         if self.error:
             raise self.error
-        return b"RIFF" + text.encode()
+        return self.header + text.encode()
 
 
 def use_synthesizer(monkeypatch, synthesizer):
@@ -30,6 +31,15 @@ def test_speech_returns_wav(monkeypatch):
     assert response.status_code == 200
     assert response.headers["content-type"] == "audio/wav"
     assert response.content == b"RIFFHola"
+
+
+def test_speech_from_fallback_voice_returns_mp3(monkeypatch):
+    use_synthesizer(monkeypatch, FakeSynthesizer(header=b"\xff\xf3"))
+
+    response = client.post("/speech", json={"text": "Hola"})
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "audio/mpeg"
 
 
 def test_speech_without_text_returns_422(monkeypatch):

@@ -32,6 +32,8 @@ from infrastructure.geocoding.geoapify_geocoder import GeoapifyGeocoder
 from infrastructure.maps.geoapify_vector_tiles import GeoapifyVectorTiles
 from infrastructure.maps.pillow_tile_renderer import PillowTileRenderer
 from infrastructure.routing.geoapify_routing import GeoapifyRouting
+from infrastructure.speech.edge_speech_synthesizer import EdgeSpeechSynthesizer
+from infrastructure.speech.fallback_speech_synthesizer import FallbackSpeechSynthesizer
 from infrastructure.speech.gemini_speech_synthesizer import GeminiSpeechSynthesizer
 
 
@@ -82,7 +84,10 @@ def get_voice_assistant() -> VoiceAssistantPort:
 @lru_cache
 def get_speech_synthesizer() -> SpeechSynthesizerPort:
     settings = load_settings()
-    return GeminiSpeechSynthesizer(settings.gemini_api_key, settings.gemini_tts_model)
+    return FallbackSpeechSynthesizer(
+        GeminiSpeechSynthesizer(settings.gemini_api_key, settings.gemini_tts_model),
+        EdgeSpeechSynthesizer(),
+    )
 
 
 @lru_cache
