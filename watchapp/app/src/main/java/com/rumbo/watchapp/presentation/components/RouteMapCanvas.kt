@@ -3,17 +3,23 @@ package com.rumbo.watchapp.presentation.components
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.rumbo.watchapp.application.usecase.TrackingState
 import com.rumbo.watchapp.domain.geo.Point2
@@ -21,7 +27,13 @@ import com.rumbo.watchapp.domain.map.MapFrame
 import com.rumbo.watchapp.domain.map.MapView
 import com.rumbo.watchapp.domain.map.MapZoom
 import com.rumbo.watchapp.domain.map.RouteGeometry
+import com.rumbo.watchapp.domain.map.TILE_SIZE
+import com.rumbo.watchapp.domain.map.TileRouteGeometry
+import com.rumbo.watchapp.domain.map.TileScene
 import com.rumbo.watchapp.domain.map.mapFrame
+import com.rumbo.watchapp.domain.map.smoothHeading
+import com.rumbo.watchapp.domain.map.tileOrigin
+import com.rumbo.watchapp.domain.map.tileScene
 import com.rumbo.watchapp.domain.navigation.NavigationStatus
 import com.rumbo.watchapp.presentation.theme.Background
 import com.rumbo.watchapp.presentation.theme.Border
@@ -31,6 +43,11 @@ import com.rumbo.watchapp.presentation.theme.StatusNoSignal
 import com.rumbo.watchapp.presentation.theme.StatusOffRoute
 import com.rumbo.watchapp.presentation.theme.StatusTurnSoon
 import com.rumbo.watchapp.presentation.theme.TextPrimary
+import kotlin.math.abs
+import kotlin.math.hypot
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 // Lo que se deja libre junto al borde redondo.
 private val EdgeMargin = 14.dp
@@ -45,21 +62,40 @@ private val ArrowTip = 19.dp
 private val ArrowHalfWidth = 8.dp
 private val Outline = 2.dp
 
+// Mapa de cerca: un tile de 256 px de mundo se dibuja en 256 dp; a densidad 2 cada píxel del tile
+// @2x cae en un píxel de pantalla. A zoom 17 en Pasto son unos 0,6 m por píxel.
+private val TileDp = 256.dp
+private val GpsRouteWidth = 7.dp
+private val GpsRouteBorderWidth = 11.dp
+private val GpsOffRouteWidth = 15.dp
+private const val WALKED_ALPHA = 0.4f
+
+// Cuánto se acerca el rumbo mostrado al del GPS en cada cuadro (1 por segundo): no salta con el ruido.
+private const val HEADING_SMOOTHING = 0.4
+
+/** Altura de la flecha en el mapa de cerca, en fracción de la pantalla: un poco abajo del centro. */
+const val PERSON_ANCHOR = 0.53f
+
 /**
- * El mapa de la ruta, solo con lo que trae [state]: no usa teselas ni internet. Se dibuja una vez por
- * cada [state] o [zoom] nuevo, sin animaciones. [topInset] y [bottomInset] son lo que tapan la hora
- * y los controles: la ruta entera se ajusta entre ellos.
+ * El mapa de la ruta [geometry] con lo que trae [state]. De cerca es un mapa tipo GPS con calles
+ * ([TileMapCanvas]); la ruta entera se dibuja sola, sin tiles. Se dibuja una vez por cada [state]
+ * o [zoom] nuevo (o tile que llega), sin animaciones. [topInset] y [bottomInset] son lo que tapan
+ * la hora y los controles: la ruta entera se ajusta entre ellos.
  */
 @Composable
 fun RouteMapCanvas(
     state: TrackingState,
+    geometry: RouteGeometry?,
     zoom: MapZoom,
     description: String,
     topInset: Dp,
     bottomInset: Dp,
     modifier: Modifier = Modifier,
 ) {
-    val geometry = remember(state.route) { state.route?.let(::RouteGeometry) }
+    if (zoom == MapZoom.NEARBY) {
+        TileMapCanvas(state, geometry, description, modifier)
+        return
+    }
     Canvas(modifier.fillMaxSize(), contentDescription = description) {
         drawRect(Background)
         if (geometry == null) return@Canvas
@@ -72,6 +108,81 @@ fun RouteMapCanvas(
         )
         drawFrame(mapFrame(geometry, state.position, state.headingDeg, state.progressM, zoom, view), state.status)
     }
+}
+
+/**
+ * Mapa de cerca tipo GPS: calles reales (tiles del backend) giradas para que el rumbo quede arriba,
+ * la ruta encima y la flecha fija en [PERSON_ANCHOR]. Un tile que no llegó deja ver el fondo
+ * oscuro; la ruta y los marcadores se dibujan igual.
+ */
+@Composable
+private fun TileMapCanvas(state: TrackingState, geometry: RouteGeometry?, description: String, modifier: Modifier) {
+    val tiles = LocalMapTiles.current
+    val config = LocalConfiguration.current
+    val tileGeometry = remember(geometry) { geometry?.let(::TileRouteGeometry) }
+    val radius = remember(config) { visibleRadiusDp(config.screenWidthDp, config.screenHeightDp, config.isScreenRound) }
+    val shownHeading = remember { doubleArrayOf(Double.NaN) }
+    val scene = remember(tileGeometry, state) {
+        tileGeometry?.let { tileScene(it, state.position, state.headingDeg, state.progressM, radius) }?.let {
+            val heading = smoothHeading(shownHeading[0].takeUnless(Double::isNaN), it.headingDeg, HEADING_SMOOTHING)
+            shownHeading[0] = heading
+            it.copy(headingDeg = heading)
+        }
+    }
+    SideEffect { scene?.let { tiles?.request(it.tiles) } }
+    Canvas(modifier.fillMaxSize(), contentDescription = description) {
+        drawRect(Background)
+        if (scene == null) return@Canvas
+        val anchor = Offset(size.width / 2, size.height * PERSON_ANCHOR)
+        // Leer version aquí hace que el mapa se redibuje cuando llega un tile.
+        tiles?.version
+        translate(anchor.x, anchor.y) {
+            rotate(-scene.headingDeg.toFloat(), pivot = Offset.Zero) {
+                drawGpsScene(scene, state.status, TileDp.toPx() / TILE_SIZE, tiles)
+            }
+        }
+        drawPerson(anchor, 0f, personColor(state.status))
+    }
+}
+
+// Hasta dónde se ve desde la flecha, en dp (= píxeles de mundo): en la redonda, el radio más lo
+// que la flecha está corrida del centro; en la cuadrada, hasta la esquina más lejana.
+private fun visibleRadiusDp(widthDp: Int, heightDp: Int, round: Boolean): Double {
+    val anchor = heightDp * PERSON_ANCHOR.toDouble()
+    val reach = if (round) {
+        min(widthDp, heightDp) / 2.0 + abs(anchor - heightDp / 2.0)
+    } else {
+        hypot(widthDp / 2.0, max(anchor, heightDp - anchor))
+    }
+    return reach * TileDp.value / TILE_SIZE + 4
+}
+
+private fun DrawScope.drawGpsScene(scene: TileScene, status: NavigationStatus, scale: Double, tiles: MapTileImages?) {
+    val center = scene.center
+    fun Point2.local() = Point2((x - center.x) * scale, (y - center.y) * scale)
+    for (tile in scene.tiles) {
+        val image = tiles?.image(tile) ?: continue
+        val origin = tileOrigin(tile).local()
+        val left = origin.x.roundToInt()
+        val top = origin.y.roundToInt()
+        // Los bordes se redondean por separado: así dos tiles vecinos no dejan una raya entre ellos.
+        val right = (origin.x + TILE_SIZE * scale).roundToInt()
+        val bottom = (origin.y + TILE_SIZE * scale).roundToInt()
+        drawImage(
+            image = image,
+            dstOffset = IntOffset(left, top),
+            dstSize = IntSize(right - left, bottom - top),
+            filterQuality = FilterQuality.Low,
+        )
+    }
+    val walked = listOf(scene.walked.map { it.local() })
+    val remaining = listOf(scene.remaining.map { it.local() })
+    if (status == NavigationStatus.OFF_ROUTE) drawLines(remaining, StatusOffRoute, GpsOffRouteWidth)
+    drawLines(walked, Primary.copy(alpha = WALKED_ALPHA), GpsRouteWidth)
+    drawLines(remaining, TextPrimary, GpsRouteBorderWidth)
+    drawLines(remaining, Primary, GpsRouteWidth)
+    scene.destination?.let { drawDestination(it.local().toOffset()) }
+    scene.nextTurn?.let { drawTurn(it.local().toOffset()) }
 }
 
 private fun DrawScope.drawFrame(frame: MapFrame, status: NavigationStatus) {

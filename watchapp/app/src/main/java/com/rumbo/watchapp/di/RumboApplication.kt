@@ -10,5 +10,6 @@ class RumboApplication : Application() {
         super.onCreate()
         container.wakeUpServerInBackground()
         container.registerDeviceInBackground()
+        container.prefetchMapTilesForEachRoute()
     }
 }

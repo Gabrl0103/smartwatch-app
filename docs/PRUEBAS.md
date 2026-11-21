@@ -122,12 +122,13 @@ Cada orden termina con "Hecho" (2 pulsos cortos) o "Error" (1 pulso extra largo)
 | # | Prueba | Pasos | Resultado esperado |
 |---|---|---|---|
 | M1 | Abrir y volver | En ruta, bajar hasta "Ver mapa" y tocarlo; luego "Atrás" o el gesto de volver | Abre "Mapa" y vuelve a En ruta sin preguntar "¿Terminar la ruta?"; la voz y las vibraciones no se cortan (`adb logcat -s Nav Vibracion`) |
-| M2 | Recorrido | Con el mapa abierto, Play route en el GPX | La persona sigue al centro con el rumbo hacia arriba; lo recorrido queda azul, lo que falta claro y el próximo giro con un aro amarillo |
+| M2 | Recorrido | Con el mapa abierto, Play route en el GPX | Calles reales (oscuras, con nombres) que giran con el rumbo; la flecha fija un poco abajo del centro; lo que falta azul con borde claro, lo recorrido azul tenue, el próximo giro con un aro amarillo, "Giro en … m" arriba y "© OpenStreetMap · Geoapify" abajo |
 | M3 | Vistas | Tocar "Ruta" y luego "Cerca" | Toda la ruta con el norte arriba, destino en verde y la flecha con su rumbo; vuelve a la vista de cerca. TalkBack lee "Ver toda la ruta" y "Ver de cerca" |
 | M4 | Desviado | Con `ruta_con_desvio.gpx` y el mapa abierto | Persona naranja, ruta con borde naranja y "Fuera de ruta"; al recalcular aparece la ruta nueva |
 | M5 | Sin señal | Con el mapa abierto, apagar la ubicación 15 s | Persona gris en la última posición y "Sin señal"; al volver la señal sigue normal |
 | M6 | Llegada | Dejar correr el GPX hasta el final con el mapa abierto | "Llegaste" sobre el destino; "Atrás" vuelve a la pantalla de llegada |
-| M7 | Sin internet | Activar modo avión con la ruta ya calculada y abrir el mapa | Se dibuja igual: no pide nada a la red (`adb logcat -s Red`) |
+| M7 | Sin internet | Activar modo avión con la ruta ya calculada y abrir el mapa | Las calles precargadas se ven (salen del disco); lo que no estaba es fondo oscuro con la ruta encima. La guía no se entera: giros y vibraciones a tiempo (`adb logcat -s Nav Mapa`) |
+| M9 | Precarga | Pedir una ruta nueva con la app abierta | Logcat `Mapa: Precarga: N de N tiles del corredor` (16 en la ruta de la demo) a no más de 4 por segundo (`adb logcat -s Red`) |
 | M8 | Batería | Con el mapa abierto y sin moverse | Nada se mueve en pantalla; tras 15 s se atenúa, y al tocar vuelve el brillo |
 
 ### Lugares guardados

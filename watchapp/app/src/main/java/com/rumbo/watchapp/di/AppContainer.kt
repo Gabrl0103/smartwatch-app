@@ -3,10 +3,12 @@ package com.rumbo.watchapp.di
 import android.content.Context
 import android.util.Log
 import com.rumbo.watchapp.application.location.LocationTracker
+import com.rumbo.watchapp.application.map.RequestPacer
 import com.rumbo.watchapp.application.usecase.AskAssistant
 import com.rumbo.watchapp.application.usecase.ExecuteVoiceCommand
 import com.rumbo.watchapp.application.usecase.ManageSavedPlaces
 import com.rumbo.watchapp.application.usecase.PlanRouteFromVoice
+import com.rumbo.watchapp.application.usecase.PrefetchRouteTiles
 import com.rumbo.watchapp.application.usecase.RegisterDevice
 import com.rumbo.watchapp.application.usecase.TrackNavigation
 import com.rumbo.watchapp.domain.port.ActiveRouteStore
@@ -19,6 +21,7 @@ import com.rumbo.watchapp.domain.port.VoiceSettings
 import com.rumbo.watchapp.infrastructure.audio.MediaAudioRecorder
 import com.rumbo.watchapp.infrastructure.location.AndroidLocationProvider
 import com.rumbo.watchapp.infrastructure.logging.AndroidLogger
+import com.rumbo.watchapp.infrastructure.map.BackendMapTileSource
 import com.rumbo.watchapp.infrastructure.navigation.ForegroundNavigationRunner
 import com.rumbo.watchapp.infrastructure.network.AssistantApiClient
 import com.rumbo.watchapp.infrastructure.network.BackendServerStatus
@@ -37,11 +40,16 @@ import com.rumbo.watchapp.infrastructure.tts.AndroidTextToSpeech
 import com.rumbo.watchapp.infrastructure.tts.GeminiSpeechPlayer
 import com.rumbo.watchapp.infrastructure.tts.SpeechOutputImpl
 import com.rumbo.watchapp.infrastructure.vibration.AndroidVibrationController
+import com.rumbo.watchapp.presentation.components.MapTileImages
+import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /** Composition root: único lugar donde se eligen las implementaciones. Uno por proceso. */
@@ -105,6 +113,38 @@ class AppContainer(context: Context) {
         tracking = { trackNavigation.state.value },
         repeatInstruction = trackNavigation::repeat,
     )
+
+    // Mapa de cerca: tiles del backend (ritmo de 4 por segundo, 2 a la vez) con caché en disco.
+    private val mapTileSource = BackendMapTileSource(
+        dir = File(appContext.cacheDir, "map_tiles"),
+        pacer = RequestPacer(maxPerSecond = 4, maxConcurrent = 2, clock = clock),
+        clock = clock,
+        logger = AndroidLogger,
+    )
+    val mapTileImages = MapTileImages(mapTileSource, appScope)
+    private val prefetchRouteTiles = PrefetchRouteTiles(mapTileSource, AndroidLogger)
+
+    /**
+     * Precarga los tiles del corredor de cada ruta nueva (también la recalculada) apenas empieza.
+     * Solo mira la ruta de [TrackNavigation.state]: la guía no espera ni depende de esto.
+     */
+    fun prefetchMapTilesForEachRoute() {
+        appScope.launch {
+            trackNavigation.state
+                .map { it.route }
+                .distinctUntilChanged { old, new -> old === new }
+                .collectLatest { route ->
+                    if (route == null) return@collectLatest
+                    try {
+                        prefetchRouteTiles(route)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.w("Mapa", "No se pudieron precargar los tiles: ${e.message}")
+                    }
+                }
+        }
+    }
 
     /**
      * Despierta el servidor de Render apenas se abre la app, para que al pedir la ruta ya esté

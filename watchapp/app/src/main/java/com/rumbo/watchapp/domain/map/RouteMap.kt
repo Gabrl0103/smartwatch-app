@@ -45,25 +45,30 @@ data class MapFrame(
 
 /** La ruta en metros locales. Se calcula una vez por ruta: el mapa se redibuja muchas veces. */
 class RouteGeometry(route: Route) {
-    private val coordinates = route.polyline.ifEmpty { route.steps.map { Coordinates(it.lat, it.lng) } }
+    /** La línea de la ruta en coordenadas, tal como llega del backend. */
+    val coordinates = route.polyline.ifEmpty { route.steps.map { Coordinates(it.lat, it.lng) } }
     private val projection = coordinates.firstOrNull()?.let(::LocalProjection)
     private val cumulative = cumulativeDistances(coordinates)
 
     val points: List<Point2> = coordinates.map(::project)
     val along: List<Double> = cumulative
 
-    private val turns: List<Pair<Double, Point2>> = if (coordinates.isEmpty()) {
+    private val turns: List<Pair<Double, Coordinates>> = if (coordinates.isEmpty()) {
         emptyList()
     } else {
         stepAlongDistances(route.steps, coordinates, cumulative).zip(route.steps)
             .filter { (_, step) -> step.maneuver.isTurn }
-            .map { (alongM, step) -> alongM to project(Coordinates(step.lat, step.lng)) }
+            .map { (alongM, step) -> alongM to Coordinates(step.lat, step.lng) }
     }
 
     fun project(point: Coordinates): Point2 = projection?.toXY(point) ?: Point2(0.0, 0.0)
 
     /** El primer giro que queda por delante de [progressM]. */
-    fun nextTurn(progressM: Double): Point2? = turns.firstOrNull { (alongM, _) -> alongM > progressM }?.second
+    fun nextTurn(progressM: Double): Point2? = nextTurnAhead(progressM)?.second?.let(::project)
+
+    /** El primer giro por delante de [progressM]: a cuántos metros de ruta queda y dónde está. */
+    fun nextTurnAhead(progressM: Double): Pair<Double, Coordinates>? =
+        turns.firstOrNull { (alongM, _) -> alongM > progressM }?.let { (alongM, point) -> alongM - progressM to point }
 }
 
 private class Camera(

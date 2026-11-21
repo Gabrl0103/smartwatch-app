@@ -1,13 +1,14 @@
 package com.rumbo.watchapp.presentation.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -16,31 +17,44 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.wear.compose.material3.MaterialTheme
+import androidx.wear.compose.material3.Text
 import com.rumbo.watchapp.application.usecase.TrackingState
 import com.rumbo.watchapp.domain.map.MapZoom
+import com.rumbo.watchapp.domain.map.RouteGeometry
 import com.rumbo.watchapp.domain.navigation.NavigationStatus
 import com.rumbo.watchapp.presentation.components.PillButton
 import com.rumbo.watchapp.presentation.components.RouteMapCanvas
 import com.rumbo.watchapp.presentation.components.StateBadge
 import com.rumbo.watchapp.presentation.format.describeDistance
+import com.rumbo.watchapp.presentation.format.formatDistance
+import com.rumbo.watchapp.presentation.theme.Background
+import com.rumbo.watchapp.presentation.theme.Surface
+import com.rumbo.watchapp.presentation.theme.TextPrimary
+import com.rumbo.watchapp.presentation.theme.TextSecondary
 
-// La etiqueta y los botones van juntos abajo, donde tapan lo ya recorrido y no lo que viene. Este es
-// su alto con la separación que pone RumboScreen; el resto queda para el mapa, sin desplazar.
-private val ControlsArea = 87.dp
-
-// Bajan un poco más sin cambiar lo medido, para no chocar con el punto de la persona, que va al
-// centro y puede ser del mismo color que la etiqueta. Así tampoco hay nada que desplazar.
-private val ControlsDrop = 6.dp
+// Arriba la etiqueta del estado y, de cerca, la distancia al giro; abajo la atribución y los
+// botones. Son sus altos aproximados: lo que queda entre ellos es para ver el mapa. Si sobra algo,
+// RumboScreen centra; nada se desplaza.
+private val BadgeArea = 24.dp
+private val DistanceArea = 26.dp
+private val AttributionArea = 14.dp
+private val ButtonsArea = 52.dp
+private val ItemGap = 8.dp
 private val ButtonsInset = 4.dp
-
-// Lo que ocupa la hora: la ruta entera se dibuja debajo de ella.
-private val TimeArea = 24.dp
 
 // El margen de arriba y abajo de RumboScreen en pantalla redonda.
 private const val VERTICAL_MARGIN = 0.14f
+
+/** Atribución que piden OpenStreetMap y el plan gratis de Geoapify, visible sobre el mapa con calles. */
+const val MAP_ATTRIBUTION = "© OpenStreetMap · Geoapify"
 
 /** Lo que dice la etiqueta. Sin señal va más corto que en En ruta: aquí cabe sobre el mapa. */
 private fun mapLabel(state: TrackingState) =
@@ -59,36 +73,52 @@ private fun describeMap(state: TrackingState, label: String, zoom: MapZoom): Str
 }
 
 /**
- * Pantalla "Mapa": la ruta dibujada por [RouteMapCanvas] y, abajo, la etiqueta del estado, "Atrás"
- * y el botón que alterna la vista de cerca (la persona al centro, su rumbo arriba) y la de toda la
- * ruta (el norte arriba). Solo muestra [state]: la guía sigue por su cuenta.
+ * "Giro en 40 m" y lo mismo en palabras para TalkBack; sin giros por delante, lo que falta al
+ * destino. Null al llegar.
+ */
+internal fun turnDistance(nextTurnM: Double?, state: TrackingState): Pair<String, String>? = when {
+    state.status == NavigationStatus.ARRIVED -> null
+    nextTurnM != null -> "Giro en ${formatDistance(nextTurnM)}" to "Próximo giro a ${describeDistance(nextTurnM)}"
+    else -> "Destino en ${formatDistance(state.remainingM)}" to "Destino a ${describeDistance(state.remainingM)}"
+}
+
+/**
+ * Pantalla "Mapa": de cerca, un mapa tipo GPS con calles, el rumbo arriba y la distancia al próximo
+ * giro; o la ruta entera (el norte arriba). Arriba la etiqueta del estado; abajo "Atrás" y el botón
+ * que alterna las vistas. Solo muestra [state]: la guía sigue por su cuenta y no espera al mapa.
  */
 @Composable
 fun RouteMapScreen(state: TrackingState, onBack: () -> Unit, initialZoom: MapZoom = MapZoom.NEARBY) {
     var zoom by remember { mutableStateOf(initialZoom) }
+    val nearby = zoom == MapZoom.NEARBY
     val label = mapLabel(state)
+    val geometry = remember(state.route) { state.route?.let(::RouteGeometry) }
+    val distance = if (nearby) turnDistance(geometry?.nextTurnAhead(state.progressM)?.first, state) else null
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val margin = screenHeight * VERTICAL_MARGIN
+    val top = BadgeArea + if (distance != null) DistanceArea else 0.dp
+    val bottom = ButtonsArea + if (nearby) AttributionArea else 0.dp
     ScreenOnWhileNavigating(wakeKey = state.status) {
         RumboScreen(
             paneTitle = "Mapa",
             background = {
                 RouteMapCanvas(
                     state = state,
+                    geometry = geometry,
                     zoom = zoom,
                     description = describeMap(state, label, zoom),
-                    topInset = TimeArea,
-                    bottomInset = margin + ControlsArea,
+                    topInset = margin + top,
+                    bottomInset = margin + bottom,
                 )
             },
         ) {
-            Spacer(Modifier.height((screenHeight - margin * 2 - ControlsArea).coerceAtLeast(0.dp)))
-            Column(
-                modifier = Modifier.offset(y = ControlsDrop),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 StateBadge(label, lookOf(state).color, announce = true, filled = true, compact = true)
+                distance?.let { (text, spoken) -> DistanceChip(text, spoken) }
+            }
+            Spacer(Modifier.height(freeHeight(screenHeight, margin, top, bottom)))
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                if (nearby) Attribution()
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = ButtonsInset),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -99,6 +129,39 @@ fun RouteMapScreen(state: TrackingState, onBack: () -> Unit, initialZoom: MapZoo
             }
         }
     }
+}
+
+private fun freeHeight(screen: Dp, margin: Dp, top: Dp, bottom: Dp) =
+    (screen - margin * 2 - top - bottom - ItemGap * 2).coerceAtLeast(0.dp)
+
+@Composable
+private fun DistanceChip(text: String, spoken: String) {
+    Text(
+        text = text,
+        modifier = Modifier
+            .background(Surface, CircleShape)
+            .padding(horizontal = 12.dp, vertical = 3.dp)
+            .clearAndSetSemantics { contentDescription = spoken },
+        style = MaterialTheme.typography.labelMedium,
+        color = TextPrimary,
+        textAlign = TextAlign.Center,
+        maxLines = 1,
+    )
+}
+
+// Pequeña pero legible: gris secundario sobre el fondo de la app (más de 4,5:1), no sobre las calles.
+@Composable
+private fun Attribution() {
+    Text(
+        text = MAP_ATTRIBUTION,
+        modifier = Modifier
+            .background(Background.copy(alpha = 0.85f), CircleShape)
+            .padding(horizontal = 8.dp, vertical = 1.dp),
+        style = MaterialTheme.typography.labelSmall,
+        fontSize = 9.sp,
+        color = TextSecondary,
+        maxLines = 1,
+    )
 }
 
 @Composable
