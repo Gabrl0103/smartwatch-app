@@ -41,8 +41,8 @@ import kotlin.math.sqrt
 private val ItemSpacing = 8.dp
 
 // Lo más que se achica un elemento al pasar por el borde. Nunca se atenúa: el texto conserva su
-// contraste de 4,5:1. Lo que tiene el centro fuera del círculo no se dibuja hasta que se
-// desplace hacia adentro: nada asoma cortado por el borde redondo.
+// contraste de 4,5:1. Lo que ni así cabe en el círculo no se dibuja hasta que se desplace hacia
+// adentro: nada asoma cortado por el borde redondo ni pisa el anillo.
 private const val MIN_EDGE_SCALE = 0.6f
 
 /**
@@ -148,8 +148,8 @@ fun RumboScreen(
  * Columna centrada con separación fija. En pantalla redonda, lo que pasa por el borde de arriba
  * o de abajo se achica lo justo para entrar en el círculo, como en las listas de Wear, en vez de
  * quedar cortado (el círculo queda a [edgeInset] del borde: con dial, por dentro del anillo); lo
- * que tiene el centro fuera del círculo espera oculto. No se atenúa, para no perder contraste. El
- * modificador debe incluir el desplazamiento y [contentPadding].
+ * que ni achicado cabe espera oculto. No se atenúa, para no perder contraste. El modificador
+ * debe incluir el desplazamiento y [contentPadding].
  */
 @Composable
 private fun RoundColumn(
@@ -204,16 +204,15 @@ private fun RoundColumn(
                     placeable.placeWithLayer(x, y) {
                         // Se lee el desplazamiento aquí: al desplazar solo se recalcula la capa.
                         val screenTop = paddingTop + top - scrollState.value
-                        val centerOffset = screenTop + placeable.height / 2f - centerY
                         val scale = fitScale(
                             halfWidth = placeable.width / 2f,
-                            centerOffset = centerOffset,
+                            centerOffset = screenTop + placeable.height / 2f - centerY,
                             halfHeight = placeable.height / 2f,
                             radius = radius,
                         )
-                        scaleX = scale
-                        scaleY = scale
-                        alpha = if (abs(centerOffset) > radius) 0f else 1f
+                        scaleX = scale ?: MIN_EDGE_SCALE
+                        scaleY = scale ?: MIN_EDGE_SCALE
+                        alpha = if (scale == null) 0f else 1f
                     }
                 }
                 y += placeable.height + gap
@@ -240,11 +239,11 @@ private fun edgeItemShift(halfWidth: Float, halfHeight: Float, radius: Float, ed
 
 /**
  * Escala (entre [MIN_EDGE_SCALE] y 1) con la que un elemento centrado en horizontal, a
- * [centerOffset] px del centro de la pantalla, cabe en el círculo de radio [radius]. El elemento
- * se toma como un rectángulo de esquinas redondeadas (radio = mitad del lado menor), como las
- * píldoras y el texto centrado.
+ * [centerOffset] px del centro de la pantalla, cabe en el círculo de radio [radius], o null si
+ * ni con la mínima cabe. El elemento se toma como un rectángulo de esquinas redondeadas (radio =
+ * mitad del lado menor), como las píldoras y el texto centrado.
  */
-private fun fitScale(halfWidth: Float, centerOffset: Float, halfHeight: Float, radius: Float): Float {
+private fun fitScale(halfWidth: Float, centerOffset: Float, halfHeight: Float, radius: Float): Float? {
     fun fits(scale: Float): Boolean {
         val w = halfWidth * scale
         val h = halfHeight * scale
@@ -253,7 +252,7 @@ private fun fitScale(halfWidth: Float, centerOffset: Float, halfHeight: Float, r
         return farthest <= radius
     }
     if (fits(1f)) return 1f
-    if (!fits(MIN_EDGE_SCALE)) return MIN_EDGE_SCALE
+    if (!fits(MIN_EDGE_SCALE)) return null
     var low = MIN_EDGE_SCALE
     var high = 1f
     repeat(8) {

@@ -298,37 +298,41 @@ private fun SecondaryLine(text: String) {
     )
 }
 
-/** Llegada: disco verde con el check, "¡Llegaste!", el destino y lo que midió la ruta. */
+/**
+ * Llegada: disco verde con el check, "¡Llegaste!", el destino y lo que midió la ruta. Cada línea
+ * va aparte para que entre entera en el círculo (las que no caben esperan abajo); TalkBack lee
+ * "Llegaste a (destino)" en el título.
+ */
 @Composable
 private fun ArrivedContent(state: TrackingState, modifier: Modifier = Modifier) {
-    GlassDisc(size = 60.dp, halo = StatusArrived, fill = DiscFill(ArrivedLight, StatusArrived)) {
-        StateIcon(StateIconKind.ARRIVED, OnColor, size = 34.dp, contentDescription = null)
+    GlassDisc(size = 56.dp, halo = StatusArrived, fill = DiscFill(ArrivedLight, StatusArrived)) {
+        StateIcon(StateIconKind.ARRIVED, OnColor, size = 32.dp, contentDescription = null)
     }
-    Column(
+    Text(
+        text = "¡Llegaste!",
         modifier = modifier.clearAndSetSemantics {
             contentDescription = "Llegaste a ${state.destinationName}"
             liveRegion = LiveRegionMode.Polite
             heading()
         },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text("¡Llegaste!", style = MaterialTheme.typography.displaySmall.copy(fontSize = 26.sp), textAlign = TextAlign.Center)
+        style = MaterialTheme.typography.displaySmall.copy(fontSize = 26.sp),
+        textAlign = TextAlign.Center,
+    )
+    Text(
+        text = state.destinationName,
+        modifier = Modifier.clearAndSetSemantics {},
+        style = MaterialTheme.typography.labelLarge.copy(fontSize = 18.sp, lineHeight = 22.sp),
+        textAlign = TextAlign.Center,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+    )
+    state.route?.let { route ->
         Text(
-            text = state.destinationName,
-            style = MaterialTheme.typography.labelLarge.copy(fontSize = 18.sp, lineHeight = 22.sp),
+            text = "Ruta de ${formatDistance(route.distanceM)}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
         )
-        state.route?.let { route ->
-            Text(
-                text = "Ruta de ${formatDistance(route.distanceM)}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-        }
     }
 }
 

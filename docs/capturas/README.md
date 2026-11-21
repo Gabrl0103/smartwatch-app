@@ -19,6 +19,7 @@ misma pantalla desplazada hasta el final.
 | `12_fuera_de_ruta.png` | Fuera de ruta: anillo a trazos y fondo teñido |
 | `13_sin_senal.png` | Sin señal GPS: anillo punteado y disco con aros |
 | `14_llegaste.png` | Llegaste: anillo lleno, disco verde con el check, destino y largo de la ruta; fondo teñido |
+| `38_llegaste_nombre_largo.png` | Llegaste con un destino real largo: el nombre, en dos líneas, espera abajo en vez de pisar el anillo |
 | `15_terminar_ruta.png` | "¿Terminar la ruta?" tras el gesto de volver en ruta |
 | `16_lugares_guardados.png`, `17_borrar_lugar.png` | Lugares guardados y borrar |
 | `18_vibraciones.png` | Probar vibraciones: "Intensidad: sí", ajustes de intensidad y duración, Secuencia de demostración y cada patrón con su descripción |

@@ -253,6 +253,13 @@ class ScreenshotsTest {
         },
         Shot("13_sin_senal") { Navigation(tracking(NavigationStatus.NO_SIGNAL, pattern = pattern(VibrationCue.NO_SIGNAL))) },
         Shot("14_llegaste") { Navigation(tracking(NavigationStatus.ARRIVED, pattern = pattern(VibrationCue.ARRIVED))) },
+        // Un destino real largo, en dos líneas: lo que no cabe espera abajo en vez de pisar el anillo.
+        Shot("38_llegaste_nombre_largo") {
+            Navigation(
+                tracking(NavigationStatus.ARRIVED, pattern = pattern(VibrationCue.ARRIVED))
+                    .copy(destinationName = "Plazoleta de comidas Unicentro"),
+            )
+        },
         Shot("15_terminar_ruta") { Navigation(tracking(NavigationStatus.ON_ROUTE), confirmFinish = true) },
         Shot("16_lugares_guardados") {
             SavedPlacesScreen(PLACES, onChoose = {}, onDelete = {}, onBack = {})
