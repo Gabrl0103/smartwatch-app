@@ -39,7 +39,12 @@ if ($running) {
     Write-Step "El emulador ya está abierto."
 } else {
     $avds = & $emulator -list-avds
-    if ($avds -notcontains $Avd) { Stop-WithError "no existe el emulador '$Avd'. Disponibles: $($avds -join ', ')" }
+    # En otro PC el emulador suele llamarse "Wear_OS_Large_Round_API_34": sirve cualquiera de Wear OS.
+    if ($avds -notcontains $Avd) {
+        $wear = $avds | Where-Object { $_ -match "Wear" } | Select-Object -First 1
+        if (-not $wear) { Stop-WithError "no hay un emulador Wear OS. Créalo en Android Studio (Device Manager). Disponibles: $($avds -join ', ')" }
+        $Avd = $wear
+    }
     Write-Step "Abriendo el emulador $Avd..."
     Start-Process -FilePath $emulator -ArgumentList "-avd", $Avd | Out-Null
 }
