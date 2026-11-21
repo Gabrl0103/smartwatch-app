@@ -144,3 +144,9 @@ def test_other_errors_are_not_quota():
     with pytest.raises(ExternalServiceError) as error:
         assistant.answer_question("¿qué sigue?", "")
     assert not isinstance(error.value, QuotaExhaustedError)
+
+
+def test_the_answer_prompt_offers_to_take_the_person_to_the_nearest_place():
+    from infrastructure.assistant.gemini_voice_assistant import ANSWER_PROMPT
+
+    assert "llévame a la droguería más cercana" in ANSWER_PROMPT

@@ -2,7 +2,8 @@ import httpx
 import pytest
 
 from domain.errors import ExternalServiceError
-from domain.models.route import Coordinates
+from domain.models.place_kind import PlaceKind
+from domain.models.route import Coordinates, Place
 from infrastructure.geocoding.geoapify_geocoder import GeoapifyGeocoder
 
 
@@ -70,3 +71,44 @@ def test_unexpected_body_raises_external_service_error():
     geocoder = make_geocoder(lambda r: httpx.Response(200, json={"otra": 1}))
     with pytest.raises(ExternalServiceError):
         geocoder.search("parque")
+
+
+def test_search_within_a_distance_filters_by_circle():
+    seen = {}
+
+    def handler(request):
+        seen["filter"] = request.url.params["filter"]
+        return httpx.Response(200, json={"results": []})
+
+    make_geocoder(handler).search("droguería alemana", Coordinates(1.2, -77.3), within_m=50_000)
+    assert seen["filter"] == "countrycode:co|circle:-77.3,1.2,50000"
+
+
+def test_nearest_asks_places_api_for_the_category_around_the_person():
+    seen = {}
+
+    def handler(request):
+        seen["url"] = request.url
+        feature = {"properties": {"name": "Droguería La Economía", "lat": 1.2158, "lon": -77.2788}}
+        return httpx.Response(200, json={"features": [feature]})
+
+    place = make_geocoder(handler).nearest(PlaceKind.PHARMACY, Coordinates(1.215, -77.278), 2_000)
+
+    assert place == Place("Droguería La Economía", Coordinates(1.2158, -77.2788))
+    assert seen["url"].path == "/v2/places"
+    assert seen["url"].params["categories"] == "healthcare.pharmacy"
+    assert seen["url"].params["filter"] == "circle:-77.278,1.215,2000"
+    assert seen["url"].params["bias"] == "proximity:-77.278,1.215"
+    assert seen["url"].params["limit"] == "1"
+
+
+def test_nearest_without_name_uses_the_kind_and_street():
+    feature = {"properties": {"street": "Carrera 26", "lat": 1.0, "lon": 2.0}}
+    geocoder = make_geocoder(lambda r: httpx.Response(200, json={"features": [feature]}))
+
+    assert geocoder.nearest(PlaceKind.PHARMACY, None, 2_000).name == "Droguería en Carrera 26"
+
+
+def test_nearest_without_results_returns_none():
+    geocoder = make_geocoder(lambda r: httpx.Response(200, json={"features": []}))
+    assert geocoder.nearest(PlaceKind.ATM, None, 2_000) is None

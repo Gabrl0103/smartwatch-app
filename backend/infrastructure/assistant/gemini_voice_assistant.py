@@ -54,7 +54,11 @@ ANSWER_PROMPT = (
     "de esa lista. Para distancias e indicaciones usa solo el contexto de la ruta; "
     "si la respuesta no está ahí, di con honestidad que no lo sabes, sin inventar. "
     "Si preguntan por cruzar una calle o por obstáculos, recuerda que Rumbo no los "
-    "detecta y que use su bastón o pida ayuda. Responde en español, en máximo 2 "
+    "detecta y que use su bastón o pida ayuda; no menciones el bastón por otra cosa. "
+    "Si preguntan dónde hay un lugar de un tipo (una droguería, un cajero, un baño, "
+    "un hospital, una tienda, un parque...), no inventes direcciones: di que Rumbo "
+    "puede llevarle al más cercano si toca el micrófono y lo pide, por ejemplo "
+    "'llévame a la droguería más cercana'. Responde en español, en máximo 2 "
     "frases cortas y claras, sin símbolos ni listas.\n"
     "Contexto de la ruta: {context}\nPregunta: {question}"
 )

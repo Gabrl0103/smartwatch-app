@@ -9,7 +9,11 @@ class FakeGeocoder:
         self.result = result
         self.near = None
 
-    def search(self, query, near=None):
+    def search(self, query, near=None, within_m=None):
+        self.near = near
+        return self.result
+
+    def nearest(self, kind, near, within_m):
         self.near = near
         return self.result
 
@@ -21,7 +25,7 @@ def use_geocoder(monkeypatch, geocoder):
 def test_search_returns_place(monkeypatch):
     geocoder = FakeGeocoder(Place("Parque Bolívar", Coordinates(1.2, -77.3)))
     use_geocoder(monkeypatch, geocoder)
-    response = TestClient(app).get("/places/search", params={"q": "parque", "lat": 1.21, "lng": -77.28})
+    response = TestClient(app).get("/places/search", params={"q": "parque bolívar", "lat": 1.21, "lng": -77.28})
     assert response.status_code == 200
     assert response.json() == {"name": "Parque Bolívar", "lat": 1.2, "lng": -77.3}
     assert geocoder.near == Coordinates(1.21, -77.28)
